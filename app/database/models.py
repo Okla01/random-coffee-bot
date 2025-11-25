@@ -153,7 +153,6 @@ class AuthAttempt(Base):
     )
 
     type: Mapped[str] = mapped_column(String(16))  # "email" | "otp"
-    type: Mapped[str] = mapped_column(String(16))  # "почта" | "пароль"
     value: Mapped[str] = mapped_column(String(255))
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
@@ -187,12 +186,11 @@ class UserRole(Base):
 
     __tablename__ = "user_roles"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
     )
     role_id: Mapped[int] = mapped_column(
-        ForeignKey("roles.id", ondelete="CASCADE"), index=True
+        ForeignKey("roles.id", ondelete="RESTRICT"), primary_key=True, index=True
     )
 
     user: Mapped["User"] = relationship(back_populates="roles")

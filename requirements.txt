@@ -1,0 +1,7 @@
+aiogram>=3.4
+SQLAlchemy>=2.0
+aiosqlite>=0.19
+aiosmtplib>=3.0
+python-dotenv>=1.0
+pydantic>=2.7
+aiogram-media-group>=0.4

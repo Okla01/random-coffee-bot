@@ -9,6 +9,36 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
+def kb_admin_menu() -> InlineKeyboardMarkup:
+    """
+    Генерирует основную клавиатуру панели администратора.
+
+    Содержит кнопки для управления пользователями и просмотра отчетов.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="👥 Пользователи", callback_data="admin:users"),
+            ],
+            [
+                InlineKeyboardButton(text="🚩 Жалобы", callback_data="admin:complaints"),
+            ],
+            [
+                InlineKeyboardButton(text="📊 Статистика", callback_data="admin:statistics"),
+            ],
+            [
+                InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin:settings"),
+            ],
+            [
+                InlineKeyboardButton(text="📤 Экспорт Excel", callback_data="admin:export"),
+            ],
+            [
+                InlineKeyboardButton(text="⛔ Выход", callback_data="admin:exit"),
+            ],
+        ]
+    )
+
+
 def kb_admin_decision(user_id: int) -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру для принятия решения по блокировке пользователя.

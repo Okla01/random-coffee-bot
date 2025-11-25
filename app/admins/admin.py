@@ -17,6 +17,7 @@ from aiogram.types import Message, CallbackQuery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.admins.keyboards import kb_admin_menu
 from app.core import Settings
 from app.core.users import get_user_by_tg_id
 from app.database import User, Role, UserRole, AdminLog
@@ -139,7 +140,7 @@ async def cmd_admin(
 
         # Синхронизируем роль администратора если пользователь в ADMIN_IDS
         await _sync_admin_role(session, settings, user)
-
+        # Проверка наличия прав администратора и статуса блокировки
         if user.status == "blocked":
             await message.answer("⛔️ Нет прав (пользователь заблокирован).")
             return
@@ -148,18 +149,21 @@ async def cmd_admin(
             await message.answer("⛔️ Нет прав.")
             return
 
+        # Логирование открытия админ-панели
         user.last_activity = datetime.now(timezone.utc)
         session.add(
             AdminLog(
-                admin_id=message.from_user.id,
+                admin_telegram_id=message.from_user.id,
                 action="open_admin",
                 payload={"user_id": user.id},
             )
         )
         await session.commit()
 
+        # Отображение админ-панели после всех проверок
         await message.answer(
-            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках."
+            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+            reply_markup=kb_admin_menu(),
         )
 
 
@@ -205,7 +209,7 @@ async def admin_callbacks(
             user.status = "blocked"
             session.add(
                 AdminLog(
-                    admin_id=cq.from_user.id,
+                    admin_telegram_id=cq.from_user.id,
                     action="block",
                     payload={"user_id": user.id},
                 )
@@ -243,7 +247,7 @@ async def admin_callbacks(
 
             session.add(
                 AdminLog(
-                    admin_id=cq.from_user.id,
+                    admin_telegram_id=cq.from_user.id,
                     action="unblock",
                     payload={"user_id": user.id},
                 )

@@ -218,7 +218,7 @@ async def _notify_admin_on_block(
     }
     session.add(
         AdminLog(
-            admin_telegram_id=0,
+            admin_id=0,
             action="auth_block_request",
             payload=payload,
         )

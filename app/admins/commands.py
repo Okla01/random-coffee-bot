@@ -151,7 +151,7 @@ async def cmd_admin(
         user.last_activity = datetime.now(timezone.utc)
         session.add(
             AdminLog(
-                admin_telegram_id=message.from_user.id,
+                admin_id=message.from_user.id,
                 action="open_admin",
                 payload={"user_id": user.id},
             )
@@ -205,7 +205,7 @@ async def admin_callbacks(
             user.status = "blocked"
             session.add(
                 AdminLog(
-                    admin_telegram_id=cq.from_user.id,
+                    admin_id=cq.from_user.id,
                     action="block",
                     payload={"user_id": user.id},
                 )
@@ -243,7 +243,7 @@ async def admin_callbacks(
 
             session.add(
                 AdminLog(
-                    admin_telegram_id=cq.from_user.id,
+                    admin_id=cq.from_user.id,
                     action="unblock",
                     payload={"user_id": user.id},
                 )

@@ -15,7 +15,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     String,
     UniqueConstraint,
     func,
@@ -75,11 +74,23 @@ class User(Base):
     )  # 'импорт' | 'сам'
     import_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
-    # Аудит
+    # Часовой пояс
+    tz: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, default="Europe/Moscow"
+    )  # Часовой пояс пользователя (например, "Europe/Moscow")
+
+    # Аудит и временные метки
+    registered_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )  # Дата регистрации
     last_activity: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
-    )
+    )  # Последняя активность
+    last_match_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Дата последнего матча
 
+    # Relationships
     otps: Mapped[list["Otp"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
@@ -88,6 +99,18 @@ class User(Base):
     )
     roles: Mapped[list["UserRole"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
+    )
+    matches_as_a: Mapped[list["Match"]] = relationship(
+        "Match", foreign_keys="Match.user_a_id", back_populates="user_a"
+    )
+    matches_as_b: Mapped[list["Match"]] = relationship(
+        "Match", foreign_keys="Match.user_b_id", back_populates="user_b"
+    )
+    complaints_as_reporter: Mapped[list["Complaint"]] = relationship(
+        "Complaint", foreign_keys="Complaint.reporter_id", back_populates="reporter"
+    )
+    complaints_as_reported: Mapped[list["Complaint"]] = relationship(
+        "Complaint", foreign_keys="Complaint.reported_id", back_populates="reported"
     )
 
 
@@ -205,15 +228,100 @@ class AdminLog(Base):
     Логирование всех действий в административной панели.
 
     Сохраняет информацию о действиях администратора (открытие панели, блокировка пользователя и т.д.),
-    включая Telegram ID администратора, тип действия, данные действия и временную метку.
+    включая ID администратора, тип действия, данные действия и временную метку.
     """
 
     __tablename__ = "admin_log"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    admin_telegram_id: Mapped[int] = mapped_column(Integer, index=True)
+    admin_id: Mapped[int] = mapped_column(Integer, index=True)  # ID администратора (telegram_id)
     action: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)
     ts: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
+
+
+# ------------------------------ Matches ----------------------------- #
+
+
+class Match(Base):
+    """
+    Матч между двумя пользователями.
+
+    Хранит информацию о паре пользователей, которые были сопоставлены,
+    дату создания матча и его статус.
+    """
+
+    __tablename__ = "matches"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_a_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    user_b_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    status: Mapped[str] = mapped_column(
+        String(16), default="active", index=True
+    )  # active, cancelled, completed и т.д.
+
+    user_a: Mapped["User"] = relationship("User", foreign_keys=[user_a_id], back_populates="matches_as_a")
+    user_b: Mapped["User"] = relationship("User", foreign_keys=[user_b_id], back_populates="matches_as_b")
+
+    __table_args__ = (
+        UniqueConstraint("user_a_id", "user_b_id", name="uq_match_users"),
+    )
+
+
+# ----------------------------- Complaints --------------------------- #
+
+
+class Complaint(Base):
+    """
+    Жалоба пользователя на другого пользователя.
+
+    Хранит информацию о жалобе: кто подал жалобу, на кого, причину,
+    текст жалобы, время создания и статус обработки.
+    """
+
+    __tablename__ = "complaints"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    reporter_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )  # ID пользователя, который подал жалобу
+    reported_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )  # ID пользователя, на которого пожаловались
+    reason: Mapped[str] = mapped_column(String(64))  # Причина жалобы
+    text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Текст жалобы
+    ts: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )  # Время создания жалобы
+    status: Mapped[str] = mapped_column(
+        String(16), default="pending", index=True
+    )  # pending, reviewed, resolved, rejected
+
+    reporter: Mapped["User"] = relationship("User", foreign_keys=[reporter_id], back_populates="complaints_as_reporter")
+    reported: Mapped["User"] = relationship("User", foreign_keys=[reported_id], back_populates="complaints_as_reported")
+
+
+# ----------------------------- Settings ---------------------------- #
+
+
+class Setting(Base):
+    """
+    Настройки приложения, хранящиеся в базе данных.
+
+    Хранит ключ-значение пары для конфигурации приложения.
+    Используется для хранения настроек, которые могут изменяться без перезапуска приложения.
+    """
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    value: Mapped[str] = mapped_column(String(512))

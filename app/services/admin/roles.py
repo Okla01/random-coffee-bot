@@ -12,8 +12,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core import Settings
-from app.services.core.users import get_user_by_tg_id
 from app.database import User, Role, UserRole
+from app.database.db import get_user_by_tg_id
 
 
 async def sync_admin_role(

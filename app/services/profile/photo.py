@@ -14,13 +14,17 @@ from __future__ import annotations
 import asyncio
 from typing import Optional
 
+from aiogram.fsm.context import FSMContext
 from aiogram.types import PhotoSize
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import attributes
 
 from app.database import User
 from app.database.utils import now_utc
-from app.services.profile.utils import get_photos_list, set_photos_list
+from aiogram.types import InputMediaPhoto
+from aiogram.exceptions import TelegramBadRequest
+
 
 # Максимальное количество фото в профиле
 MAX_PHOTOS = 3
@@ -31,6 +35,75 @@ MAX_PHOTOS = 3
 _media_group_buffer: dict[str, list[PhotoSize]] = {}
 # {media_group_id: asyncio.Task} – чтобы не запускать обработку альбома несколько раз
 _media_group_tasks: dict[str, asyncio.Task] = {}
+
+
+async def send_photo_request(
+    message_or_cq,
+    state: FSMContext,
+    kb=None,
+) -> None:
+    """
+    Отправляет стандартный запрос на загрузку фото с клавиатурой.
+    
+    Args:
+        message_or_cq: Message или CallbackQuery объект
+        state (FSMContext): контекст FSM
+        kb: клавиатура (по умолчанию kb_profile_photo())
+    """
+    # Импортируем здесь, чтобы избежать циклических импортов
+    from app.keyboards.kb_profile import kb_profile_photo as default_kb
+    
+    if kb is None:
+        kb = default_kb()
+    
+    # Для CallbackQuery используем message.answer(), для Message просто answer()
+    if hasattr(message_or_cq, 'message'):
+        # Это CallbackQuery
+        sent = await message_or_cq.message.answer(
+            "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
+            "либо используйте текущее фото вашего профиля.",
+            reply_markup=kb,
+        )
+    else:
+        # Это Message
+        sent = await message_or_cq.answer(
+            "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
+            "либо используйте текущее фото вашего профиля.",
+            reply_markup=kb,
+        )
+    
+    if sent and hasattr(sent, 'message_id'):
+        await state.update_data(last_kb_mid=sent.message_id)
+
+
+async def send_photos(
+    bot,
+    chat_id: int,
+    photos_list: list,
+) -> None:
+    """
+    Отправляет список фото (одиночное или альбом).
+    
+    Автоматически выбирает способ отправки в зависимости от количества фото.
+    """
+    if not photos_list:
+        return
+
+    count = len(photos_list)
+
+    if count == 1:
+        await bot.send_photo(chat_id, photos_list[0]["file_id"])
+    else:
+        media_group = [
+            InputMediaPhoto(media=photo_data["file_id"])
+            for photo_data in photos_list
+        ]
+        try:
+            await bot.send_media_group(chat_id, media=media_group)
+        except TelegramBadRequest as e:
+            print("send_media_group error:", repr(e))
+            for photo_data in photos_list:
+                await bot.send_photo(chat_id, photo_data["file_id"])
 
 
 def add_to_media_group_buffer(media_group_id: str, photo: PhotoSize) -> list[PhotoSize]:
@@ -265,3 +338,19 @@ def get_photo_count(user: User) -> int:
     photos_list = get_photos_list(user)
     return len(photos_list)
 
+def get_photos_list(user: User) -> list:
+    """Получает список фото пользователя из БД."""
+    # Импорт здесь не нужен, так как User используется только для типизации
+    # благодаря TYPE_CHECKING и from __future__ import annotations
+    return user.photos_json.get("photos", []) if user.photos_json else []
+
+
+def set_photos_list(user: User, photos_list: list) -> None:
+    """Устанавливает список фото пользователя в БД."""
+    # Импорт здесь не нужен, так как User используется только для типизации
+    # благодаря TYPE_CHECKING и from __future__ import annotations
+    if photos_list:
+        user.photos_json = {"photos": photos_list}
+        attributes.flag_modified(user, "photos_json")
+    else:
+        user.photos_json = None

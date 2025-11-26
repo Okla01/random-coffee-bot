@@ -14,15 +14,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+import re
+from typing import Iterable, List, Literal
 
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core.config import Settings
-from app.services.core.text import contains_banned_words
-from app.services.profile.utils import normalize_interests
+from app.services.profile.banned_words import contains_banned_words
 from app.services.profile.utils import is_profile_complete
 
 from app.database.models import User
@@ -333,6 +333,50 @@ async def process_interests_field(
         next_stage="profile_review",
         is_editing=False
     )
+
+
+def normalize_interests(
+    raw: str, banned_words: Iterable[str]
+) -> tuple[List[str] | None, str | None]:
+    """
+    Нормализует и валидирует список интересов.
+
+    Разбивает строку по разделителям (запятая, точка с запятой, перевод строки),
+    тримит каждый элемент, проверяет индивидуальную длину (1–50 символов),
+    удаляет дубликаты (без учёта регистра), проверяет на запрещённые слова
+    и контролирует суммарную длину (макс. 300 символов) и количество (макс. 30).
+
+    Args:
+        raw (str): исходная строка с интересами, разделённые запятыми/другими разделителями.
+        banned_words (Iterable[str]): итерируемое собрание запрещённых слов.
+
+    Returns:
+        tuple[list[str] | None, str | None]: (список_интересов_или_None, сообщение_об_ошибке_или_None).
+                                               При успехе: (список, None), при ошибке: (None, текст_ошибки).
+    """
+    if not raw.strip():
+        return [], None
+    parts = re.split(r"[,\n;]+", raw)
+    interests = [p.strip() for p in parts if p.strip()]
+    if len(interests) > 30:
+        return None, "Слишком много значений (макс. 30)."
+    for interest in interests:
+        if not (1 <= len(interest) <= 50):
+            return None, f"Интерес «{interest}» недопустимой длины"
+        has_banned, word = contains_banned_words(interest, banned_words)
+        if has_banned:
+            return None, f"Интерес «{interest}» содержит недопустимое слово"
+    # удаляем дубликаты, сохраняя порядок
+    seen = set()
+    result: List[str] = []
+    for it in interests:
+        if it.lower() not in seen:
+            seen.add(it.lower())
+            result.append(it)
+    # итоговая длина строк
+    if sum(len(x) for x in result) > 300:
+        return None, "Суммарная длина интересов превышает 300 символов."
+    return result, None
 
 
 async def process_prefilled_keep(

@@ -17,18 +17,20 @@ from aiogram.exceptions import TelegramBadRequest
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.core import Settings
-from app.services.core.users import get_or_create_user
-from app.services.core.text import send_photo_request
+from app.database.db import get_or_create_user
 from app.database.utils import now_utc
+
 from app.keyboards.kb_profile import (
     kb_profile_photo,
     kb_profile_photo_with_photos,
     kb_profile_photo_clear_save,
     kb_profile_review,
 )
-from app.services.profile.utils import get_photos_list, send_photos
-from app.services.profile.utils import is_profile_complete
+
+from app.services.core import Settings
+from app.services.profile.utils import(
+    is_profile_complete,
+)
 from app.services.profile.preview import _send_profile_preview
 from app.services.profile.photo import (
     MAX_PHOTOS,
@@ -43,6 +45,9 @@ from app.services.profile.photo import (
     add_telegram_profile_photo,
     clear_user_photos,
     can_add_photo,
+    send_photo_request,
+    send_photos,
+    get_photos_list,
 )
 
 router = Router()

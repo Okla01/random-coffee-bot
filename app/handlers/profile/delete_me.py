@@ -16,15 +16,17 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.core import Settings
-from app.services.core.keyboards import clear_last_kb
 from app.services.profile.delete_me import delete_user_by_telegram_id
+from app.services.profile.preview import _send_profile_preview
+
+from app.keyboards.utils import clear_last_kb
 from app.keyboards.kb_profile import (
     kb_profile_delete_confirm,
     kb_profile_review,
 )
-from app.services.profile.preview import (
-    _send_profile_preview,
-)
+
+from app.database.db import get_or_create_user
+
 
 router = Router()
 
@@ -127,8 +129,6 @@ async def cb_delete_cancel(
     await cq.message.edit_text("Удаление отменено.", reply_markup=None)
     
     async with session_factory() as session:
-        from app.services.core.users import get_or_create_user
-        
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         
         # Возвращаем пользователя к просмотру анкеты с фотографиями

@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.keyboards.kb_admin import kb_admin_menu
 from app.services.core import Settings
-from app.services.core.keyboards import clear_last_kb
+from app.keyboards.utils import clear_last_kb
 from app.services.admin import (
     process_admin_command,
     AdminAccessResultType,

@@ -17,17 +17,15 @@ from aiogram.dispatcher.event.bases import SkipHandler
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.services.core import Settings
 from app.keyboards.kb_auth import kb_auth_code_wait, kb_auth_code_expired
+from app.keyboards.utils import clear_last_kb
+
 from app.database.utils import now_utc
-from app.services.core.users import (
-    get_or_create_user,
+from app.database.db import (
+    get_or_create_user,         
     check_user_blocked,
-    is_stage_valid,
 )
-from app.services.core.keyboards import (
-    clear_last_kb,
-)
+
 from app.services.auth.registration import (
     process_otp_input,
     check_email_change_allowed,
@@ -36,10 +34,13 @@ from app.services.auth.registration import (
     notify_admin_on_block,
     OtpResultType,
 )
+
+from app.services.core import Settings
 from app.services.auth.email import (
     process_email_input,
     EmailResultType,
 )
+
 
 router = Router()
 
@@ -292,7 +293,7 @@ async def cb_otp_resend(
         if await check_user_blocked(cq, session, user):
             return
 
-        if not is_stage_valid(user, {"verifying_code", "verifying_code_error"}):
+        if user.stage not in {"verifying_code", "verifying_code_error"}:
             await session.commit()
             await cq.answer("Переотправка кода недоступна.")
             return

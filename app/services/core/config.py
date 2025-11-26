@@ -20,7 +20,7 @@ from typing import Pattern, Set, List
 
 from dotenv import load_dotenv
 
-from app.services.profile.utils import load_banned_words
+from app.services.profile.banned_words import load_banned_words
 
 
 def _parse_list(raw: str) -> List[str]:

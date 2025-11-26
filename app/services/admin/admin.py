@@ -14,7 +14,7 @@ from enum import Enum
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core import Settings
-from app.services.core.users import get_user_by_tg_id
+from app.database.db import get_user_by_tg_id
 from app.database import User, AdminLog
 from app.database.utils import now_utc
 from .roles import sync_admin_role, is_admin

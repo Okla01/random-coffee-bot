@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
-from app.services.core.text import contains_banned_words  # фильтр запрещённых слов
+from app.services.profile.banned_words import contains_banned_words  # фильтр запрещённых слов
 
 
 # Перечень возможных действий после обработки /start.

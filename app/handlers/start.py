@@ -15,7 +15,7 @@ from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from app.services.core.config import Settings
-from app.services.core.users import get_or_create_user
+from app.database.db import get_or_create_user
 from app.keyboards.kb_auth import (
     kb_auth_code_wait,
 )
@@ -28,7 +28,7 @@ from app.keyboards.kb_profile import (
     kb_profile_filled,
 )
 from app.services.onboarding import process_start
-from app.services.core.keyboards import clear_last_kb
+from app.keyboards.utils import clear_last_kb
 from app.services.profile.preview import _send_profile_preview
 from app.handlers.profile.photo import _send_photos_with_actions
 

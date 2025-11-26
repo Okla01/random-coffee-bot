@@ -21,18 +21,12 @@ from app.keyboards.kb_profile import (
     kb_profile_review,
     kb_profile_photo,
 )
+from app.keyboards.utils import clear_last_kb
+
 from app.services.profile.preview import (
     _send_profile_preview,
     build_profile_preview_text
 )
-from app.services.core.users import (
-    get_or_create_user,
-    update_user_stage,
-)
-from app.services.core.keyboards import (
-    clear_last_kb,
-)
-from app.services.core.text import send_photo_request
 from app.services.profile.editing import (
     process_name_field,
     process_bio_field,
@@ -43,6 +37,13 @@ from app.services.profile.editing import (
     process_save_profile,
     process_edit_review,
 )
+from app.services.profile.photo import send_photo_request
+
+from app.database.db import (
+    get_or_create_user,
+    update_user_stage,
+)
+
 
 router = Router()
 

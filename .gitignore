@@ -25,6 +25,8 @@ htmlcov/
 
 # Project specific
 data/*.db
+data/*.sqlite3
+
 data/backups/
 logs/
 *.log

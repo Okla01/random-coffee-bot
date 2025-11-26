@@ -20,6 +20,8 @@ from typing import Pattern, Set, List
 
 from dotenv import load_dotenv
 
+from app.services.profile.utils import load_banned_words
+
 
 def _parse_list(raw: str) -> List[str]:
     """
@@ -159,7 +161,7 @@ class Settings:
 
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
         tz_default = os.getenv("TZ_DEFAULT", "Europe/Moscow")
-        banned_words = _parse_list(os.getenv("BANNED_WORDS", ""))
+        banned_words = load_banned_words()
 
         return cls(
             bot_token=bot_token,

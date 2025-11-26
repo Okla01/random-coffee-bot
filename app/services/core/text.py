@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Iterable
 
 from aiogram.fsm.context import FSMContext
@@ -16,7 +17,9 @@ def contains_banned_words(
     Проверяет наличие запрещённых слов в тексте.
 
     Выполняет поиск слов из списка banned_words в тексте без учёта регистра.
-    Возвращает результат в виде кортежа с флагом наличия и самим словом.
+    Слова проверяются как целые слова (не подстроки), например:
+    - "спам" найдется в "Данил Спам" или "спам реклама"
+    - "спам" НЕ найдется в "ДанСПАМил" или "спамм"
 
     Args:
         text (str): текст для проверки.
@@ -28,7 +31,14 @@ def contains_banned_words(
     low = text.lower()
     for w in banned_words:
         w = w.strip().lower()
-        if w and w in low:
+        if not w:
+            continue
+        
+        # Используем регулярное выражение с границами слов (\b)
+        # Это гарантирует, что слово ищется как целое, а не как подстрока
+        pattern = r'\b' + re.escape(w) + r'\b'
+        
+        if re.search(pattern, low):
             return True, w
     return False, None
 

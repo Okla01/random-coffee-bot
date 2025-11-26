@@ -6,15 +6,46 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List
+from pathlib import Path
+from typing import TYPE_CHECKING, Iterable, List
 import re
 
 from aiogram.types import InputMediaPhoto
 from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.orm import attributes
 
-from app.database import User
 from app.services.core.text import contains_banned_words
+
+if TYPE_CHECKING:
+    from app.database import User
+
+
+def load_banned_words() -> List[str]:
+    """
+    Загружает список запрещённых слов из файла.
+    
+    Читает файл data/banned_words.txt, где каждое слово на отдельной строке.
+    Пустые строки и строки, начинающиеся с #, игнорируются.
+    
+    Returns:
+        List[str]: список запрещённых слов.
+    """
+    banned_words_file = Path("data/banned_words.txt")
+    words = []
+    
+    if banned_words_file.exists():
+        try:
+            with open(banned_words_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    # Игнорируем пустые строки и комментарии
+                    if line and not line.startswith("#"):
+                        words.append(line)
+        except Exception:
+            # Если не удалось прочитать файл, возвращаем пустой список
+            pass
+    
+    return words
 
 
 def normalize_interests(
@@ -63,11 +94,15 @@ def normalize_interests(
 
 def get_photos_list(user: User) -> list:
     """Получает список фото пользователя из БД."""
+    # Импорт здесь не нужен, так как User используется только для типизации
+    # благодаря TYPE_CHECKING и from __future__ import annotations
     return user.photos_json.get("photos", []) if user.photos_json else []
 
 
 def set_photos_list(user: User, photos_list: list) -> None:
     """Устанавливает список фото пользователя в БД."""
+    # Импорт здесь не нужен, так как User используется только для типизации
+    # благодаря TYPE_CHECKING и from __future__ import annotations
     if photos_list:
         user.photos_json = {"photos": photos_list}
         attributes.flag_modified(user, "photos_json")

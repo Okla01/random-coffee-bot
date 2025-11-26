@@ -24,7 +24,7 @@ htmlcov/
 *~
 
 # Project specific
-data/*.db
+data/
 data/backups/
 logs/
 *.log

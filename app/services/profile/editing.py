@@ -22,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core.config import Settings
 from app.services.core.text import contains_banned_words
-from app.database.models import User
 from app.services.profile.utils import normalize_interests
+from app.services.profile.utils import is_profile_complete
 
+from app.database.models import User
 
 # Типы результатов обработки полей профиля
 FieldResultType = Literal[
@@ -50,33 +51,6 @@ class FieldResult:
     error_message: str | None = None
     next_stage: str | None = None
     is_editing: bool = False
-
-
-def _is_profile_complete(user: User) -> bool:
-    """
-    Проверяет, заполнен ли профиль полностью.
-    
-    Профиль считается заполненным, если все обязательные поля заполнены:
-    - имя (name)
-    - описание (bio)
-    - возраст (age)
-    - интересы (interests_json)
-    - фото (photos_json с непустым списком photos)
-    
-    Args:
-        user (User): объект пользователя.
-        
-    Returns:
-        bool: True если все обязательные поля заполнены, иначе False.
-    """
-    return bool(
-        user.name and
-        user.bio and
-        user.age and
-        user.interests_json and
-        user.photos_json and
-        user.photos_json.get("photos")
-    )
 
 
 async def process_name_field(
@@ -138,7 +112,7 @@ async def process_name_field(
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
-    is_editing = editing_field == "name" or _is_profile_complete(user)
+    is_editing = editing_field == "name" or is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -208,7 +182,7 @@ async def process_bio_field(
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
-    is_editing = editing_field == "bio" or _is_profile_complete(user)
+    is_editing = editing_field == "bio" or is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -279,7 +253,7 @@ async def process_age_field(
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
-    is_editing = editing_field == "age" or _is_profile_complete(user)
+    is_editing = editing_field == "age" or is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -341,7 +315,7 @@ async def process_interests_field(
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
-    is_editing = editing_field == "interests" or _is_profile_complete(user)
+    is_editing = editing_field == "interests" or is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()

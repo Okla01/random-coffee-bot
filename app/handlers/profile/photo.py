@@ -28,6 +28,7 @@ from app.keyboards.kb_profile import (
     kb_profile_review,
 )
 from app.services.profile.utils import get_photos_list, send_photos
+from app.services.profile.utils import is_profile_complete
 from app.services.profile.preview import _send_profile_preview
 from app.services.profile.photo import (
     MAX_PHOTOS,
@@ -395,16 +396,8 @@ async def cb_photo_save(
         editing = data.get("editing_field")
         
         # Проверяем, заполнен ли профиль полностью (для работы после перезапуска бота)
-        is_profile_complete = bool(
-            user.name and
-            user.bio and
-            user.age and
-            user.interests_json and
-            user.photos_json and
-            user.photos_json.get("photos")
-        )
-
-        if editing == "photo" or is_profile_complete:
+        editing_profile_complete = is_profile_complete(user)
+        if editing == "photo" or editing_profile_complete:
             # Возвращаемся в режим просмотра анкеты
             user.stage = "profile_review"
             await session.commit()

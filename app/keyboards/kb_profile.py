@@ -41,12 +41,24 @@ def kb_profile_review() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:save")],
-            [
-                InlineKeyboardButton(text="Изменить описание", callback_data="prof:edit:bio"),
-            ],
+            [InlineKeyboardButton(text="Изменить описание", callback_data="prof:edit:bio"),],
             [InlineKeyboardButton(text="Изменить интересы", callback_data="prof:edit:interests")],
             [InlineKeyboardButton(text="Изменить фото", callback_data="prof:edit:photo")],
             [InlineKeyboardButton(text="Удалить профиль 🗑", callback_data="prof:delete:confirm")],
+        ]
+    )
+
+
+def kb_profile_photo_clear_save() -> InlineKeyboardMarkup:
+    """
+    Кратко: клавиатура для управления фотографиями профиля (очистка, сохранить).
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Очистить 🗑️", callback_data="prof:photo:clear"),
+                InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:photo:save"),
+            ],
         ]
     )
 
@@ -61,18 +73,6 @@ def kb_profile_photo() -> InlineKeyboardMarkup:
         ]
     )
 
-def kb_profile_photo_clear_save() -> InlineKeyboardMarkup:
-    """
-    Кратко: клавиатура для управления фотографиями профиля (очистка, сохранить).
-    """
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="Очистить 🗑️", callback_data="prof:photo:clear"),
-                InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:photo:save"),
-            ],
-        ]
-    )
 
 def kb_profile_photo_with_photos() -> InlineKeyboardMarkup:
     """

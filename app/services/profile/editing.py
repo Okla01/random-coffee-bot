@@ -52,6 +52,33 @@ class FieldResult:
     is_editing: bool = False
 
 
+def _is_profile_complete(user: User) -> bool:
+    """
+    Проверяет, заполнен ли профиль полностью.
+    
+    Профиль считается заполненным, если все обязательные поля заполнены:
+    - имя (name)
+    - описание (bio)
+    - возраст (age)
+    - интересы (interests_json)
+    - фото (photos_json с непустым списком photos)
+    
+    Args:
+        user (User): объект пользователя.
+        
+    Returns:
+        bool: True если все обязательные поля заполнены, иначе False.
+    """
+    return bool(
+        user.name and
+        user.bio and
+        user.age and
+        user.interests_json and
+        user.photos_json and
+        user.photos_json.get("photos")
+    )
+
+
 async def process_name_field(
     session: AsyncSession,
     user: User,
@@ -110,7 +137,8 @@ async def process_name_field(
     user.last_activity = datetime.now(timezone.utc)
 
     # Определение следующей стадии
-    is_editing = editing_field == "name"
+    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
+    is_editing = editing_field == "name" or _is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -179,7 +207,8 @@ async def process_bio_field(
     user.last_activity = datetime.now(timezone.utc)
 
     # Определение следующей стадии
-    is_editing = editing_field == "bio"
+    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
+    is_editing = editing_field == "bio" or _is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -249,7 +278,8 @@ async def process_age_field(
     user.last_activity = datetime.now(timezone.utc)
 
     # Определение следующей стадии
-    is_editing = editing_field == "age"
+    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
+    is_editing = editing_field == "age" or _is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()
@@ -310,7 +340,8 @@ async def process_interests_field(
     user.last_activity = datetime.now(timezone.utc)
 
     # Определение следующей стадии
-    is_editing = editing_field == "interests"
+    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
+    is_editing = editing_field == "interests" or _is_profile_complete(user)
     if is_editing:
         user.stage = "profile_review"
         await session.commit()

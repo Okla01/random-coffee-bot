@@ -393,8 +393,18 @@ async def cb_photo_save(
         # Проверяем, был ли режим редактирования
         data = await state.get_data()
         editing = data.get("editing_field")
+        
+        # Проверяем, заполнен ли профиль полностью (для работы после перезапуска бота)
+        is_profile_complete = bool(
+            user.name and
+            user.bio and
+            user.age and
+            user.interests_json and
+            user.photos_json and
+            user.photos_json.get("photos")
+        )
 
-        if editing == "photo":
+        if editing == "photo" or is_profile_complete:
             # Возвращаемся в режим просмотра анкеты
             user.stage = "profile_review"
             await session.commit()

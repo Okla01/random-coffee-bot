@@ -24,12 +24,13 @@ htmlcov/
 *~
 
 # Project specific
-data/
+data/*.db
+data/*.sqlite3
+
 data/backups/
 logs/
 *.log
 .env
-all_code.*
 
 # Distribution / packaging
 dist/

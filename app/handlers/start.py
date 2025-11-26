@@ -64,6 +64,9 @@ async def cmd_start(
     # Очистка предыдущей клавиатуры (при наличии)
     await clear_last_kb(state, message.chat.id, message.bot)
 
+    # Сбрасываем флаг админ-панели при возврате к регистрации
+    await state.update_data(admin_panel_active=False)
+
     # Открываем асинхронную сессию БД в контекстном менеджере
     async with session_factory() as session:
         # Получаем пользователя или создаём нового при первом заходе

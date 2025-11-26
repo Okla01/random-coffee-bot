@@ -69,6 +69,9 @@ async def cmd_admin(
         # Удаляем предыдущую клавиатуру
         await clear_last_kb(state, message.chat.id, message.bot)
 
+        # Сохраняем флаг, что админ-панель активна, чтобы обработчик регистрации не перехватывал текст
+        await state.update_data(admin_panel_active=True)
+
         # Отображение админ-панели после всех проверок
         sent = await message.answer(
             "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",

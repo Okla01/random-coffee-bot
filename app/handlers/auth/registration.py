@@ -112,13 +112,19 @@ async def on_email_or_code(
     (валидация по regex и доменам), либо OTP-код (проверка корректности и срока действия).
     Оставляет обработку других текстов другим обработчикам через SkipHandler на не-свои стадиях.
     """
+    # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+    # Это позволяет админам использовать админ-панель, даже если они на стадии регистрации
+    state_data = await state.get_data()
+    if state_data.get("admin_panel_active"):
+        raise SkipHandler()
+    
     async with session_factory() as session:
         user = await get_or_create_user(
             session, message.from_user.id, message.from_user.username
         )
         # Обрабатываем только свои стадии — если не наша стадия, отменяем обработчик
+        # Убрали "new" из списка, так как на стадии "new" пользователь еще не получил приглашение ввести email
         if user.stage not in {
-            "new",
             "verifying_email",
             "verifying_email_error",
             "verifying_code",
@@ -141,7 +147,7 @@ async def on_email_or_code(
             return
 
         # E-MAIL
-        if user.stage in {"new", "verifying_email", "verifying_email_error"}:
+        if user.stage in {"verifying_email", "verifying_email_error"}:
             email = text
             result_type, error_msg, warn = await process_email_input(
                 session,

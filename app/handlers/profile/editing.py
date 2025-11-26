@@ -206,7 +206,7 @@ async def on_profile_text(
                 return
             
             if result.result_type == "field_updated_continue":
-                await message.answer("Введите ваш возраст (18–50):")
+                await message.answer("Введите ваш возраст (16–50):")
                 await state.update_data(last_kb_mid=None)
                 return
 
@@ -389,7 +389,7 @@ async def cb_prof_edit_field(
             await cq.message.answer("Расскажите о себе (до 500 символов):")
         elif field == "age":
             await update_user_stage(session, user, "profile_age", state, {"editing_field": field, "last_kb_mid": None})
-            await cq.message.answer("Введите ваш возраст (18–50):")
+            await cq.message.answer("Введите ваш возраст (16–50):")
         elif field == "interests":
             await update_user_stage(session, user, "profile_interests", state, {"editing_field": field, "last_kb_mid": None})
             await cq.message.answer("Перечислите интересы через запятую.")

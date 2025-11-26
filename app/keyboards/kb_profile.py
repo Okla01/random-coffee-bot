@@ -42,11 +42,7 @@ def kb_profile_review() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:save")],
             [
-                InlineKeyboardButton(text="Изменить имя", callback_data="prof:edit:name"),
-            ],
-            [
                 InlineKeyboardButton(text="Изменить описание", callback_data="prof:edit:bio"),
-                InlineKeyboardButton(text="Изменить возраст", callback_data="prof:edit:age"),
             ],
             [InlineKeyboardButton(text="Изменить интересы", callback_data="prof:edit:interests")],
             [InlineKeyboardButton(text="Изменить фото", callback_data="prof:edit:photo")],

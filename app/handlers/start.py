@@ -153,7 +153,7 @@ async def cmd_start(
 
         # Запрос возраста
         if result.action == "ask_profile_age":
-            await message.answer("Введите ваш возраст (18–50):")
+            await message.answer("Введите ваш возраст (16–50):")
             await state.update_data(last_kb_mid=None)
             return
 

@@ -87,6 +87,15 @@ async def process_name_field(
             error_message="⚠️ Имя должно быть от 2 до 100 символов. Попробуйте ещё раз."
         )
 
+    # Проверка, что имя содержит только буквы и пробелы
+    # Разрешаем пробелы для составных имен (например, "Мария Иванова")
+    if not all(c.isalpha() or c.isspace() for c in text) or not any(c.isalpha() for c in text):
+        await session.commit()
+        return FieldResult(
+            result_type="validation_error",
+            error_message="⚠️ Имя должно содержать только буквы. Попробуйте ещё раз."
+        )
+
     # Проверка запрещённых слов
     bad, word = contains_banned_words(text, settings.banned_words)
     if bad:
@@ -200,7 +209,7 @@ async def process_age_field(
     """
     Обрабатывает ввод возраста пользователя.
 
-    Валидирует возраст (число от 18 до 50), обновляет поле user.age,
+    Валидирует возраст (число от 16 до 50), обновляет поле user.age,
     определяет следующую стадию.
 
     Args:
@@ -222,17 +231,17 @@ async def process_age_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 18 до 50.\nВведите ваш возраст (18–50):"
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):"
         )
 
     age = int(text)
 
     # Валидация диапазона
-    if not (18 <= age <= 50):
+    if not (16 <= age <= 50):
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 18 до 50.\nВведите ваш возраст (18–50):"
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):"
         )
 
     # Обновление поля

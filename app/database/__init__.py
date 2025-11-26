@@ -14,4 +14,18 @@
 from .db import make_engine, make_session_factory, lifespan_db
 from .models import *
 
-__all__ = ["make_engine", "make_session_factory", "lifespan_db", "Base", "User", "Otp", "AuthAttempt", "Role", "UserRole", "AdminLog"]
+__all__ = [
+    "make_engine",
+    "make_session_factory",
+    "lifespan_db",
+    "Base",
+    "User",
+    "Otp",
+    "AuthAttempt",
+    "Role",
+    "UserRole",
+    "AdminLog",
+    "Match",
+    "Complaint",
+    "Setting",
+]

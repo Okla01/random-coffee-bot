@@ -10,7 +10,7 @@
 
 import asyncio
 
-from app.core.bot import run_bot
+from app.services.core.bot import run_bot
 
 
 if __name__ == "__main__":

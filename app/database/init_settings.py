@@ -14,9 +14,10 @@ from app.database import Setting
 
 # Дефолтные настройки, которые будут созданы при инициализации
 DEFAULT_SETTINGS: dict[str, str] = {
-    # Примеры настроек (замените на ваши реальные настройки)
-    # "setting_key_1": "default_value_1",
-    # "setting_key_2": "default_value_2",
+    "min_jaccard": "0.3",
+    "cooldown_weeks": "1",
+    "match_day": "fri",
+    "match_utc_hour": "12",
 }
 
 
@@ -34,7 +35,7 @@ async def init_default_settings(session: AsyncSession) -> None:
         None: ничего не возвращает.
     """
     for key, default_value in DEFAULT_SETTINGS.items():
-        # Проверяем, существует ли уже настройка
+        # Проверка, существует ли уже настройка
         existing = (
             await session.execute(select(Setting).where(Setting.key == key))
         ).scalar_one_or_none()

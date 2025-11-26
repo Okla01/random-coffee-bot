@@ -57,3 +57,31 @@ def kb_admin_decision(user_id: int) -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def kb_admin_settings() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для настроек администратора.
+
+    Используется для изменения специфических настроек работы алгоритма организации встреч.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔄 Изменить минимальный Jaccard", callback_data="admin:update_min_jaccard"),
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Изменить периодичность встреч (в неделях)", callback_data="admin:update_cooldown_weeks"),
+            ],
+            [
+                InlineKeyboardButton(text="🗓️ Изменить день недели для встреч", callback_data="admin:update_match_day"),
+            ],
+            [
+                InlineKeyboardButton(text="🕓 Изменить час совпадения", callback_data="admin:update_match_utc_hour"),
+            ],
+            [
+                InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="admin:cancel_admin_settings"),
+            ],
+        ]
+    )

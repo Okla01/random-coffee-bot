@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.types import CallbackQuery
 
 from sqlalchemy import select
@@ -20,7 +20,9 @@ from app.services.admin import is_admin, block_user, unblock_user
 router = Router()
 
 
-@router.callback_query()
+@router.callback_query(
+    F.data.startswith("admin:block:") | F.data.startswith("admin:unblock:")
+)
 async def admin_callbacks(
     cq: CallbackQuery,
     session_factory: async_sessionmaker[AsyncSession],
@@ -35,8 +37,6 @@ async def admin_callbacks(
     Отказывает в доступе если caller не администратор.
     """
     data = cq.data or ""
-    if not (data.startswith("admin:block:") or data.startswith("admin:unblock:")):
-        return
 
     async with session_factory() as session:
         # Проверка прав администратора

@@ -29,6 +29,7 @@ data/backups/
 logs/
 *.log
 .env
+all_code.*
 
 # Distribution / packaging
 dist/

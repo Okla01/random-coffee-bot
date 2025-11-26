@@ -11,7 +11,7 @@ from typing import AsyncIterator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.core import Settings
+from app.services.core import Settings
 
 
 def make_engine(settings: Settings):
@@ -78,6 +78,12 @@ async def lifespan_db(
 
     async with engine.begin() as conn:
         await conn.run_sync(_Base.metadata.create_all)
+
+    # Инициализируем дефолтные настройки
+    async with session_factory() as session:
+        from .init_settings import init_default_settings
+        await init_default_settings(session)
+        await session.commit()
 
     try:
         yield session_factory

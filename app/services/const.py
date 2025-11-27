@@ -13,3 +13,11 @@ DAYS_OF_WEEK = {
     "sat": "Суббота",
     "sun": "Воскресенье",
 }
+
+# Дефолтные настройки, которые будут созданы при инициализации
+DEFAULT_SETTINGS: dict[str, str] = {
+    "min_jaccard": "0.3",
+    "cooldown_weeks": "1",
+    "match_day": "fri",
+    "match_utc_hour": "12",
+}

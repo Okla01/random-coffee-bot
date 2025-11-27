@@ -22,11 +22,36 @@ async def get_current_settings(
     return {s.key: s.value for s in settings}
 
 
+async def save_settings(
+    session_factory: async_sessionmaker[AsyncSession],
+    draft_settings: dict[str, str],
+) -> None:
+    """
+    Сохраняет настройки в базу данных.
+
+    Args:
+        session_factory: async_sessionmaker[AsyncSession] - фабрика сессий.
+        draft_settings: dict[str, str] - настройки, которые ещё не сохранены в базу данных.
+    """
+    async with session_factory() as session:
+        for key, value in draft_settings.items():
+            # Получение настройки из базы данных
+            setting = await session.get(Setting, key)
+
+            if setting is None:
+                # Нет настройки - пропуск
+                continue
+            
+            setting.value = value
+
+        await session.commit()
+
+
 def format_settings_text(settings: dict) -> str:
     """
     Форматирует настройки в текстовую строку.
 
-    Данный текст будет отображён над меню с настройками панели администратора.
+    Примечание: Данный текст будет отображён над меню с настройками панели администратора.
     """
     text = "Настройки для организации встреч.\n\n"
     text += f"🔹 Минимальный Jaccard: {settings['min_jaccard']}\n"
@@ -65,7 +90,7 @@ async def update_draft_setting(
     await state.update_data(draft_settings=draft)
     
     return draft
-    
+
 
 def try_to_input_min_jaccard(msg: str) -> float | None:
     """
@@ -98,6 +123,24 @@ def try_to_input_cooldown_weeks(msg: str) -> int | None:
         return None
     
     if 1 <= value <= 4:
+        return value
+
+    return None
+
+
+def try_to_input_match_utc_hour(msg: str) -> int | None:
+    """
+    Пытается преобразовать введённый текст в числовое значения (типа int).
+
+    Также сразу происходит проверка на вхождение числа в промежуток.
+    """
+
+    try:
+        value = int(msg.strip())
+    except ValueError:
+        return None
+    
+    if 0 <= value <= 23:
         return value
 
     return None

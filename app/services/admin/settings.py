@@ -1,4 +1,5 @@
 from mailbox import Message
+from aiogram.fsm.context import FSMContext
 from sqlalchemy.sql import select
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -40,6 +41,33 @@ def format_settings_text(settings: dict) -> str:
     return text
 
 
+async def update_draft_setting(
+    state: FSMContext,
+    key: str,
+    value: any
+) -> dict:
+    """
+    Обновляет черновик настроек и возвращает его.
+
+    Args:
+        state: FSMContext - контекст состояния.
+        key: str - ключ настройки.
+        value: any - значение настройки.
+
+    Returns:
+        dict - черновик настроек.
+    """
+    # Получение черновика настроек
+    data = await state.get_data()
+    draft = (data.get("draft_settings") or {}).copy()
+    # Обновление черновика настроек
+    draft[key] = value
+    # Сохранение черновика
+    await state.update_data(draft_settings=draft)
+    
+    return draft
+    
+
 def try_to_input_min_jaccard(msg: str) -> float | None:
     """
     Пытается преобразовать введённый текст в числовое значения (типа float).
@@ -54,6 +82,23 @@ def try_to_input_min_jaccard(msg: str) -> float | None:
         return None
 
     if 0.1 <= value <= 1.0:
+        return value
+
+    return None
+
+
+def try_to_input_cooldown_weeks(msg: str) -> int | None:
+    """
+    Пытается преобразовать введённый текст в числовое значения (типа float).
+
+    Также сразу происходит проверка на вхождение числа в промежуток.
+    """
+    try:
+        value = int(msg.strip())
+    except ValueError:
+        return None
+    
+    if 1 <= value <= 4:
         return value
 
     return None

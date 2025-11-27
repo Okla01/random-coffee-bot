@@ -1,4 +1,3 @@
-from mailbox import Message
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.sql import select
 

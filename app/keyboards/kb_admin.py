@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.services.const import DAYS_OF_WEEK
+
 
 def kb_admin_menu() -> InlineKeyboardMarkup:
     """
@@ -85,3 +87,33 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def kb_admin_settings_change_day_of_week(current_day_of_week: str) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для выбора дня недели для встреч.
+
+    Args:
+        current_day_of_week (str): код текущего дня недели (mon, tue, wed...).
+    """
+    keyboard = []
+    row = []
+    
+    for day_code, label in DAYS_OF_WEEK.items():
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+
+        mark = "✅" if day_code == current_day_of_week else "❌"
+        row.append(
+            InlineKeyboardButton(
+                text=f"{mark} {label}",
+                callback_data=f"admin:change_day_of_week:{day_code}"
+            )
+        )
+
+    keyboard.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+    

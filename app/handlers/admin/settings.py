@@ -18,7 +18,7 @@ from aiogram.types import CallbackQuery, Message
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
-from app.keyboards.kb_admin import kb_admin_settings
+from app.keyboards.kb_admin import kb_admin_settings, kb_admin_settings_change_day_of_week
 from app.keyboards.utils import clear_last_kb
 from app.services.admin.settings import format_settings_text, get_current_settings, try_to_input_cooldown_weeks, try_to_input_min_jaccard, update_draft_setting
 from app.services.core import Settings
@@ -111,7 +111,17 @@ async def cb_update_match_day(
     settings: Settings,
 ) -> None:
     """Запрашивает новый день недели для встреч."""
-    await cq.answer("Заглушка: изменение match_day")
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    data = await state.get_data()
+    draft = (data.get("draft_settings") or {}).copy()
+
+    sent = await cq.message.answer(
+        "Выберите новый день недели для встреч:",
+        reply_markup=kb_admin_settings_change_day_of_week(draft["match_day"]),
+    )
+    await state.update_data(last_kb_mid=sent.message_id)
 
 
 @router.callback_query(F.data == "admin:update_match_utc_hour")
@@ -123,24 +133,6 @@ async def cb_update_match_utc_hour(
 ) -> None:
     """Запрашивает новый час совпадения (UTC)."""
     await cq.answer("Заглушка: изменение match_utc_hour")
-
-
-# @router.message(
-#     StateFilter(
-#         AdminSettingsStates.waiting_min_jaccard,
-#         AdminSettingsStates.waiting_cooldown_weeks,
-#         AdminSettingsStates.waiting_match_day,
-#         AdminSettingsStates.waiting_match_utc_hour,
-#     )
-# )
-# async def on_setting_value_input(
-#     message: Message,
-#     state: FSMContext,
-#     session_factory: async_sessionmaker[AsyncSession],
-#     settings: Settings,
-# ) -> None:
-#     """Обрабатывает ввод нового значения настройки."""
-#     await message.answer("Заглушка: обработка ввода настройки")
 
 
 @router.callback_query(F.data == "admin:save_admin_settings")
@@ -163,6 +155,35 @@ async def cb_cancel_admin_settings(
 ) -> None:
     """Отменяет все несохранённые изменения и возвращает в главное меню админа."""
     await cq.answer("Заглушка: отмена изменений")
+
+
+# ----------------------------- Обработчик выбора дня недели -----------------------------
+
+@router.callback_query(F.data.startswith("admin:change_day_of_week:"))
+async def cb_change_day_of_week(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Обрабатывает выбор нового дня недели для встреч."""
+    # Получение кода дня из callback_data
+    # "admin:change_day_of_week:mon" -> "mon"
+    day_code = cq.data.split(":")[-1]
+
+    # Обновление дня недели в черновых настройках
+    draft = await update_draft_setting(state, "match_day", day_code)
+
+    # Выход из состояния ожидания значения
+    await state.set_state(None)
+
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    # Возвращение в меню настроек
+    sent = await cq.message.answer(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(last_kb_mid=sent.message_id)
 
 
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------

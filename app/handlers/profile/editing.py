@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.core import Settings
 from app.keyboards.kb_profile import (
-    kb_profile_filled,
     kb_profile_review,
     kb_profile_photo,
 )
@@ -282,8 +281,7 @@ async def cb_prof_save(
     """
     Обрабатывает нажатие кнопки «Сохранить ✅» — финализирует анкету.
 
-    Переводит пользователя на стадию profile_filled, отправляет подтверждающее сообщение
-    с кнопками для редактирования или участия в подборе.
+    Переводит пользователя на стадию profile_filled и сразу вызывает функционал участия в подборе.
 
     Args:
         cq (CallbackQuery): callback запрос от пользователя.
@@ -294,16 +292,17 @@ async def cb_prof_save(
     Returns:
         None: ничего не возвращает.
     """
-    await cq.message.edit_text("Анкета сохранена! 🎉", reply_markup=kb_profile_filled())
-    
-    try:
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
-    except Exception:
-        pass
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         await process_save_profile(session, user)
-        await cq.answer()
+    
+    # Сразу вызываем функционал участия в подборе
+    await cq.message.edit_reply_markup(reply_markup=None)
+    await cq.message.answer(
+        "Отлично! Вы будете участвовать в подборе, когда это станет доступно."
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+    await cq.answer()
 
 
 @router.callback_query(F.data == "prof:edit:review")

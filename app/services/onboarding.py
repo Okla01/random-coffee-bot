@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
-from app.keyboards.kb_profile import kb_prefilled_data, kb_profile_filled, kb_profile_photo, kb_profile_review
+from app.keyboards.kb_profile import kb_prefilled_data, kb_profile_photo, kb_profile_review
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
 from app.services.profile.banned_words import contains_banned_words
@@ -272,6 +272,6 @@ async def handle_start_result(
             chat_id,
             user,
             state,
-            kb_profile_filled(),
+            kb_profile_review(),
         )
         return

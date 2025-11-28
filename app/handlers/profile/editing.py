@@ -295,6 +295,8 @@ async def cb_prof_save(
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         await process_save_profile(session, user)
+        user.status = "active"
+        await session.commit()
     
     # Сразу вызываем функционал участия в подборе
     await cq.message.edit_reply_markup(reply_markup=None)
@@ -382,6 +384,9 @@ async def cb_prof_edit_field(
     field = cq.data.split(":", 2)[2]
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
+        # При редактировании bio или interests устанавливаем статус not_active
+        if field in {"bio", "interests"}:
+            user.status = "not_active"
         if field == "name":
             await update_user_stage(session, user, "profile_name", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
             await cq.message.answer("Давайте заполним анкету! Как вас зовут?")
@@ -394,6 +399,7 @@ async def cb_prof_edit_field(
         elif field == "interests":
             await update_user_stage(session, user, "profile_interests", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
             await cq.message.answer("Перечислите интересы через запятую.")
+        await session.commit()
         await cq.answer()
 
 

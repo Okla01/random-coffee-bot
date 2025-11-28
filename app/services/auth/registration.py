@@ -337,7 +337,6 @@ async def process_otp_input(
 
     # УСПЕХ: обновляем состояние пользователя
     otp_row.used_at = now
-    user.status = "active"
     user.stage = "profile_name"
     user.email_attempts = 0
     user.otp_attempts = 0

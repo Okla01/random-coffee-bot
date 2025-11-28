@@ -116,7 +116,7 @@ async def get_or_create_user(
     user = User(
         telegram_id=telegram_id,
         username=username,
-        status="new",
+        status="not_active",
         stage="new",
         last_activity=now_utc(),
     )

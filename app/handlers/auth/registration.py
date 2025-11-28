@@ -80,7 +80,7 @@ async def on_stage2_debug(
         user.email = f"test.user{user.telegram_id}@test.corp"
         user.stage = "authorized"  # Помечаем как авторизованного
         user.last_activity = now_utc()
-        user.status = "active"
+        user.status = "not_active"
 
         await session.commit()
 

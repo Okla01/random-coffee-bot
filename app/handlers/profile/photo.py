@@ -442,6 +442,7 @@ async def cb_edit_photo(
                 session, cq.from_user.id, cq.from_user.username
             )
             user.stage = "profile_photo"
+            user.status = "not_active"
             user.last_activity = now_utc()
             await session.commit()
 

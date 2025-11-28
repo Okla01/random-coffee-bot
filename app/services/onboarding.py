@@ -13,11 +13,18 @@
 from dataclasses import dataclass
 from typing import Literal, Any
 
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.handlers.fsm import FSMDataKeys
+from app.handlers.profile.photo import send_photos_with_actions
+from app.keyboards.kb_auth import kb_auth_code_wait
+from app.keyboards.kb_profile import kb_prefilled_data, kb_profile_filled, kb_profile_photo, kb_profile_review
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
-from app.services.profile.banned_words import contains_banned_words  # фильтр запрещённых слов
+from app.services.profile.banned_words import contains_banned_words
+from app.services.profile.preview import send_profile_preview  # фильтр запрещённых слов
 
 
 # Перечень возможных действий после обработки /start.
@@ -165,3 +172,106 @@ async def process_start(
     user.stage = "verifying_email"
     await session.commit()
     return StartResult(action="ask_email")
+
+
+async def handle_start_result(
+    message: Message,
+    state: FSMContext,
+    user: User,
+    result: StartResult,
+):
+    """
+    Обработчик результата process_start.
+    Отправляет нужные сообщения и клавиатуры (UI-слой).
+    """
+    chat_id = message.chat.id
+    bot = message.bot
+
+    async def answer(text, **kwargs):
+        return await message.answer(text, **kwargs)
+
+    if result.action == "blocked":
+        await answer("Доступ временно заблокирован. Свяжитесь с администратором.")
+        return
+
+    if result.action == "ask_email":
+        await answer(
+            "Привет! Давайте зарегистрируемся через корпоративную почту.\n"
+            "Отправьте адрес (например, name@corp.com):"
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "ask_code":
+        sent = await answer(
+            "Мы уже отправили код подтверждения на вашу почту. Введите код.\n"
+            "Если код истёк — воспользуйтесь кнопкой ниже.",
+            reply_markup=kb_auth_code_wait(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+        return
+
+    if result.action == "ask_profile_name":
+        prefilled = result.payload.get("prefilled_name") if result.payload else None
+        if prefilled:
+            sent = await answer(
+                f"У нас есть ваше имя из импорта: {prefilled}\n"
+                f"Оставить или ввести новое?",
+                reply_markup=kb_prefilled_data(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+        else:
+            await answer("Давайте заполним анкету! Как вас зовут?")
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "ask_profile_photo":
+        has_photos = result.payload.get("has_photos") if result.payload else False
+        if has_photos:
+            photos_list = user.photos_json.get("photos", [])
+            await send_photos_with_actions(bot, chat_id, user, state, photos_list)
+        else:
+            sent = await answer(
+                "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
+                "либо используйте текущее фото вашего профиля.",
+                reply_markup=kb_profile_photo(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+        return
+
+    if result.action == "ask_profile_bio":
+        await answer("Расскажите о себе (до 500 символов):")
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "ask_profile_age":
+        await answer("Введите ваш возраст (16–50):")
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "ask_profile_interests":
+        await answer(
+            "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "show_profile_review":
+        await send_profile_preview(
+            bot,
+            chat_id,
+            user,
+            state,
+            kb_profile_review(),
+        )
+        return
+
+    if result.action == "show_profile_filled":
+        await send_profile_preview(
+            bot,
+            chat_id,
+            user,
+            state,
+            kb_profile_filled(),
+        )
+        return

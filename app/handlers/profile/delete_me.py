@@ -26,6 +26,7 @@ from app.keyboards.kb_profile import (
 )
 
 from app.database.db import get_or_create_user
+from app.handlers.fsm import FSMDataKeys
 
 
 router = Router()
@@ -61,7 +62,7 @@ async def cb_delete_confirm(
         "Точно ли вы хотите удалить свою анкету?",
         reply_markup=kb_profile_delete_confirm(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
     await cq.answer()
 
 

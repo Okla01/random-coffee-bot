@@ -24,6 +24,7 @@ from app.database import User
 from app.database.utils import now_utc
 from aiogram.types import InputMediaPhoto
 from aiogram.exceptions import TelegramBadRequest
+from app.handlers.fsm import FSMDataKeys
 
 
 # Максимальное количество фото в профиле
@@ -73,7 +74,7 @@ async def send_photo_request(
         )
     
     if sent and hasattr(sent, 'message_id'):
-        await state.update_data(last_kb_mid=sent.message_id)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 async def send_photos(

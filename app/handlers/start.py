@@ -31,6 +31,7 @@ from app.services.onboarding import process_start
 from app.keyboards.utils import clear_last_kb
 from app.services.profile.preview import _send_profile_preview
 from app.handlers.profile.photo import _send_photos_with_actions
+from app.handlers.fsm import FSMDataKeys
 
 # Роутер для регистрации хендлеров текущего модуля
 router = Router()
@@ -65,7 +66,7 @@ async def cmd_start(
     await clear_last_kb(state, message.chat.id, message.bot)
 
     # Сбрасываем флаг админ-панели при возврате к регистрации
-    await state.update_data(admin_panel_active=False)
+    await state.update_data(**{FSMDataKeys.ADMIN_PANEL_ACTIVE: False})
 
     # Открываем асинхронную сессию БД в контекстном менеджере
     async with session_factory() as session:
@@ -96,7 +97,7 @@ async def cmd_start(
                 "Отправьте адрес (например, name@corp.com):"
             )
             # Здесь клавиатура не показывается, сбрасываем ссылку на last_kb
-            await state.update_data(last_kb_mid=None)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
             return
 
         # Ожидание OTP-кода — показываем клавиатуру с переотправкой/сменой почты
@@ -107,7 +108,7 @@ async def cmd_start(
                 reply_markup=kb_auth_code_wait(),
             )
             # Сохраняем message_id последней клавиатуры, чтобы потом её погасить
-            await state.update_data(last_kb_mid=sent.message_id)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
             return
 
         # Первый шаг анкеты — имя (с возможным предзаполнением из импорта)
@@ -121,11 +122,11 @@ async def cmd_start(
                     f"Оставить или ввести новое?",
                     reply_markup=kb_prefilled_data(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
             else:
                 # Иначе — обычный сценарий: просим ввести имя
                 await message.answer("Давайте заполним анкету! Как вас зовут?")
-                await state.update_data(last_kb_mid=None)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
             return
 
         # Загрузка/редактирование фото профиля
@@ -145,19 +146,19 @@ async def cmd_start(
                     "либо используйте текущее фото вашего профиля.",
                     reply_markup=kb_profile_photo(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
             return
 
         # Запрос текста о себе
         if result.action == "ask_profile_bio":
             await message.answer("Расскажите о себе (до 500 символов):")
-            await state.update_data(last_kb_mid=None)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
             return
 
         # Запрос возраста
         if result.action == "ask_profile_age":
             await message.answer("Введите ваш возраст (16–50):")
-            await state.update_data(last_kb_mid=None)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
             return
 
         # Запрос интересов
@@ -165,7 +166,7 @@ async def cmd_start(
             await message.answer(
                 "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
             )
-            await state.update_data(last_kb_mid=None)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
             return
 
         # Предпросмотр анкеты перед подтверждением

@@ -32,6 +32,7 @@ from app.services.profile.utils import(
     is_profile_complete,
 )
 from app.services.profile.preview import _send_profile_preview
+from app.handlers.fsm import FSMDataKeys
 from app.services.profile.photo import (
     MAX_PHOTOS,
     add_to_media_group_buffer,
@@ -123,7 +124,7 @@ async def _finalize_media_group_album(
             if not success:
                 # Удаляем старую клавиатуру
                 data = await state.get_data()
-                last_kb_mid = data.get("last_kb_mid")
+                last_kb_mid = data.get(FSMDataKeys.LAST_KB_MID)
                 if last_kb_mid:
                     try:
                         await bot.edit_message_reply_markup(
@@ -184,7 +185,7 @@ async def on_single_photo(
         if not success:
             # Удаляем старую клавиатуру
             data = await state.get_data()
-            last_kb_mid = data.get("last_kb_mid")
+            last_kb_mid = data.get(FSMDataKeys.LAST_KB_MID)
             if last_kb_mid:
                 try:
                     await message.bot.edit_message_reply_markup(
@@ -201,7 +202,7 @@ async def on_single_photo(
                 f"⚠️ Максимум {MAX_PHOTOS} фото. Очистите фото, чтобы добавить новые.",
                 reply_markup=kb_profile_photo_clear_save(),
             )
-            await state.update_data(last_kb_mid=sent.message_id)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
             return
 
         # Отправляем текущее количество фото и кнопки действий
@@ -398,7 +399,7 @@ async def cb_photo_save(
 
         # Проверяем, был ли режим редактирования
         data = await state.get_data()
-        editing = data.get("editing_field")
+        editing = data.get(FSMDataKeys.EDITING_FIELD)
         
         # Проверяем, заполнен ли профиль полностью (для работы после перезапуска бота)
         editing_profile_complete = is_profile_complete(user)
@@ -406,7 +407,7 @@ async def cb_photo_save(
             # Возвращаемся в режим просмотра анкеты
             user.stage = "profile_review"
             await session.commit()
-            await state.update_data(editing_field=None)
+            await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
             await _send_profile_preview(
                 cq.message.bot,
                 cq.message.chat.id,
@@ -445,7 +446,7 @@ async def cb_edit_photo(
             await session.commit()
 
             # режим редактирования
-            await state.update_data(editing_field="photo")
+            await state.update_data(**{FSMDataKeys.EDITING_FIELD: "photo"})
 
             photos_list = get_photos_list(user)
 
@@ -456,7 +457,7 @@ async def cb_edit_photo(
                 else kb_profile_photo()
             )
             await cq.message.edit_text("Изменение фото", reply_markup=keyboard)
-            await state.update_data(last_kb_mid=cq.message.message_id)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
             await cq.answer()
     except Exception as e:
         print(f"Error in cb_edit_photo: {repr(e)}")

@@ -13,7 +13,6 @@ from __future__ import annotations
 from aiogram import Router, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
@@ -33,17 +32,9 @@ from app.services.admin.settings import (
     try_to_input_min_jaccard,
     update_draft_setting,
 )
+from app.handlers.fsm import AdminSettingsStates, FSMDataKeys
 
 router = Router()
-
-
-class AdminSettingsStates(StatesGroup):
-    """Состояния FSM для редактирования настроек администратора."""
-
-    waiting_min_jaccard = State()
-    waiting_cooldown_weeks = State()
-    waiting_match_day = State()
-    waiting_match_utc_hour = State()
 
 
 # ----------------------------- Обработчик главной кнопки "Настройки" -----------------------------
@@ -62,7 +53,7 @@ async def cb_admin_settings(
 
     # Сохранение текущих настроек в состояние
     # как черновик для последующего сохранения или отмены изменений
-    await state.update_data(draft_settings=current_settings)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: current_settings})
 
     # Текст содержит настройки, которые ещё не сохранены в базу данных
     text = format_settings_text(current_settings)
@@ -74,7 +65,7 @@ async def cb_admin_settings(
         text,
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 # ----------------------------- Обработчики кнопок меню настроек -----------------------------
@@ -124,13 +115,13 @@ async def cb_update_match_day(
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
     data = await state.get_data()
-    draft = (data.get("draft_settings") or {}).copy()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
 
     sent = await cq.message.answer(
         "Выберите новый день недели для встреч:",
         reply_markup=kb_admin_settings_change_day_of_week(draft["match_day"]),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.callback_query(F.data == "admin:update_match_utc_hour")
@@ -158,7 +149,7 @@ async def cb_save_admin_settings(
 
     # Получение черновика настроек
     data = await state.get_data()
-    draft = data.get("draft_settings")
+    draft = data.get(FSMDataKeys.DRAFT_SETTINGS)
     if draft is None:
         await cq.answer(
             "Ошибка сохранения настроек. Перезапустите меню.", show_alert=True
@@ -178,7 +169,7 @@ async def cb_save_admin_settings(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.callback_query(F.data == "admin:cancel_admin_settings")
@@ -191,7 +182,7 @@ async def cb_cancel_admin_settings(
 
     # Получение черновика настроек
     data = await state.get_data()
-    draft = data.get("draft_settings")
+    draft = data.get(FSMDataKeys.DRAFT_SETTINGS)
     if draft is None:
         await cq.answer("Ошибка отмены настроек. Перезапустите меню.", show_alert=True)
         return
@@ -205,7 +196,7 @@ async def cb_cancel_admin_settings(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 # ----------------------------- Обработчик выбора дня недели -----------------------------
@@ -235,7 +226,7 @@ async def cb_change_day_of_week(
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------
@@ -256,7 +247,7 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
         return
 
     draft = await update_draft_setting(state, "min_jaccard", min_jaccard)
-    await state.update_data(draft_settings=draft)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения
     await state.set_state(None)
@@ -266,7 +257,7 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_cooldown_weeks))
@@ -282,7 +273,7 @@ async def on_cooldown_weeks_input(msg: Message, state: FSMContext) -> None:
         return
 
     draft = await update_draft_setting(state, "cooldown_weeks", cooldown_weeks)
-    await state.update_data(draft_settings=draft)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения
     await state.set_state(None)
@@ -292,7 +283,7 @@ async def on_cooldown_weeks_input(msg: Message, state: FSMContext) -> None:
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_match_utc_hour))
@@ -308,7 +299,7 @@ async def on_match_utc_hour_input(msg: Message, state: FSMContext) -> None:
         return
 
     draft = await update_draft_setting(state, "match_utc_hour", match_utc_hour)
-    await state.update_data(draft_settings=draft)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения
     await state.set_state(None)
@@ -318,4 +309,4 @@ async def on_match_utc_hour_input(msg: Message, state: FSMContext) -> None:
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

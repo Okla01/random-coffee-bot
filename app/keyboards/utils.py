@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from aiogram.fsm.context import FSMContext
+from app.handlers.fsm import FSMDataKeys
 
 
 async def clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
@@ -19,7 +20,7 @@ async def clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
     ошибка игнорируется. Очищает сохранённый ID сообщения в состоянии.
     """
     data = await state.get_data()
-    mid = data.get("last_kb_mid")
+    mid = data.get(FSMDataKeys.LAST_KB_MID)
     if mid:
         try:
             await bot.edit_message_reply_markup(
@@ -29,5 +30,5 @@ async def clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
             )
         except Exception:
             pass
-        await state.update_data(last_kb_mid=None)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
 

@@ -21,6 +21,7 @@ from app.services.admin import (
     process_admin_command,
     AdminAccessResultType,
 )
+from app.handlers.fsm import FSMDataKeys
 
 router = Router()
 
@@ -70,11 +71,11 @@ async def cmd_admin(
         await clear_last_kb(state, message.chat.id, message.bot)
 
         # Сохраняем флаг, что админ-панель активна, чтобы обработчик регистрации не перехватывал текст
-        await state.update_data(admin_panel_active=True)
+        await state.update_data(**{FSMDataKeys.ADMIN_PANEL_ACTIVE: True})
 
         # Отображение админ-панели после всех проверок
         sent = await message.answer(
             "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
             reply_markup=kb_admin_menu(),
         )
-        await state.update_data(last_kb_mid=sent.message_id)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

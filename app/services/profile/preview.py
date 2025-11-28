@@ -8,6 +8,7 @@
 from aiogram.types import InputMediaPhoto
 
 from app.database import User
+from app.handlers.fsm import FSMDataKeys
 
 
 async def _send_profile_preview(bot, chat_id: int, user: User, state, reply_markup, send_photos: bool = True, send_preview_text: bool = True) -> None:
@@ -55,11 +56,11 @@ async def _send_profile_preview(bot, chat_id: int, user: User, state, reply_mark
     if send_preview_text:
         preview = build_profile_preview_text(user)
         sent = await bot.send_message(chat_id, preview, reply_markup=reply_markup)
-        await state.update_data(last_kb_mid=sent.message_id)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
     elif reply_markup:
         # Если только клавиатура без текста предпросмотра
         sent = await bot.send_message(chat_id, " ", reply_markup=reply_markup)
-        await state.update_data(last_kb_mid=sent.message_id)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 def build_profile_preview_text(user: User) -> str:

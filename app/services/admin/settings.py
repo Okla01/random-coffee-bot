@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.database import Setting
 
 from app.services.const import DAYS_OF_WEEK
+from app.handlers.fsm import FSMDataKeys
 
 
 async def get_current_settings(
@@ -83,11 +84,11 @@ async def update_draft_setting(
     """
     # Получение черновика настроек
     data = await state.get_data()
-    draft = (data.get("draft_settings") or {}).copy()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
     # Обновление черновика настроек
     draft[key] = value
     # Сохранение черновика
-    await state.update_data(draft_settings=draft)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
     
     return draft
 

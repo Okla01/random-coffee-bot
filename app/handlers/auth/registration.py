@@ -40,6 +40,7 @@ from app.services.auth.email import (
     process_email_input,
     EmailResultType,
 )
+from app.handlers.fsm import FSMDataKeys
 
 
 router = Router()
@@ -116,7 +117,7 @@ async def on_email_or_code(
     # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
     # Это позволяет админам использовать админ-панель, даже если они на стадии регистрации
     state_data = await state.get_data()
-    if state_data.get("admin_panel_active"):
+    if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
         raise SkipHandler()
     
     async with session_factory() as session:
@@ -183,7 +184,7 @@ async def on_email_or_code(
                 if warn:
                     msg += f"\n⚠️ {warn}"
                 sent = await message.answer(msg, reply_markup=kb_auth_code_wait())
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
         # OTP
@@ -205,7 +206,7 @@ async def on_email_or_code(
                     error_msg or "Ожидаю код из письма (6 символов):",
                     reply_markup=kb_auth_code_wait(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
             if result_type == OtpResultType.NOT_FOUND:
@@ -213,7 +214,7 @@ async def on_email_or_code(
                     error_msg or f"Код не найден. Отправить новый код на {user.email}?",
                     reply_markup=kb_auth_code_wait(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
             if result_type == OtpResultType.EXPIRED:
@@ -221,7 +222,7 @@ async def on_email_or_code(
                     error_msg or f"Код истёк. Отправить новый код на {user.email}?",
                     reply_markup=kb_auth_code_expired(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
             if result_type == OtpResultType.ALREADY_USED:
@@ -229,7 +230,7 @@ async def on_email_or_code(
                     error_msg or "Код уже был использован. Запросите новый.",
                     reply_markup=kb_auth_code_wait(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
             if result_type == OtpResultType.WRONG_CODE:
@@ -237,7 +238,7 @@ async def on_email_or_code(
                     error_msg or "Неверный код. Попробуйте ещё раз или запросите новый.",
                     reply_markup=kb_auth_code_wait(),
                 )
-                await state.update_data(last_kb_mid=sent.message_id)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
                 return
 
             if result_type == OtpResultType.BLOCKED:
@@ -249,7 +250,7 @@ async def on_email_or_code(
             if result_type == OtpResultType.SUCCESS:
                 await message.answer("Успешная авторизация! ✅")
                 await message.answer("Давайте заполним анкету! Как вас зовут?")
-                await state.update_data(last_kb_mid=None)
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
                 return
 
         await session.commit()
@@ -306,7 +307,7 @@ async def cb_otp_resend(
         # отправляем новое сообщение с клавиатурой
         sent = await cq.message.answer(msg, reply_markup=kb_auth_code_wait())
         if sent and hasattr(sent, "message_id"):
-            await state.update_data(last_kb_mid=sent.message_id)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
         await cq.answer()
 
 
@@ -351,13 +352,13 @@ async def cb_change_email(
                 f"Отправить код повторно можно не ранее чем через {time_remaining} секунд.\nОжидаю код из письма (6 символов):",
                 reply_markup=kb_auth_code_wait(),
             )
-            await state.update_data(last_kb_mid=sent.message_id)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
             await cq.answer()
             return
 
         user.stage = "verifying_email"
         await session.commit()
         await cq.message.answer("Отправьте новый корпоративный e-mail:")
-        await state.update_data(last_kb_mid=None)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         await cq.answer()
 

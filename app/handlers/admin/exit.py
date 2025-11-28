@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database.db import get_or_create_user
+from app.database.db import get_or_create_user, get_user_by_tg_id
 from app.handlers.fsm import FSMDataKeys
 from app.keyboards.utils import clear_last_kb
 from app.services.core.config import Settings
@@ -38,6 +38,8 @@ async def cb_admin_exit(
     # Сброс состояния панели администратора
     await state.update_data(**{FSMDataKeys.ADMIN_PANEL_ACTIVE: False})
 
+    await cq.message.edit_reply_markup(reply_markup=None)
+    
     # Открываем асинхронную сессию БД в контекстном менеджере
     async with session_factory() as session:
         # Получаем пользователя или создаём нового при первом заходе

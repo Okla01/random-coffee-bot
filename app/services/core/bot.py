@@ -28,6 +28,7 @@ from app.handlers.profile.photo import router as photo_router
 from app.handlers.profile.delete_me import router as delete_me_router
 from app.handlers.auth.registration import router as registration_router
 from app.handlers.admin import router as commands_router
+from app.handlers.admin.export_excel import router as export_excel_router
 
 
 async def create_dispatcher(settings: Settings) -> Dispatcher:
@@ -52,6 +53,8 @@ async def create_dispatcher(settings: Settings) -> Dispatcher:
     dp.include_router(delete_me_router)  # удаление профиля
     dp.include_router(registration_router)  # регистрация ниже
     dp.include_router(commands_router)
+    dp.include_router(export_excel_router)
+
     return dp
 
 

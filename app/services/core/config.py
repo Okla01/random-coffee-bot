@@ -84,12 +84,6 @@ class Settings:
     email_max_attempts: int
     otp_max_attempts: int
 
-    # Matching (на будущее)
-    min_jaccard: float
-    cooldown_weeks: int
-    match_day: str
-    match_utc_hour: int
-
     # Misc
     log_level: str
     tz_default: str
@@ -154,11 +148,6 @@ class Settings:
         email_max_attempts = int(os.getenv("EMAIL_MAX_ATTEMPTS", "3"))
         otp_max_attempts = int(os.getenv("OTP_MAX_ATTEMPTS", "3"))
 
-        min_jaccard = float(os.getenv("MIN_JACCARD", "0.3"))
-        cooldown_weeks = int(os.getenv("COOLDOWN_WEEKS", "4"))
-        match_day = os.getenv("MATCH_DAY", "MON")
-        match_utc_hour = int(os.getenv("MATCH_UTC_HOUR", "9"))
-
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
         tz_default = os.getenv("TZ_DEFAULT", "Europe/Moscow")
         banned_words = load_banned_words()
@@ -181,10 +170,6 @@ class Settings:
             resend_max_per_session=resend_max_per_session,
             email_max_attempts=email_max_attempts,
             otp_max_attempts=otp_max_attempts,
-            min_jaccard=min_jaccard,
-            cooldown_weeks=cooldown_weeks,
-            match_day=match_day,
-            match_utc_hour=match_utc_hour,
             log_level=log_level,
             tz_default=tz_default,
             banned_words=banned_words,

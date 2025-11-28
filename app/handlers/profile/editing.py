@@ -24,7 +24,7 @@ from app.keyboards.kb_profile import (
 from app.keyboards.utils import clear_last_kb
 
 from app.services.profile.preview import (
-    _send_profile_preview,
+    send_profile_preview,
     build_profile_preview_text
 )
 from app.services.profile.editing import (
@@ -177,7 +177,7 @@ async def on_profile_text(
             
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-                await _send_profile_preview(
+                await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
@@ -202,7 +202,7 @@ async def on_profile_text(
             
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-                await _send_profile_preview(
+                await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
@@ -228,7 +228,7 @@ async def on_profile_text(
             
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-                await _send_profile_preview(
+                await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
@@ -256,14 +256,14 @@ async def on_profile_text(
             
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-                await _send_profile_preview(
+                await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
             
             if result.result_type == "field_updated_continue":
                 # Отправить текстовый предпросмотр
-                await _send_profile_preview(
+                await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return

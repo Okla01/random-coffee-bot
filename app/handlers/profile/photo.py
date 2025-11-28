@@ -31,7 +31,7 @@ from app.services.core import Settings
 from app.services.profile.utils import(
     is_profile_complete,
 )
-from app.services.profile.preview import _send_profile_preview
+from app.services.profile.preview import send_profile_preview
 from app.handlers.fsm import FSMDataKeys
 from app.services.profile.photo import (
     MAX_PHOTOS,
@@ -145,7 +145,7 @@ async def _finalize_media_group_album(
                 return
 
         # Отправляем пользователю альбом (все актуальные фото профиля)
-        await _send_photos_with_actions(bot, chat_id, user, state, photos_list)
+        await send_photos_with_actions(bot, chat_id, user, state, photos_list)
 
     finally:
         # Освобождаем слот таска для этой media_group
@@ -206,7 +206,7 @@ async def on_single_photo(
             return
 
         # Отправляем текущее количество фото и кнопки действий
-        await _send_photos_with_actions(
+        await send_photos_with_actions(
             message.bot, message.chat.id, user, state, photos_list
         )
 
@@ -214,7 +214,7 @@ async def on_single_photo(
 # ----------------------- Helper Functions ------------------------- #
 
 
-async def _send_photos_with_actions(
+async def send_photos_with_actions(
     bot,
     chat_id: int,
     user,
@@ -233,7 +233,7 @@ async def _send_photos_with_actions(
         return
 
     # Отправляем фото через универсальную функцию (с caption "Добавлено N фото")
-    await _send_profile_preview(
+    await send_profile_preview(
         bot, chat_id, user, state, None, send_photos=True, send_preview_text=False
     )
 
@@ -247,7 +247,7 @@ async def _send_photos_with_actions(
         reply_markup=keyboard,
     )
 
-    await state.update_data(last_kb_mid=sent.message_id)
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 # ----------------------- Callback Handlers ----------------------- #
@@ -307,7 +307,7 @@ async def cb_photo_from_tg(
             return
 
         await cq.message.delete()
-        await _send_photos_with_actions(
+        await send_photos_with_actions(
             cq.bot, cq.message.chat.id, user, state, photos_list
         )
         await cq.answer()
@@ -340,7 +340,7 @@ async def cb_photo_add(
         await session.commit()
         await cq.message.delete()
         sent = await cq.message.answer("Пришлите ещё фото:")
-        await state.update_data(last_kb_mid=sent.message_id)
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
         await cq.answer()
 
 
@@ -408,7 +408,7 @@ async def cb_photo_save(
             user.stage = "profile_review"
             await session.commit()
             await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-            await _send_profile_preview(
+            await send_profile_preview(
                 cq.message.bot,
                 cq.message.chat.id,
                 user,
@@ -421,7 +421,7 @@ async def cb_photo_save(
             user.stage = "profile_bio"
             await session.commit()
             await cq.message.answer("Расскажите о себе (до 500 символов):")
-            await state.update_data(last_kb_mid=None)
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
 
         await cq.answer()
 

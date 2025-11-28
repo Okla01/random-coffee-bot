@@ -11,7 +11,7 @@ from app.database import User
 from app.handlers.fsm import FSMDataKeys
 
 
-async def _send_profile_preview(bot, chat_id: int, user: User, state, reply_markup, send_photos: bool = True, send_preview_text: bool = True) -> None:
+async def send_profile_preview(bot, chat_id: int, user: User, state, reply_markup, send_photos: bool = True, send_preview_text: bool = True) -> None:
     """
     Отправляет фото профиля (если есть) и текстовый предпросмотр профиля с клавиатурой.
 

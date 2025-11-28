@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.core import Settings
 from app.services.profile.delete_me import delete_user_by_telegram_id
-from app.services.profile.preview import _send_profile_preview
+from app.services.profile.preview import send_profile_preview
 
 from app.keyboards.utils import clear_last_kb
 from app.keyboards.kb_profile import (
@@ -133,7 +133,7 @@ async def cb_delete_cancel(
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         
         # Возвращаем пользователя к просмотру анкеты с фотографиями
-        await _send_profile_preview(
+        await send_profile_preview(
             cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
         )
     

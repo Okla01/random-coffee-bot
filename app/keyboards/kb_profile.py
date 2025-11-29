@@ -10,18 +10,6 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-def kb_profile_filled() -> InlineKeyboardMarkup:
-    """
-    Кратко: клавиатура после успешного сохранения анкеты.
-    """
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Изменить анкету ✏️", callback_data="prof:edit:review")],
-            [InlineKeyboardButton(text="Участвовать в подборе 🥰", callback_data="prof:join")],
-        ]
-    )
-
-
 def kb_prefilled_data() -> InlineKeyboardMarkup:
     """
     Кратко: клавиатура при наличии предзаполненных данных.

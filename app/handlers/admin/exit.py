@@ -12,7 +12,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database.db import get_or_create_user, get_user_by_tg_id
+from app.database.db import get_or_create_user
 from app.handlers.fsm import FSMDataKeys
 from app.keyboards.utils import clear_last_kb
 from app.services.core.config import Settings
@@ -44,7 +44,7 @@ async def cb_admin_exit(
     async with session_factory() as session:
         # Получаем пользователя или создаём нового при первом заходе
         user = await get_or_create_user(
-            session, cq.message.from_user.id, cq.message.from_user.username
+            session, cq.from_user.id, cq.from_user.username
         )
 
         # Удаление последней клавиатуры

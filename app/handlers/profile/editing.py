@@ -31,8 +31,6 @@ from app.services.profile.editing import (
     process_bio_field,
     process_age_field,
     process_interests_field,
-    process_prefilled_keep,
-    process_prefilled_new,
     process_save_profile,
     process_edit_review,
 )
@@ -46,70 +44,6 @@ from app.handlers.fsm import FSMDataKeys
 
 
 router = Router()
-
-
-# ----------------------- prefilled data ---------------------- #
-
-
-@router.callback_query(F.data == "prof:prefilled:keep")
-async def cb_prefilled_keep(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-) -> None:
-    """
-    Обрабатывает выбор «Оставить ✅» для предзаполненных данных.
-
-    Сохраняет предзаполненное имя из импорта и переводит пользователя на следующий шаг (описание).
-
-    Args:
-        cq (CallbackQuery): callback запрос от пользователя.
-        state (FSMContext): контекст FSM.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
-        settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    await cq.message.edit_reply_markup(reply_markup=None)
-    async with session_factory() as session:
-        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
-        next_stage = await process_prefilled_keep(session, user)
-        await update_user_stage(session, user, next_stage, state, {FSMDataKeys.LAST_KB_MID: None})
-        await cq.message.answer("Расскажите о себе (до 500 символов):")
-    await cq.answer()
-
-
-@router.callback_query(F.data == "prof:prefilled:new")
-async def cb_prefilled_new(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-) -> None:
-    """
-    Обрабатывает выбор «Ввести новые данные ✏️» — отвергает предзаполненные данные.
-
-    Переводит пользователя на шаг ввода имени, позволяя ему ввести свои данные
-    вместо предзаполненных из импорта.
-
-    Args:
-        cq (CallbackQuery): callback запрос от пользователя.
-        state (FSMContext): контекст FSM.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
-        settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    await cq.message.edit_reply_markup(reply_markup=None)
-    async with session_factory() as session:
-        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
-        next_stage = await process_prefilled_new(session, user)
-        await update_user_stage(session, user, next_stage, state, {FSMDataKeys.LAST_KB_MID: None})
-        await cq.message.answer("Давайте заполним анкету! Как вас зовут?")
-    await cq.answer()
 
 
 # --------------------------- text steps ------------------------- #

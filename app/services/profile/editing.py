@@ -379,46 +379,6 @@ def normalize_interests(
     return result, None
 
 
-async def process_prefilled_keep(
-    session: AsyncSession,
-    user: User,
-) -> str:
-    """
-    Обрабатывает выбор «Оставить ✅» для предзаполненных данных.
-
-    Сохраняет предзаполненное имя из импорта и возвращает следующую стадию.
-
-    Args:
-        session (AsyncSession): активная сессия БД.
-        user (User): ORM-модель пользователя.
-
-    Returns:
-        str: следующая стадия ("profile_bio").
-    """
-    if user.import_payload and user.import_payload.get("profile_name"):
-        user.name = user.import_payload["profile_name"]
-    return "profile_bio"
-
-
-async def process_prefilled_new(
-    session: AsyncSession,
-    user: User,
-) -> str:
-    """
-    Обрабатывает выбор «Ввести новые данные ✏️» — отвергает предзаполненные данные.
-
-    Возвращает стадию для ввода нового имени.
-
-    Args:
-        session (AsyncSession): активная сессия БД.
-        user (User): ORM-модель пользователя.
-
-    Returns:
-        str: следующая стадия ("profile_name").
-    """
-    return "profile_name"
-
-
 async def process_save_profile(
     session: AsyncSession,
     user: User,

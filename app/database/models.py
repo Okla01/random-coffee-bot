@@ -35,7 +35,7 @@ class User(Base):
 
     Хранит Telegram ID, статус, стадию прохождения сценариев, email,
     счётчики попыток, данные анкеты (имя, фото, биография, возраст, интересы),
-    информацию об импорте и историю активности.
+    и историю активности.
     """
 
     __tablename__ = "users"
@@ -47,7 +47,7 @@ class User(Base):
     # Текущий статус/стадия
     status: Mapped[str] = mapped_column(
         String(16), default="new", index=True
-    )  # новый/активный/заблокированный/импортированный
+    )  # новый/активный/заблокированный
     stage: Mapped[str] = mapped_column(String(32), default="new", index=True)
 
     # Авторизация через e-mail
@@ -67,12 +67,6 @@ class User(Base):
     interests_json: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
     )  # {"интересы": [...]}
-
-    # Импорт
-    origin: Mapped[Optional[str]] = mapped_column(
-        String(16), nullable=True
-    )  # 'импорт' | 'сам'
-    import_payload: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
 
     # Часовой пояс
     tz: Mapped[Optional[str]] = mapped_column(

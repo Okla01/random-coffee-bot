@@ -20,11 +20,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
-from app.keyboards.kb_profile import kb_prefilled_data, kb_profile_photo, kb_profile_review
+from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
-from app.services.profile.banned_words import contains_banned_words
-from app.services.profile.preview import send_profile_preview  # фильтр запрещённых слов
+from app.services.profile.preview import send_profile_preview
 
 
 # Перечень возможных действий после обработки /start.
@@ -52,7 +51,6 @@ class StartResult:
         action (ActionType): тип следующего шага для хендлера.
         payload (dict[str, Any] | None): дополнительные данные для хендлера,
             например:
-            - prefilled_name: предзаполненное имя из импорта;
             - has_photos: флаг наличия загруженных фото и т.п.
     """
     action: ActionType
@@ -103,24 +101,6 @@ async def process_start(
     if user.stage == "authorized":
         # Переводим на первый шаг анкеты
         user.stage = "profile_name"
-
-        # Попытка предзаполнения имени из импорта
-        prefilled = None
-        if user.origin == "import" and user.import_payload:
-            prefilled = user.import_payload.get("profile_name")
-            # Базовая валидация длины имени
-            if prefilled and 2 <= len(prefilled) <= 100:
-                # Проверка на запрещённые слова
-                banned, _ = contains_banned_words(prefilled, settings.banned_words)
-                if not banned:
-                    # Фиксируем стадию и возвращаем действие с payload
-                    await session.commit()
-                    return StartResult(
-                        action="ask_profile_name",
-                        payload={"prefilled_name": prefilled},
-                    )
-
-        # Если предзаполнения нет или оно не прошло фильтры
         await session.commit()
         return StartResult(action="ask_profile_name")
 
@@ -212,17 +192,8 @@ async def handle_start_result(
         return
 
     if result.action == "ask_profile_name":
-        prefilled = result.payload.get("prefilled_name") if result.payload else None
-        if prefilled:
-            sent = await answer(
-                f"У нас есть ваше имя из импорта: {prefilled}\n"
-                f"Оставить или ввести новое?",
-                reply_markup=kb_prefilled_data(),
-            )
-            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
-        else:
-            await answer("Давайте заполним анкету! Как вас зовут?")
-            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        await answer("Давайте заполним анкету! Как вас зовут?")
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 
     if result.action == "ask_profile_photo":

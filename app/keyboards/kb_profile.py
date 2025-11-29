@@ -2,24 +2,12 @@
 Inline-клавиатуры для сценария заполнения профиля пользователя.
 
 Содержит функции-генераторы inline-клавиатур для различных этапов заполнения анкеты:
-сохранение, редактирование отдельных полей, подтверждение предзаполненных данных, участие в подборе.
+сохранение, редактирование отдельных полей, участие в подборе.
 """
 
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
-
-def kb_prefilled_data() -> InlineKeyboardMarkup:
-    """
-    Кратко: клавиатура при наличии предзаполненных данных.
-    """
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="Оставить ✅", callback_data="prof:prefilled:keep")],
-            [InlineKeyboardButton(text="Ввести новые данные ✏️", callback_data="prof:prefilled:new")],
-        ]
-    )
 
 
 def kb_profile_review() -> InlineKeyboardMarkup:

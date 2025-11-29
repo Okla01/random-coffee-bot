@@ -22,8 +22,7 @@ from app.keyboards.utils import clear_last_kb
 
 from app.database.utils import now_utc
 from app.database.db import (
-    get_or_create_user,         
-    check_user_blocked,
+    get_or_create_user,
 )
 
 from app.services.auth.registration import (
@@ -140,13 +139,6 @@ async def on_email_or_code(
 
         # Удаляем старую клавиатуру при любом вводе текста
         await clear_last_kb(state, message.chat.id, message.bot)
-
-        if user.status == "blocked":
-            await session.commit()
-            await message.answer(
-                "Доступ временно заблокирован. Свяжитесь с администратором."
-            )
-            return
 
         # E-MAIL
         if user.stage in {"verifying_email", "verifying_email_error"}:
@@ -290,9 +282,6 @@ async def cb_otp_resend(
             session, cq.from_user.id, cq.from_user.username
         )
         user.last_activity = now_utc()
-
-        if await check_user_blocked(cq, session, user):
-            return
 
         if user.stage not in {"verifying_code", "verifying_code_error"}:
             await session.commit()

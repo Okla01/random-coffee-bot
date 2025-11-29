@@ -24,7 +24,6 @@ class AdminAccessResultType(str, Enum):
     """Типы результатов проверки доступа к админ-панели."""
     SUCCESS = "success"
     NO_RIGHTS = "no_rights"
-    BLOCKED = "blocked"
     USER_CREATED = "user_created"
 
 
@@ -70,10 +69,6 @@ async def process_admin_command(
 
     # Синхронизируем роль администратора если пользователь в ADMIN_IDS
     await sync_admin_role(session, settings, user)
-
-    # Проверка статуса блокировки
-    if user.status == "blocked":
-        return AdminAccessResultType.BLOCKED, user
 
     # Проверка наличия прав администратора
     if not await is_admin(session, settings, telegram_id):

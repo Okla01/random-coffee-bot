@@ -19,7 +19,6 @@ from app.services.core import Settings
 from app.keyboards.kb_profile import (
     kb_profile_review,
     kb_profile_photo,
-    kb_timezone,
 )
 from app.keyboards.utils import clear_last_kb
 
@@ -32,7 +31,6 @@ from app.services.profile.editing import (
     process_bio_field,
     process_age_field,
     process_interests_field,
-    process_timezone_field,
     process_save_profile,
     process_edit_review,
 )
@@ -100,12 +98,6 @@ async def on_profile_text(
         if user.stage == "profile_name":
             result = await process_name_field(session, user, text, settings, editing_field)
             
-            if result.result_type == "blocked":
-                await message.answer(
-                    "Доступ временно заблокирован. Свяжитесь с администратором."
-                )
-                return
-            
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
                 return
@@ -124,12 +116,6 @@ async def on_profile_text(
         # BIO
         if user.stage == "profile_bio":
             result = await process_bio_field(session, user, text, settings, editing_field)
-            
-            if result.result_type == "blocked":
-                await message.answer(
-                    "Доступ временно заблокирован. Свяжитесь с администратором."
-                )
-                return
             
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
@@ -150,12 +136,6 @@ async def on_profile_text(
         # AGE
         if user.stage == "profile_age":
             result = await process_age_field(session, user, text, settings, editing_field)
-            
-            if result.result_type == "blocked":
-                await message.answer(
-                    "Доступ временно заблокирован. Свяжитесь с администратором."
-                )
-                return
             
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
@@ -178,12 +158,6 @@ async def on_profile_text(
         # INTERESTS
         if user.stage == "profile_interests":
             result = await process_interests_field(session, user, text, settings, editing_field)
-            
-            if result.result_type == "blocked":
-                await message.answer(
-                    "Доступ временно заблокирован. Свяжитесь с администратором."
-                )
-                return
             
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
@@ -336,81 +310,8 @@ async def cb_prof_edit_field(
         elif field == "interests":
             await update_user_stage(session, user, "profile_interests", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
             await cq.message.answer("Перечислите интересы через запятую.")
-        elif field == "timezone":
-            await update_user_stage(session, user, "profile_timezone", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
-            sent = await cq.message.answer("Выберите ваш часовой пояс:", reply_markup=kb_timezone())
-            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
         await session.commit()
         await cq.answer()
-
-
-@router.callback_query(F.data.startswith("prof:timezone:"))
-async def cb_prof_timezone(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-) -> None:
-    """
-    Обрабатывает нажатие кнопки выбора часового пояса.
-
-    Извлекает IANA timezone из callback_data, валидирует и сохраняет выбор пользователя,
-    переводит на следующую стадию (предпросмотр или редактирование).
-
-    Args:
-        cq (CallbackQuery): callback запрос от пользователя.
-        state (FSMContext): контекст FSM.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
-        settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    await cq.message.edit_reply_markup(reply_markup=None)
-    
-    # Извлекаем часовой пояс из callback_data (формат: "prof:timezone:Europe/Moscow")
-    timezone_iana = cq.data.split(":", 2)[2]
-    
-    async with session_factory() as session:
-        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
-        
-        # Получаем флаг редактирования из состояния
-        data = await state.get_data()
-        editing_field = data.get(FSMDataKeys.EDITING_FIELD)
-        
-        result = await process_timezone_field(session, user, timezone_iana, editing_field)
-        
-        if result.result_type == "blocked":
-            await cq.message.answer(
-                "Доступ временно заблокирован. Свяжитесь с администратором."
-            )
-            await cq.answer()
-            return
-        
-        if result.result_type == "validation_error":
-            await cq.message.answer(result.error_message)
-            await cq.answer()
-            return
-        
-        if result.result_type == "field_updated_review":
-            await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-            await send_profile_preview(
-                cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
-            )
-            await cq.answer()
-            return
-        
-        if result.result_type == "field_updated_continue":
-            # Отправить текстовый предпросмотр
-            await send_profile_preview(
-                cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
-            )
-            await cq.answer()
-            return
-    
-    await cq.answer()
-
-
 @router.callback_query(F.data == "prof:join")
 async def cb_prof_join(
     cq: CallbackQuery,

@@ -125,32 +125,19 @@ async def get_or_create_user(
     return user
 
 
-async def check_user_blocked(
-    cq,
-    session: AsyncSession,
-    user: User,
-) -> bool:
+def is_user_blocked(user: User) -> bool:
     """
-    Проверяет, заблокирован ли пользователь, и отправляет уведомление если заблокирован.
-
-    Если статус пользователя 'blocked', отправляет сообщение и возвращает True.
-    Иначе возвращает False. Используется для ранней проверки в обработчиках.
+    Проверяет, заблокирован ли пользователь.
 
     Args:
-        cq: callback запрос для отправки сообщения.
-        session (AsyncSession): сессия БД.
         user (User): объект пользователя для проверки.
 
     Returns:
         bool: True если пользователь заблокирован, иначе False.
     """
-    if user.status == "blocked":
-        await cq.message.answer(
-            "Доступ временно заблокирован. Свяжитесь с администратором."
-        )
-        await session.commit()
-        return True
-    return False
+    if not user or not user.status:
+        return False
+    return user.status.strip().lower() == "blocked"
 
 
 async def update_user_stage(

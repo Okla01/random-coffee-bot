@@ -8,5 +8,6 @@
 """
 
 from .db_session import DbSessionMiddleware
+from .blocked_user import BlockedUserMiddleware
 
-__all__ = ["DbSessionMiddleware"]
+__all__ = ["DbSessionMiddleware", "BlockedUserMiddleware"]

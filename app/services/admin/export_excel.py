@@ -26,7 +26,6 @@ HEADERS = [
     "Email",
     "Имя",
     "Возраст",
-    "Часовой пояс",
     "Интересы",
     "Дата регистрации",
     "Последний матч",
@@ -39,13 +38,12 @@ COLUMN_WIDTHS = {
     "D": 25,  # Email
     "E": 20,  # Имя
     "F": 10,  # Возраст
-    "G": 15,  # Часовой пояс
     "H": 30,  # Интересы
     "I": 20,  # Дата регистрации
     "J": 20,  # Последний матч
 }
 
-TEXT_COLUMNS = [2, 3, 4, 5, 7, 8, 9, 10]  # Номера текстовых столбцов
+TEXT_COLUMNS = [2, 3, 4, 5, 6, 7, 8, 9]  # Номера текстовых столбцов
 
 
 async def _get_users(session: AsyncSession) -> list[User]:
@@ -146,7 +144,6 @@ def _get_user_row_data(user: User) -> list:
         user.email,
         user.name or "",
         user.age or "",
-        user.tz or "",
         interests,
         _format_datetime(user.registered_at),
         _format_datetime(user.last_match_at),
@@ -216,7 +213,6 @@ async def export_users_to_excel(
     - Статус
     - Email
     - Данные анкеты (имя, возраст, интересы)
-    - Часовой пояс
     - Даты регистрации и последнего матча
 
     Args:

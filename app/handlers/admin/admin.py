@@ -61,10 +61,6 @@ async def cmd_admin(
             await message.answer("⛔️ Нет прав.")
             return
 
-        if result_type == AdminAccessResultType.BLOCKED:
-            await message.answer("⛔️ Нет прав (пользователь заблокирован).")
-            return
-
         await session.commit()
 
         # Удаляем предыдущую клавиатуру

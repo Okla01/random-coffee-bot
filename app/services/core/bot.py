@@ -19,7 +19,7 @@ from aiogram import Bot, Dispatcher
 from .config import Settings
 from .logger import setup_logging
 from app.database import lifespan_db
-from app.middlewares import DbSessionMiddleware
+from app.middlewares import DbSessionMiddleware, BlockedUserMiddleware
 
 # импортируем роутеры в нужном порядке
 from app.handlers import start_router
@@ -80,8 +80,11 @@ async def run_bot() -> None:
     dp = await create_dispatcher(settings)
 
     # Регистрируем middleware/контекст БД
+    # Порядок важен: последний зарегистрированный outer_middleware выполняется первым (LIFO)
+    # Регистрируем BlockedUserMiddleware последним, чтобы он выполнился первым в цепочке
     async with lifespan_db(settings) as session_factory:
         dp.update.outer_middleware(DbSessionMiddleware(session_factory))
+        dp.update.outer_middleware(BlockedUserMiddleware(session_factory))
         dp["settings"] = settings
         await bot.delete_webhook(drop_pending_updates=True)
 

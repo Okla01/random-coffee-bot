@@ -86,7 +86,6 @@ class Settings:
 
     # Misc
     log_level: str
-    tz_default: str
     banned_words: List[str]
 
     @classmethod
@@ -149,7 +148,6 @@ class Settings:
         otp_max_attempts = int(os.getenv("OTP_MAX_ATTEMPTS", "3"))
 
         log_level = os.getenv("LOG_LEVEL", "INFO").upper()
-        tz_default = os.getenv("TZ_DEFAULT", "Europe/Moscow")
         banned_words = load_banned_words()
 
         return cls(
@@ -171,7 +169,6 @@ class Settings:
             email_max_attempts=email_max_attempts,
             otp_max_attempts=otp_max_attempts,
             log_level=log_level,
-            tz_default=tz_default,
             banned_words=banned_words,
         )
 

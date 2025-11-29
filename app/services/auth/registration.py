@@ -14,7 +14,7 @@ import uuid
 from datetime import timedelta
 from enum import Enum
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core import Settings
@@ -64,8 +64,11 @@ async def log_attempt(
     )
     rows = list((await session.execute(q)).scalars())
     if len(rows) > 3:
-        for old in rows[3:]:
-            session.delete(old)
+        # Удаляем старые записи через statement-based удаление
+        old_ids = [row.id for row in rows[3:]]
+        if old_ids:
+            stmt = delete(AuthAttempt).where(AuthAttempt.id.in_(old_ids))
+            await session.execute(stmt)
 
 
 async def get_last_attempts(

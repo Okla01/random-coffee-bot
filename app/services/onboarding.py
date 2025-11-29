@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
-from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review, kb_timezone
+from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
 from app.services.profile.preview import send_profile_preview
@@ -29,7 +29,6 @@ from app.services.profile.preview import send_profile_preview
 # Перечень возможных действий после обработки /start.
 # Каждое значение — это "сигнал" для хендлера, что именно нужно сделать.
 ActionType = Literal[
-    "blocked",             # пользователь заблокирован
     "ask_email",           # запросить корпоративный e-mail
     "ask_code",            # запросить код подтверждения
     "ask_profile_name",    # запросить имя (или показать предзаполненное)
@@ -37,7 +36,6 @@ ActionType = Literal[
     "ask_profile_bio",     # запросить текст "о себе"
     "ask_profile_age",     # запросить возраст
     "ask_profile_interests",  # запросить интересы
-    "ask_profile_timezone",  # запросить часовой пояс
     "show_profile_review",    # показать предпросмотр анкеты перед подтверждением
     "show_profile_filled",    # показать уже заполненную анкету
 ]
@@ -78,11 +76,7 @@ async def process_start(
     Returns:
         StartResult: объект с действием (action) и опциональными данными (payload).
     """
-    # 1. Пользователь заблокирован — никакой онбординг не запускаем
-    if user.status == "blocked":
-        return StartResult(action="blocked")
-
-    # 2. Регистрация по почте:
+    # 1. Регистрация по почте:
     #    - "new"                 — только что созданный пользователь
     #    - "verifying_email"     — вводит/подтверждает почту
     #    - "verifying_email_error" — была ошибка, но остаёмся на этом шаге
@@ -138,10 +132,6 @@ async def process_start(
         await session.commit()
         return StartResult(action="ask_profile_interests")
 
-    # Шаг выбора часового пояса
-    if user.stage == "profile_timezone":
-        await session.commit()
-        return StartResult(action="ask_profile_timezone")
 
     # Предпросмотр анкеты перед подтверждением
     if user.stage == "profile_review":
@@ -175,10 +165,6 @@ async def handle_start_result(
 
     async def answer(text, **kwargs):
         return await message.answer(text, **kwargs)
-
-    if result.action == "blocked":
-        await answer("Доступ временно заблокирован. Свяжитесь с администратором.")
-        return
 
     if result.action == "ask_email":
         await answer(
@@ -233,13 +219,6 @@ async def handle_start_result(
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 
-    if result.action == "ask_profile_timezone":
-        sent = await answer(
-            "Выберите ваш часовой пояс:",
-            reply_markup=kb_timezone(),
-        )
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
-        return
 
     if result.action == "show_profile_review":
         await send_profile_preview(

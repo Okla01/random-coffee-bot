@@ -68,11 +68,6 @@ class User(Base):
         JSON, nullable=True
     )  # {"интересы": [...]}
 
-    # Часовой пояс
-    tz: Mapped[Optional[str]] = mapped_column(
-        String(64), nullable=True, default="Europe/Moscow"
-    )  # Часовой пояс пользователя (например, "Europe/Moscow")
-
     # Аудит и временные метки
     registered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True

@@ -325,12 +325,12 @@ async def process_interests_field(
             is_editing=True
         )
 
-    # Переход на предпросмотр
-    user.stage = "profile_review"
+    # Переход на выбор часового пояса
+    user.stage = "profile_timezone"
     await session.commit()
     return FieldResult(
         result_type="field_updated_continue",
-        next_stage="profile_review",
+        next_stage="profile_timezone",
         is_editing=False
     )
 
@@ -377,6 +377,68 @@ def normalize_interests(
     if sum(len(x) for x in result) > 300:
         return None, "Суммарная длина интересов превышает 300 символов."
     return result, None
+
+
+async def process_timezone_field(
+    session: AsyncSession,
+    user: User,
+    timezone_iana: str,
+    editing_field: str | None,
+) -> FieldResult:
+    """
+    Обрабатывает выбор часового пояса пользователя.
+
+    Валидирует часовой пояс (проверяет, что он существует в списке доступных),
+    обновляет поле user.tz, определяет следующую стадию.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        user (User): ORM-модель пользователя.
+        timezone_iana (str): IANA timezone (например, "Europe/Moscow").
+        editing_field (str | None): флаг редактирования ("timezone" или None).
+
+    Returns:
+        FieldResult: результат обработки.
+    """
+    if user.status == "blocked":
+        await session.commit()
+        return FieldResult(result_type="blocked")
+
+    # Валидация: проверяем, что часовой пояс есть в списке доступных
+    from app.services.const import TIMEZONES
+    valid_timezones = {tz_iana for tz_iana, _ in TIMEZONES}
+    
+    if timezone_iana not in valid_timezones:
+        await session.commit()
+        return FieldResult(
+            result_type="validation_error",
+            error_message="⚠️ Выбран недопустимый часовой пояс. Попробуйте ещё раз."
+        )
+
+    # Обновление поля
+    user.tz = timezone_iana
+    user.last_activity = datetime.now(timezone.utc)
+
+    # Определение следующей стадии
+    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
+    is_editing = editing_field == "timezone" or is_profile_complete(user)
+    if is_editing:
+        user.stage = "profile_review"
+        await session.commit()
+        return FieldResult(
+            result_type="field_updated_review",
+            next_stage="profile_review",
+            is_editing=True
+        )
+
+    # Переход на предпросмотр
+    user.stage = "profile_review"
+    await session.commit()
+    return FieldResult(
+        result_type="field_updated_continue",
+        next_stage="profile_review",
+        is_editing=False
+    )
 
 
 async def process_save_profile(

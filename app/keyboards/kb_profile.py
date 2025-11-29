@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.services.const import TIMEZONES
+
 
 def kb_profile_review() -> InlineKeyboardMarkup:
     """
@@ -20,6 +22,7 @@ def kb_profile_review() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="Изменить описание", callback_data="prof:edit:bio"),],
             [InlineKeyboardButton(text="Изменить интересы", callback_data="prof:edit:interests")],
             [InlineKeyboardButton(text="Изменить фото", callback_data="prof:edit:photo")],
+            [InlineKeyboardButton(text="Изменить часовой пояс", callback_data="prof:edit:timezone")],
             [InlineKeyboardButton(text="Удалить профиль 🗑", callback_data="prof:delete:confirm")],
         ]
     )
@@ -78,3 +81,30 @@ def kb_profile_delete_confirm() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def kb_timezone() -> InlineKeyboardMarkup:
+    """
+    Кратко: клавиатура выбора часового пояса.
+    
+    Создаёт клавиатуру с популярными часовыми поясами.
+    Кнопки расположены по 2 в ряд для удобства.
+    """
+    keyboard = []
+    for i in range(0, len(TIMEZONES), 2):
+        row = []
+        tz_iana, tz_display = TIMEZONES[i]
+        row.append(InlineKeyboardButton(
+            text=tz_display,
+            callback_data=f"prof:timezone:{tz_iana}"
+        ))
+        # Если есть следующий элемент, добавляем его в тот же ряд
+        if i + 1 < len(TIMEZONES):
+            tz_iana_next, tz_display_next = TIMEZONES[i + 1]
+            row.append(InlineKeyboardButton(
+                text=tz_display_next,
+                callback_data=f"prof:timezone:{tz_iana_next}"
+            ))
+        keyboard.append(row)
+    
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)

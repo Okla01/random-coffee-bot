@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
-from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
+from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review, kb_timezone
 from app.services.core.config import Settings          # настройки приложения
 from app.database.models import User              # ORM-модель пользователя
 from app.services.profile.preview import send_profile_preview
@@ -37,6 +37,7 @@ ActionType = Literal[
     "ask_profile_bio",     # запросить текст "о себе"
     "ask_profile_age",     # запросить возраст
     "ask_profile_interests",  # запросить интересы
+    "ask_profile_timezone",  # запросить часовой пояс
     "show_profile_review",    # показать предпросмотр анкеты перед подтверждением
     "show_profile_filled",    # показать уже заполненную анкету
 ]
@@ -137,6 +138,11 @@ async def process_start(
         await session.commit()
         return StartResult(action="ask_profile_interests")
 
+    # Шаг выбора часового пояса
+    if user.stage == "profile_timezone":
+        await session.commit()
+        return StartResult(action="ask_profile_timezone")
+
     # Предпросмотр анкеты перед подтверждением
     if user.stage == "profile_review":
         await session.commit()
@@ -225,6 +231,14 @@ async def handle_start_result(
             "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "ask_profile_timezone":
+        sent = await answer(
+            "Выберите ваш часовой пояс:",
+            reply_markup=kb_timezone(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
         return
 
     if result.action == "show_profile_review":

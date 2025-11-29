@@ -38,11 +38,13 @@ async def cb_admin_exit(
     # Сброс состояния панели администратора
     await state.update_data(**{FSMDataKeys.ADMIN_PANEL_ACTIVE: False})
 
+    await cq.message.edit_reply_markup(reply_markup=None)
+    
     # Открываем асинхронную сессию БД в контекстном менеджере
     async with session_factory() as session:
         # Получаем пользователя или создаём нового при первом заходе
         user = await get_or_create_user(
-            session, cq.message.from_user.id, cq.message.from_user.username
+            session, cq.from_user.id, cq.from_user.username
         )
 
         # Удаление последней клавиатуры

@@ -116,4 +116,15 @@ def kb_admin_settings_change_day_of_week(current_day_of_week: str) -> InlineKeyb
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
-    
+
+def kb_admin_back_to_menu() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для возврата в главное меню администратора.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:back_to_menu"),
+            ]
+        ]
+    )

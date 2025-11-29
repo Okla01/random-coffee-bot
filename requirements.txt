@@ -5,3 +5,4 @@ aiosmtplib>=3.0
 python-dotenv>=1.0
 pydantic>=2.7
 aiogram-media-group>=0.4
+openpyxl>=3.1

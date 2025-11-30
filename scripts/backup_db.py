@@ -14,6 +14,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from app.database.utils import now_msk
+
 
 def backup_database(
     src_path: str | Path,
@@ -39,7 +41,7 @@ def backup_database(
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     # Имя файла бэкапа в формате YYYY-MM-DD.db
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = now_msk().strftime("%Y-%m-%d")
     backup_path = backup_dir / f"{today}.db"
 
     try:
@@ -69,7 +71,7 @@ def backup_database(
         print(f"Бэкап создан успешно: {backup_path}")
 
         # Удаляем старые бэкапы
-        cutoff = datetime.now() - timedelta(days=days_to_keep)
+        cutoff = now_msk() - timedelta(days=days_to_keep)
         for old_backup in backup_dir.glob("*.db"):
             try:
                 # Парсим дату из имени файла

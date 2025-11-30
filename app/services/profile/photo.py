@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import attributes
 
 from app.database import User
-from app.database.utils import now_utc
+from app.database.utils import now_msk
 from aiogram.types import InputMediaPhoto
 from aiogram.exceptions import TelegramBadRequest
 from app.handlers.fsm import FSMDataKeys
@@ -201,7 +201,7 @@ async def add_photos_to_profile(
     for photo in photos[:free_slots]:
         photos_list.append({
             "file_id": photo.file_id,
-            "ts": now_utc().isoformat(),
+            "ts": now_msk().isoformat(),
         })
 
     set_photos_list(user, photos_list)
@@ -234,7 +234,7 @@ async def add_single_photo_to_profile(
 
     photos_list.append({
         "file_id": photo.file_id,
-        "ts": now_utc().isoformat(),
+        "ts": now_msk().isoformat(),
     })
 
     set_photos_list(user, photos_list)
@@ -288,7 +288,7 @@ async def add_telegram_profile_photo(
 
     photos_list.append({
         "file_id": photo.file_id,
-        "ts": now_utc().isoformat(),
+        "ts": now_msk().isoformat(),
     })
 
     set_photos_list(user, photos_list)

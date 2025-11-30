@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy import select
 
 from app.database.models import User
-from app.database.utils import now_utc
+from app.database.utils import now_msk
 from app.services.core import Settings
 
 
@@ -109,7 +109,7 @@ async def get_or_create_user(
         # Теоретически telegram_id меняться не должен, но на всякий случай:
         if user.telegram_id != telegram_id:
             user.telegram_id = telegram_id
-        user.last_activity = now_utc()
+        user.last_activity = now_msk()
         return user
 
     # Создаём нового пользователя
@@ -118,7 +118,7 @@ async def get_or_create_user(
         username=username,
         status="not_active",
         stage="new",
-        last_activity=now_utc(),
+        last_activity=now_msk(),
     )
     session.add(user)
     await session.flush()
@@ -164,7 +164,7 @@ async def update_user_stage(
         None: ничего не возвращает.
     """
     user.stage = new_stage
-    user.last_activity = now_utc()
+    user.last_activity = now_msk()
     await session.commit()
 
     if state_data:

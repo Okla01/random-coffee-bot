@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core import Settings
 from app.services.auth.email import send_otp_email, generate_otp
 from app.database import User, Otp, AuthAttempt, AdminLog
-from app.database.utils import now_utc, ensure_aware_utc
+from app.database.utils import now_msk, ensure_aware_msk
 from app.keyboards.kb_admin import kb_admin_decision
 
 
@@ -119,7 +119,7 @@ async def send_or_resend_otp(
     Raises:
         Exception: если ошибка при отправке email.
     """
-    now = now_utc()
+    now = now_msk()
 
     existing = (
         (
@@ -136,8 +136,8 @@ async def send_or_resend_otp(
     warn: str | None = None
 
     if existing:
-        ex_expires_at = ensure_aware_utc(existing.expires_at)
-        ex_last_sent_at = ensure_aware_utc(existing.last_sent_at)
+        ex_expires_at = ensure_aware_msk(existing.expires_at)
+        ex_last_sent_at = ensure_aware_msk(existing.last_sent_at)
 
         if ex_expires_at and ex_expires_at > now:
             if (
@@ -299,14 +299,14 @@ async def process_otp_input(
 
     await log_attempt(session, user.id, "otp", code)
 
-    now = now_utc()
+    now = now_msk()
     otp_row = await get_latest_otp(session, user.id)
 
     if not otp_row:
         return OtpResultType.NOT_FOUND, f"Код не найден. Отправить новый код на {user.email}?"
 
-    exp = ensure_aware_utc(otp_row.expires_at)
-    used_at = ensure_aware_utc(otp_row.used_at)
+    exp = ensure_aware_msk(otp_row.expires_at)
+    used_at = ensure_aware_msk(otp_row.used_at)
 
     if not exp or exp <= now:
         return OtpResultType.EXPIRED, f"Код истёк. Отправить новый код на {user.email}?"
@@ -360,13 +360,13 @@ async def check_email_change_allowed(
     Returns:
         tuple[bool, int | None]: (разрешено_ли, оставшееся_время_в_секундах_или_None).
     """
-    now = now_utc()
+    now = now_msk()
     otp_row = await get_latest_otp(session, user_id)
 
     if not otp_row:
         return True, None
 
-    created_at = ensure_aware_utc(otp_row.created_at)
+    created_at = ensure_aware_msk(otp_row.created_at)
     if created_at and (created_at + timedelta(seconds=cooldown_seconds)) > now:
         time_remaining = int(
             (created_at + timedelta(seconds=cooldown_seconds) - now).total_seconds()

@@ -17,10 +17,11 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.sqlite import JSON
+
+from app.database.utils import now_msk
 
 class Base(DeclarativeBase):
     """Базовый класс для всех моделей SQLAlchemy ORM."""
@@ -70,10 +71,10 @@ class User(Base):
 
     # Аудит и временные метки
     registered_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )  # Дата регистрации
     last_activity: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )  # Последняя активность
     last_match_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
@@ -128,11 +129,11 @@ class Otp(Base):
     )  # логическая «сессия» для контроля переотправок
     resend_count: Mapped[int] = mapped_column(Integer, default=0)
     last_sent_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), default=now_msk
     )
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), default=now_msk
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     used_at: Mapped[Optional[datetime]] = mapped_column(
@@ -167,7 +168,7 @@ class AuthAttempt(Base):
     type: Mapped[str] = mapped_column(String(16))  # "email" | "otp"
     value: Mapped[str] = mapped_column(String(255))
     ts: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )
 
     user: Mapped["User"] = relationship(back_populates="attempts")
@@ -227,7 +228,7 @@ class AdminLog(Base):
     action: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)
     ts: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )
 
 
@@ -252,7 +253,7 @@ class Match(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )
     status: Mapped[str] = mapped_column(
         String(16), default="active", index=True
@@ -289,7 +290,7 @@ class Complaint(Base):
     reason: Mapped[str] = mapped_column(String(64))  # Причина жалобы
     text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Текст жалобы
     ts: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
+        DateTime(timezone=True), default=now_msk, index=True
     )  # Время создания жалобы
     status: Mapped[str] = mapped_column(
         String(16), default="pending", index=True

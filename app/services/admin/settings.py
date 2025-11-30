@@ -61,7 +61,10 @@ def format_settings_text(settings: dict) -> str:
         "🔹 День недели для встреч: "
         f"{DAYS_OF_WEEK.get(settings['match_day'], settings['match_day'])}\n"
     )
-    text += f"🔹 Час совпадения (UTC): {settings['match_utc_hour']}\n"
+
+    msk_hour = int(settings['match_msk_hour'])
+
+    text += f"🔹 Час мэтчинга (МСК): {msk_hour:02d}:00\n"
     
     return text
 
@@ -129,7 +132,7 @@ def try_to_input_cooldown_weeks(msg: str) -> int | None:
     return None
 
 
-def try_to_input_match_utc_hour(msg: str) -> int | None:
+def try_to_input_match_msk_hour(msg: str) -> int | None:
     """
     Пытается преобразовать введённый текст в числовое значения (типа int).
 

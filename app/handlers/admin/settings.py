@@ -5,7 +5,7 @@
 - минимальный Jaccard коэффициент
 - периодичность встреч (в неделях)
 - день недели для встреч
-- час совпадения (UTC)
+- час мэтчинга (МСК)
 """
 
 from __future__ import annotations
@@ -28,7 +28,7 @@ from app.services.admin.settings import (
     get_current_settings,
     save_settings,
     try_to_input_cooldown_weeks,
-    try_to_input_match_utc_hour,
+    try_to_input_match_msk_hour,
     try_to_input_min_jaccard,
     update_draft_setting,
 )
@@ -124,19 +124,19 @@ async def cb_update_match_day(
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.callback_query(F.data == "admin:update_match_utc_hour")
-async def cb_update_match_utc_hour(
+@router.callback_query(F.data == "admin:update_match_msk_hour")
+async def cb_update_match_msk_hour(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новый час совпадения (UTC)."""
+    """Запрашивает новый час мэтчинга (МСК)."""
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
     await cq.message.answer("Введите новый час подбора (0 - 23):")
 
     # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_match_utc_hour)
+    await state.set_state(AdminSettingsStates.waiting_match_msk_hour)
 
 
 @router.callback_query(F.data == "admin:save_admin_settings")
@@ -286,19 +286,19 @@ async def on_cooldown_weeks_input(msg: Message, state: FSMContext) -> None:
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_match_utc_hour))
-async def on_match_utc_hour_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_match_msk_hour))
+async def on_match_msk_hour_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения часа рассылки.
     """
-    match_utc_hour: int | None = try_to_input_match_utc_hour(msg.text)
-    if match_utc_hour is None:
+    match_msk_hour: int | None = try_to_input_match_msk_hour(msg.text)
+    if match_msk_hour is None:
         await msg.answer(
             "Некорректный ввод. Пожалуйста, введите число в диапазоне 0 - 23."
         )
         return
 
-    draft = await update_draft_setting(state, "match_utc_hour", match_utc_hour)
+    draft = await update_draft_setting(state, "match_msk_hour", match_msk_hour)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

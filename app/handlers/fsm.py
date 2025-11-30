@@ -15,7 +15,7 @@ class AdminSettingsStates(StatesGroup):
     waiting_min_jaccard = State()
     waiting_cooldown_weeks = State()
     waiting_match_day = State()
-    waiting_match_utc_hour = State()
+    waiting_match_msk_hour = State()
 
 
 class FSMDataKeys(str, Enum):

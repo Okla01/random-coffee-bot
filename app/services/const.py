@@ -19,5 +19,5 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "min_jaccard": "0.3",
     "cooldown_weeks": "1",
     "match_day": "fri",
-    "match_utc_hour": "12",
+    "match_msk_hour": "12",
 }

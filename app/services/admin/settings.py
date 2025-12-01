@@ -1,3 +1,7 @@
+"""
+Бизнес-логика управления настройками в панели администратора.
+"""
+
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.sql import select
 

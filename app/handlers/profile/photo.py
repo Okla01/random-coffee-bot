@@ -18,7 +18,6 @@ from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database.db import get_or_create_user
-from app.database.utils import now_msk
 
 from app.keyboards.kb_profile import (
     kb_profile_photo,
@@ -117,7 +116,6 @@ async def _finalize_media_group_album(
 
         async with session_factory() as session:
             user = await get_or_create_user(session, user_id)
-            user.last_activity = now_msk()
 
             # Добавляем фото через бизнес-логику
             success, photos_list = await add_photos_to_profile(session, user, photos)
@@ -175,8 +173,6 @@ async def on_single_photo(
         if user.stage != "profile_photo":
             await session.commit()
             raise SkipHandler()
-
-        user.last_activity = now_msk()
 
         # Добавляем фото через бизнес-логику
         success, photos_list = await add_single_photo_to_profile(
@@ -271,7 +267,6 @@ async def cb_photo_from_tg(
         user = await get_or_create_user(
             session, cq.from_user.id, cq.from_user.username
         )
-        user.last_activity = now_msk()
 
         # Проверяем лимит
         if not can_add_photo(user):
@@ -444,7 +439,6 @@ async def cb_edit_photo(
             )
             user.stage = "profile_photo"
             user.status = USER_STATUS_NOT_ACTIVE
-            user.last_activity = now_msk()
             await session.commit()
 
             # режим редактирования

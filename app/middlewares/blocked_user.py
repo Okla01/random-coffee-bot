@@ -1,8 +1,9 @@
 """
-Middleware для проверки блокировки пользователя.
+Middleware для проверки блокировки пользователя и обновления last_activity.
 
 Перехватывает все обновления (Message, CallbackQuery) и проверяет статус пользователя.
 Если пользователь заблокирован, отправляет уведомление и прерывает обработку.
+Также обновляет last_activity для всех действий пользователя.
 """
 
 from __future__ import annotations
@@ -14,16 +15,18 @@ from aiogram.types import TelegramObject, Message, CallbackQuery, Update, ReplyK
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from app.database.db import get_user_by_tg_id, is_user_blocked
+from app.database.utils import now_msk
 from app.services.admin.roles import is_admin
 from app.services.core import Settings
 
 
 class BlockedUserMiddleware(BaseMiddleware):
     """
-    Middleware для проверки блокировки пользователя.
+    Middleware для проверки блокировки пользователя и обновления last_activity.
     
     Проверяет статус пользователя перед обработкой любого обновления.
     Если пользователь заблокирован, отправляет уведомление и прерывает цепочку обработки.
+    Также обновляет last_activity для всех действий пользователя.
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -43,10 +46,10 @@ class BlockedUserMiddleware(BaseMiddleware):
         data: Dict[str, Any],
     ) -> Any:
         """
-        Проверяет блокировку пользователя перед обработкой любого обновления.
+        Проверяет блокировку пользователя и обновляет last_activity перед обработкой любого обновления.
         
-        Любое действие пользователя приводит к проверке блокировки. Если пользователь
-        заблокирован, отправляется сообщение о блокировке и удаляется последняя клавиатура.
+        Любое действие пользователя приводит к проверке блокировки и обновлению last_activity.
+        Если пользователь заблокирован, отправляется сообщение о блокировке и удаляется последняя клавиатура.
         
         Args:
             handler: следующий обработчик в цепи.
@@ -82,6 +85,10 @@ class BlockedUserMiddleware(BaseMiddleware):
             # Если пользователь не найден - пропускаем
             if not user:
                 return await handler(event, data)
+            
+            # Обновляем last_activity для любого действия пользователя
+            user.last_activity = now_msk()
+            await session.commit()
             
             # Проверяем блокировку
             if is_user_blocked(user):

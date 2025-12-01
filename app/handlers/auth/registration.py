@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.keyboards.kb_auth import kb_auth_code_wait, kb_auth_code_expired
 from app.keyboards.utils import clear_last_kb
 
-from app.database.utils import now_msk
 from app.database.db import (
     get_or_create_user,
 )
@@ -79,7 +78,6 @@ async def on_stage2_debug(
         # Заполняем тестовые данные
         user.email = f"test.user{user.telegram_id}@test.corp"
         user.stage = "authorized"  # Помечаем как авторизованного
-        user.last_activity = now_msk()
         user.status = USER_STATUS_NOT_ACTIVE
 
         await session.commit()
@@ -135,7 +133,6 @@ async def on_email_or_code(
             await session.commit()
             raise SkipHandler()
 
-        user.last_activity = now_msk()
         text = (message.text or "").strip()
 
         # Удаляем старую клавиатуру при любом вводе текста
@@ -282,7 +279,6 @@ async def cb_otp_resend(
         user = await get_or_create_user(
             session, cq.from_user.id, cq.from_user.username
         )
-        user.last_activity = now_msk()
 
         if user.stage not in {"verifying_code", "verifying_code_error"}:
             await session.commit()
@@ -330,7 +326,6 @@ async def cb_change_email(
         user = await get_or_create_user(
             session, cq.from_user.id, cq.from_user.username
         )
-        user.last_activity = now_msk()
 
         allowed, time_remaining = await check_email_change_allowed(
             session, user.id, cooldown_seconds=120

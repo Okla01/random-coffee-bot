@@ -110,7 +110,6 @@ async def get_or_create_user(
         # Теоретически telegram_id меняться не должен, но на всякий случай:
         if user.telegram_id != telegram_id:
             user.telegram_id = telegram_id
-        user.last_activity = now_msk()
         return user
 
     # Создаём нового пользователя
@@ -165,7 +164,6 @@ async def update_user_stage(
         None: ничего не возвращает.
     """
     user.stage = new_stage
-    user.last_activity = now_msk()
     await session.commit()
 
     if state_data:

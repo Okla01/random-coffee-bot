@@ -19,7 +19,6 @@ from typing import Iterable, List, Literal
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.utils import now_msk
 from app.services.core.config import Settings
 from app.services.profile.banned_words import contains_banned_words
 from app.services.profile.utils import is_profile_complete
@@ -102,7 +101,6 @@ async def process_name_field(
 
     # Обновление поля
     user.name = text
-    user.last_activity = now_msk()
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
@@ -168,7 +166,6 @@ async def process_bio_field(
 
     # Обновление поля
     user.bio = text
-    user.last_activity = now_msk()
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
@@ -235,7 +232,6 @@ async def process_age_field(
 
     # Обновление поля
     user.age = age
-    user.last_activity = now_msk()
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
@@ -293,7 +289,6 @@ async def process_interests_field(
 
     # Обновление поля
     user.interests_json = {"interests": interests or []}
-    user.last_activity = now_msk()
 
     # Определение следующей стадии
     # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
@@ -373,7 +368,6 @@ async def process_save_profile(
         user (User): ORM-модель пользователя.
     """
     user.stage = "profile_filled"
-    user.last_activity = now_msk()
     await session.commit()
 
 
@@ -389,6 +383,5 @@ async def process_edit_review(
         user (User): ORM-модель пользователя.
     """
     user.stage = "profile_review"
-    user.last_activity = now_msk()
     await session.commit()
 

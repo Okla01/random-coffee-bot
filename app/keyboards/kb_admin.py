@@ -129,3 +129,76 @@ def kb_admin_back_to_menu() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+def kb_admin_users(
+    page: int,
+    total_users: int,
+    filters: dict[str, bool]
+) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для просмотра списка пользователей.
+    """
+    pages = max((total_users + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
+    kb = InlineKeyboardBuilder()
+
+    # Первая строка: Пагинация
+    pagination_row = []
+
+    if page > 1:
+        pagination_row.append(
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data=f"admin:users:{page - 1}"
+            )
+        )
+
+    pagination_row.append(
+        InlineKeyboardButton(
+            text=f"{page}/{pages}",
+            callback_data="admin:users:noop"
+        )
+    )
+
+    if page < pages:
+        pagination_row.append(
+            InlineKeyboardButton(
+                text="Вперёд ▶️",
+                callback_data=f"admin:users:{page + 1}"
+            )
+        )
+
+    # Эта строка автоматически будет из 2 или из 3 кнопок
+    kb.row(*pagination_row)
+
+    # Вторая строка: Фильтры
+    active_state = "✅" if filters.get("active") else "❌"
+    blocked_state = "✅" if filters.get("blocked") else "❌"
+
+    kb.row(
+        InlineKeyboardButton(
+            text=f"{active_state} Активные",
+            callback_data="admin:users:filter:active"
+        ),
+        InlineKeyboardButton(
+            text=f"{blocked_state} Заблокированные",
+            callback_data="admin:users:filter:blocked"
+        ),
+    )
+
+    # Третья строка: Поиск (через inline-режим)
+    kb.row(
+        InlineKeyboardButton(
+            text="🔍 Поиск по username",
+            switch_inline_query_current_chat="user:"
+        )
+    )
+
+    # Четвёртая строка: В главное меню
+    kb.row(
+        InlineKeyboardButton(
+            text="⬅️ В главное меню",
+            callback_data="admin:back_to_menu"
+        )
+    )
+
+    return kb.as_markup()

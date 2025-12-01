@@ -78,6 +78,36 @@ async def get_user_by_tg_id(
     ).scalar_one_or_none()
 
 
+async def search_users_by_username(
+    session: AsyncSession,
+    query: str,
+    limit: int = 10,
+) -> list[User]:
+    """
+    Ищет пользователей по username (частичное совпадение).
+
+    Args:
+        session (AsyncSession): сессия БД.
+        query (str): строка поиска (без @).
+        limit (int): максимальное количество результатов.
+
+    Returns:
+        list[User]: список найденных пользователей.
+    """
+    # Убираем @ если есть
+    query = query.lstrip("@").strip().lower()
+    if not query:
+        return []
+
+    result = await session.execute(
+        select(User)
+        .where(User.username.ilike(f"%{query}%"))
+        .order_by(User.username)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def get_or_create_user(
     session: AsyncSession,
     telegram_id: int,

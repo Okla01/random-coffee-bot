@@ -18,6 +18,12 @@ class AdminSettingsStates(StatesGroup):
     waiting_match_msk_hour = State()
 
 
+class AdminUsersStates(StatesGroup):
+    """Состояния FSM для поиска пользователей в админке."""
+    
+    waiting_search_telegram_id = State()
+
+
 class FSMDataKeys(str, Enum):
     """Ключи для данных, сохраняемых в FSMContext."""
 

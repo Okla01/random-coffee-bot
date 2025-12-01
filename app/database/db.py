@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.database.models import User
 from app.database.utils import now_msk
 from app.services.core import Settings
+from app.services.const import USER_STATUS_NOT_ACTIVE, USER_STATUS_BLOCKED
 
 
 def make_engine(settings: Settings):
@@ -116,7 +117,7 @@ async def get_or_create_user(
     user = User(
         telegram_id=telegram_id,
         username=username,
-        status="not_active",
+        status=USER_STATUS_NOT_ACTIVE,
         stage="new",
         last_activity=now_msk(),
     )
@@ -137,7 +138,7 @@ def is_user_blocked(user: User) -> bool:
     """
     if not user or not user.status:
         return False
-    return user.status.strip().lower() == "blocked"
+    return user.status.strip().lower() == USER_STATUS_BLOCKED
 
 
 async def update_user_stage(

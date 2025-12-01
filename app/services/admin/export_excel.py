@@ -16,6 +16,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import User
+from app.database.utils import now_msk
+from app.services.const import USER_STATUS_NAMES
 
 
 # Константы для конфигурации
@@ -136,11 +138,12 @@ def _get_user_row_data(user: User) -> list:
         list: список значений для строки Excel.
     """
     interests = _extract_interests(user)
+    status_name = USER_STATUS_NAMES.get(user.status, user.status)
     
     return [
         user.id,
         user.username,
-        user.status,
+        status_name,
         user.email,
         user.name or "",
         user.age or "",
@@ -236,7 +239,7 @@ async def export_users_to_excel(
         excel_bytes.seek(0) # Перенос потока в начало файла
 
         # Получение сегодняшней даты в формате YYYYMMDD
-        today = datetime.now().strftime("%Y%m%d")
+        today = now_msk().strftime("%Y%m%d")
 
         document = BufferedInputFile(excel_bytes.read(), filename=f"users-{today}.xlsx")
 

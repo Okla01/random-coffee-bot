@@ -28,6 +28,7 @@ from app.keyboards.kb_profile import (
 )
 
 from app.services.core import Settings
+from app.services.const import USER_STATUS_NOT_ACTIVE
 from app.services.profile.utils import(
     is_profile_complete,
 )
@@ -442,7 +443,7 @@ async def cb_edit_photo(
                 session, cq.from_user.id, cq.from_user.username
             )
             user.stage = "profile_photo"
-            user.status = "not_active"
+            user.status = USER_STATUS_NOT_ACTIVE
             user.last_activity = now_msk()
             await session.commit()
 

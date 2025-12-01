@@ -4,6 +4,7 @@
 Файл содержит константы, которые используются разными модулями приложения.
 """
 
+# Дни недели для встреч
 DAYS_OF_WEEK = {
     "mon": "Понедельник",
     "tue": "Вторник",
@@ -20,4 +21,29 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "cooldown_weeks": "1",
     "match_day": "fri",
     "match_msk_hour": "12",
+}
+
+# Названия ролей в БД (ключи)
+ROLE_ADMIN = "admin"
+
+# Расшифровка названий ролей для читаемости
+ROLE_NAMES: dict[str, str] = {
+    ROLE_ADMIN: "Администратор",
+}
+
+# Количество пользователей на странице в административной панели
+USERS_PER_PAGE = 10
+
+# Статусы пользователей
+USER_STATUS_NEW = "new"
+USER_STATUS_ACTIVE = "active"
+USER_STATUS_BLOCKED = "blocked"
+USER_STATUS_NOT_ACTIVE = "not_active"
+
+# Расшифровка статусов пользователей для читаемости
+USER_STATUS_NAMES: dict[str, str] = {
+    USER_STATUS_NEW: "Новый",
+    USER_STATUS_ACTIVE: "Активный",
+    USER_STATUS_BLOCKED: "Заблокирован",
+    USER_STATUS_NOT_ACTIVE: "Не активен",
 }

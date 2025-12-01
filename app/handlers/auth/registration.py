@@ -35,6 +35,7 @@ from app.services.auth.registration import (
 )
 
 from app.services.core import Settings
+from app.services.const import USER_STATUS_NOT_ACTIVE
 from app.services.auth.email import (
     process_email_input,
     EmailResultType,
@@ -79,7 +80,7 @@ async def on_stage2_debug(
         user.email = f"test.user{user.telegram_id}@test.corp"
         user.stage = "authorized"  # Помечаем как авторизованного
         user.last_activity = now_msk()
-        user.status = "not_active"
+        user.status = USER_STATUS_NOT_ACTIVE
 
         await session.commit()
 

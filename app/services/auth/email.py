@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core import Settings
 from app.database import User
+from app.services.const import USER_STATUS_BLOCKED
 
 
 async def send_otp_email(settings: Settings, to_email: str, otp_code: str) -> None:
@@ -192,7 +193,7 @@ async def process_email_input(
         user.email_attempts += 1
         user.stage = "verifying_email"
         if user.email_attempts > settings.email_max_attempts:
-            user.status = "blocked"
+            user.status = USER_STATUS_BLOCKED
             user.stage = "verifying_email_error"
             await notify_admin_on_block_func(
                 session,

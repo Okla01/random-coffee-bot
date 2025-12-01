@@ -16,6 +16,7 @@ from aiogram.dispatcher.event.bases import SkipHandler
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.core import Settings
+from app.services.const import USER_STATUS_ACTIVE, USER_STATUS_NOT_ACTIVE
 from app.keyboards.kb_profile import (
     kb_profile_review,
     kb_profile_photo,
@@ -205,7 +206,7 @@ async def cb_prof_save(
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         await process_save_profile(session, user)
-        user.status = "active"
+        user.status = USER_STATUS_ACTIVE
         await session.commit()
     
     # Сразу вызываем функционал участия в подборе
@@ -297,7 +298,7 @@ async def cb_prof_edit_field(
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         # При редактировании bio или interests устанавливаем статус not_active
         if field in {"bio", "interests"}:
-            user.status = "not_active"
+            user.status = USER_STATUS_NOT_ACTIVE
         if field == "name":
             await update_user_stage(session, user, "profile_name", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
             await cq.message.answer("Давайте заполним анкету! Как вас зовут?")

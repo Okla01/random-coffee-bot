@@ -11,6 +11,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import User, AdminLog
+from app.services.const import USER_STATUS_BLOCKED, USER_STATUS_NEW
 
 
 async def block_user(
@@ -27,7 +28,7 @@ async def block_user(
     Returns:
         None: ничего не возвращает.
     """
-    user.status = "blocked"
+    user.status = USER_STATUS_BLOCKED
     session.add(
         AdminLog(
             admin_id=admin_tg_id,
@@ -52,7 +53,7 @@ async def unblock_user(
     Returns:
         None: ничего не возвращает.
     """
-    user.status = "new"
+    user.status = USER_STATUS_NEW
     user.stage = "verifying_email"
     user.email_attempts = 0
     user.otp_attempts = 0

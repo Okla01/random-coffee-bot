@@ -18,6 +18,7 @@ from app.database.db import get_user_by_tg_id
 from app.database import User, AdminLog
 from app.database.utils import now_msk
 from .roles import sync_admin_role, is_admin
+from app.services.const import USER_STATUS_NEW
 
 
 class AdminAccessResultType(str, Enum):
@@ -58,7 +59,7 @@ async def process_admin_command(
             user = User(
                 telegram_id=telegram_id,
                 username=username,
-                status="new",
+                status=USER_STATUS_NEW,
                 stage="new",
             )
             session.add(user)

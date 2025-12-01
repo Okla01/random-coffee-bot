@@ -7,8 +7,9 @@ Inline-клавиатуры для административной панели
 from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from app.services.const import DAYS_OF_WEEK
+from app.services.const import DAYS_OF_WEEK, USERS_PER_PAGE
 
 
 def kb_admin_menu() -> InlineKeyboardMarkup:
@@ -73,7 +74,7 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🔄 Изменить минимальный Jaccard", callback_data="admin:update_min_jaccard"),
             ],
             [
-                InlineKeyboardButton(text="🔄 Изменить периодичность встреч (в неделях)", callback_data="admin:update_cooldown_weeks"),
+                InlineKeyboardButton(text="🔢 Изменить периодичность встреч (в неделях)", callback_data="admin:update_cooldown_weeks"),
             ],
             [
                 InlineKeyboardButton(text="🗓️ Изменить день недели для встреч", callback_data="admin:update_match_day"),

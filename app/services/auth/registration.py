@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core import Settings
 from app.services.auth.email import send_otp_email, generate_otp
 from app.database import User, Otp, AuthAttempt, AdminLog
+from app.services.const import USER_STATUS_BLOCKED
 from app.database.utils import now_msk, ensure_aware_msk
 from app.keyboards.kb_admin import kb_admin_decision
 
@@ -318,7 +319,7 @@ async def process_otp_input(
         user.otp_attempts += 1
         user.stage = "verifying_code"
         if user.otp_attempts > settings.otp_max_attempts:
-            user.status = "blocked"
+            user.status = USER_STATUS_BLOCKED
             user.stage = "verifying_code_error"
             await notify_admin_on_block(
                 session,

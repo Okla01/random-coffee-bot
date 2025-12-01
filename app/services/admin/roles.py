@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core import Settings
 from app.database import User, Role, UserRole
 from app.database.db import get_user_by_tg_id
+from app.services.const import ROLE_ADMIN
 
 
 async def sync_admin_role(
@@ -38,10 +39,10 @@ async def sync_admin_role(
 
     # Получаем или создаём роль admin
     role = (
-        await session.execute(select(Role).where(Role.name == "admin"))
+        await session.execute(select(Role).where(Role.name == ROLE_ADMIN))
     ).scalar_one_or_none()
     if not role:
-        role = Role(name="admin")
+        role = Role(name=ROLE_ADMIN)
         session.add(role)
         await session.flush()
 
@@ -86,7 +87,7 @@ async def is_admin(session: AsyncSession, settings: Settings, tg_id: int) -> boo
     q = (
         select(Role)
         .join(UserRole, UserRole.role_id == Role.id)
-        .where(UserRole.user_id == user.id, Role.name == "admin")
+        .where(UserRole.user_id == user.id, Role.name == ROLE_ADMIN)
     )
     return (await session.execute(q)).scalar_one_or_none() is not None
 

@@ -73,6 +73,12 @@ async def on_profile_text(
     Returns:
         None: ничего не возвращает.
     """
+    # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+    # Это позволяет админам использовать админ-панель, даже если они на стадии заполнения профиля
+    state_data = await state.get_data()
+    if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
+        raise SkipHandler()
+    
     async with session_factory() as session:
         user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
 

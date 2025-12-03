@@ -313,32 +313,3 @@ async def cb_prof_edit_field(
             await cq.message.answer("Перечислите интересы через запятую.")
         await session.commit()
         await cq.answer()
-@router.callback_query(F.data == "prof:join")
-async def cb_prof_join(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-) -> None:
-    """
-    Обрабатывает нажатие кнопки «Участвовать в подборе 🥰» — подтверждает участие.
-
-    Отправляет подтверждающее сообщение и гасит кнопки. В будущем здесь будет логика
-    включения пользователя в алгоритм подбора пары.
-
-    Args:
-        cq (CallbackQuery): callback запрос от пользователя.
-        state (FSMContext): контекст FSM.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
-        settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    await cq.message.edit_reply_markup(reply_markup=None)
-    await cq.message.answer(
-        "Отлично! Вы будете участвовать в подборе, когда это станет доступно."
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
-    await cq.answer()
-

@@ -17,10 +17,13 @@ DAYS_OF_WEEK = {
 
 # Дефолтные настройки, которые будут созданы при инициализации
 DEFAULT_SETTINGS: dict[str, str] = {
+    "matching_enabled": "true",
     "min_jaccard": "0.3",
-    "cooldown_weeks": "1",
+    "repeat_pair_cooldown_weeks": "1",
     "match_day": "fri",
     "match_msk_hour": "12",
+    "response_timeout_hours": "8",
+    "reminder_interval_hours": "2",
 }
 
 # Названия ролей в БД (ключи)

@@ -74,7 +74,10 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🔄 Изменить минимальный Jaccard", callback_data="admin:update_min_jaccard"),
             ],
             [
-                InlineKeyboardButton(text="🔢 Изменить периодичность встреч (в неделях)", callback_data="admin:update_cooldown_weeks"),
+                InlineKeyboardButton(
+                    text="🔢 Изменить кулдаун повторной пары (недели)",
+                    callback_data="admin:update_repeat_pair_cooldown_weeks",
+                ),
             ],
             [
                 InlineKeyboardButton(text="🗓️ Изменить день недели для встреч", callback_data="admin:update_match_day"),

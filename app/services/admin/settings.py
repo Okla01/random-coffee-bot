@@ -52,6 +52,14 @@ async def save_settings(
         await session.commit()
 
 
+def _as_bool(value: str | int | float | None) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() in {"1", "true", "t", "yes", "on"}
+
+
 def format_settings_text(settings: dict) -> str:
     """
     Форматирует настройки в текстовую строку.
@@ -59,17 +67,34 @@ def format_settings_text(settings: dict) -> str:
     Примечание: Данный текст будет отображён над меню с настройками панели администратора.
     """
     text = "Настройки для организации встреч.\n\n"
-    text += f"🔹 Минимальный Jaccard: {settings['min_jaccard']}\n"
-    text += f"🔹 Периодичность встреч (недели): {settings['cooldown_weeks']}\n"
+    match_enabled = _as_bool(settings.get("matching_enabled", "true"))
+    text += f"🔹 Матчинг включён: {'Да' if match_enabled else 'Нет'}\n"
+    text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
+    text += (
+        "🔹 Кулдаун повторной пары (недели): "
+        f"{settings.get('repeat_pair_cooldown_weeks', '1')}\n"
+    )
+    match_day_code = settings.get("match_day", "fri")
     text += (
         "🔹 День недели для встреч: "
-        f"{DAYS_OF_WEEK.get(settings['match_day'], settings['match_day'])}\n"
+        f"{DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
     )
 
-    msk_hour = int(settings['match_msk_hour'])
+    try:
+        msk_hour = int(settings.get("match_msk_hour", 12))
+    except (TypeError, ValueError):
+        msk_hour = 12
 
     text += f"🔹 Час мэтчинга (МСК): {msk_hour:02d}:00\n"
-    
+    text += (
+        "🔹 Таймаут ответа (часы): "
+        f"{settings.get('response_timeout_hours', '8')}\n"
+    )
+    text += (
+        "🔹 Интервал напоминаний (часы): "
+        f"{settings.get('reminder_interval_hours', '2')}\n"
+    )
+
     return text
 
 
@@ -119,7 +144,7 @@ def try_to_input_min_jaccard(msg: str) -> float | None:
     return None
 
 
-def try_to_input_cooldown_weeks(msg: str) -> int | None:
+def try_to_input_repeat_pair_cooldown_weeks(msg: str) -> int | None:
     """
     Пытается преобразовать введённый текст в числовое значения (типа float).
 
@@ -130,7 +155,7 @@ def try_to_input_cooldown_weeks(msg: str) -> int | None:
     except ValueError:
         return None
     
-    if 1 <= value <= 4:
+    if 1 <= value <= 12:
         return value
 
     return None

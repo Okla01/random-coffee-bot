@@ -13,7 +13,7 @@ class AdminSettingsStates(StatesGroup):
     """Состояния FSM для редактирования настроек администратора."""
 
     waiting_min_jaccard = State()
-    waiting_cooldown_weeks = State()
+    waiting_repeat_pair_cooldown_weeks = State()
     waiting_match_day = State()
     waiting_match_msk_hour = State()
 
@@ -31,4 +31,5 @@ class FSMDataKeys(str, Enum):
     DRAFT_SETTINGS = "draft_settings"
     ADMIN_PANEL_ACTIVE = "admin_panel_active"
     EDITING_FIELD = "editing_field"
+    MATCH_SLOTS_DRAFT = "match_slots_draft"
 

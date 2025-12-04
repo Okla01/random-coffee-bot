@@ -4,5 +4,6 @@
 
 from .start import router as start_router
 from .admin import router as admin_router
+from .matching import router as matching_router
 
-__all__ = ["start_router", "admin_router"]
+__all__ = ["start_router", "admin_router", "matching_router"]

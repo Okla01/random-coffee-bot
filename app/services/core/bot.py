@@ -23,13 +23,14 @@ from app.database import lifespan_db
 from app.middlewares import DbSessionMiddleware, BlockedUserMiddleware
 
 # импортируем роутеры в нужном порядке
-from app.handlers import start_router
+from app.handlers import matching_router, start_router
 from app.handlers.profile.editing import router as editing_router
 from app.handlers.profile.photo import router as photo_router
 from app.handlers.profile.delete_me import router as delete_me_router
 from app.handlers.auth.registration import router as registration_router
 from app.handlers.admin import router as commands_router
 from app.handlers.admin.export_excel import router as export_excel_router
+from app.services.matching.scheduler import setup_matching_scheduler
 
 
 async def create_dispatcher(settings: Settings) -> Dispatcher:
@@ -55,6 +56,7 @@ async def create_dispatcher(settings: Settings) -> Dispatcher:
     dp.include_router(registration_router)  # регистрация ниже
     dp.include_router(commands_router)
     dp.include_router(export_excel_router)
+    dp.include_router(matching_router)
 
     return dp
 
@@ -89,6 +91,9 @@ async def run_bot() -> None:
         dp["settings"] = settings
         await bot.delete_webhook(drop_pending_updates=True)
 
+        scheduler = await setup_matching_scheduler(session_factory, bot)
+        scheduler.start()
+
         loop = asyncio.get_running_loop()
 
         def _make_signal_handler(sig_name: str):
@@ -114,8 +119,11 @@ async def run_bot() -> None:
                 # поведение aiogram (он попытается сам обработать сигналы)
                 pass
 
-        # Запускаем polling и разрешаем нашему коду корректно остановить его
-        # через dp.stop_polling(). Отключаем внутреннюю обработку сигналов
-        # чтобы не было двойной регистрации.
-        await dp.start_polling(bot, settings=settings, handle_signals=False)
+        try:
+            # Запускаем polling и разрешаем нашему коду корректно остановить его
+            # через dp.stop_polling(). Отключаем внутреннюю обработку сигналов
+            # чтобы не было двойной регистрации.
+            await dp.start_polling(bot, settings=settings, handle_signals=False)
+        finally:
+            scheduler.shutdown(wait=False)
 

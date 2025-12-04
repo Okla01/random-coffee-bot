@@ -13,6 +13,7 @@ from typing import Optional
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -79,6 +80,9 @@ class User(Base):
     last_match_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )  # Дата последнего матча
+    last_pairing_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Дата последней подборки пары (создания Match)
 
     # Relationships
     otps: Mapped[list["Otp"]] = relationship(
@@ -255,15 +259,70 @@ class Match(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=now_msk, onupdate=now_msk, index=True
+    )
     status: Mapped[str] = mapped_column(
-        String(16), default="active", index=True
-    )  # active, cancelled, completed и т.д.
+        String(16), default="pending_response", index=True
+    )
+    jaccard_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    user_a_response: Mapped[str] = mapped_column(
+        String(16), default="none", index=True
+    )
+    user_b_response: Mapped[str] = mapped_column(
+        String(16), default="none", index=True
+    )
+    meeting_start_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    meeting_end_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    # ID сообщений с приглашениями для возможности удаления клавиатур
+    invite_message_id_a: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # message_id приглашения для user_a
+    invite_message_id_b: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # message_id приглашения для user_b
 
     user_a: Mapped["User"] = relationship("User", foreign_keys=[user_a_id], back_populates="matches_as_a")
     user_b: Mapped["User"] = relationship("User", foreign_keys=[user_b_id], back_populates="matches_as_b")
 
+
+class MatchSlot(Base):
+    """
+    Интервалы времени, выбранные пользователями для конкретного матча.
+    """
+
+    __tablename__ = "match_slots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    match_id: Mapped[int] = mapped_column(
+        ForeignKey("matches.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    time_from: Mapped[str] = mapped_column(String(5))
+    time_to: Mapped[str] = mapped_column(String(5))
+
+    match: Mapped["Match"] = relationship()
+    user: Mapped["User"] = relationship()
+
     __table_args__ = (
-        UniqueConstraint("user_a_id", "user_b_id", name="uq_match_users"),
+        UniqueConstraint(
+            "match_id",
+            "user_id",
+            "date",
+            "time_from",
+            "time_to",
+            name="uq_matchslot_unique",
+        ),
     )
 
 
@@ -274,8 +333,8 @@ class Complaint(Base):
     """
     Жалоба пользователя на другого пользователя.
 
-    Хранит информацию о жалобе: кто подал жалобу, на кого, причину,
-    текст жалобы, время создания и статус обработки.
+    Хранит информацию о жалобе: кто подал жалобу, на кого, текст жалобы,
+    ответ администратора, время создания и статус обработки.
     """
 
     __tablename__ = "complaints"
@@ -287,8 +346,8 @@ class Complaint(Base):
     reported_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )  # ID пользователя, на которого пожаловались
-    reason: Mapped[str] = mapped_column(String(64))  # Причина жалобы
     text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Текст жалобы
+    admin_response: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Ответ администратора
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True
     )  # Время создания жалобы

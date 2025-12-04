@@ -27,9 +27,9 @@ from app.services.admin.settings import (
     format_settings_text,
     get_current_settings,
     save_settings,
-    try_to_input_cooldown_weeks,
     try_to_input_match_msk_hour,
     try_to_input_min_jaccard,
+    try_to_input_repeat_pair_cooldown_weeks,
     update_draft_setting,
 )
 from app.handlers.fsm import AdminSettingsStates, FSMDataKeys
@@ -89,8 +89,8 @@ async def cb_update_min_jaccard(
     await state.set_state(AdminSettingsStates.waiting_min_jaccard)
 
 
-@router.callback_query(F.data == "admin:update_cooldown_weeks")
-async def cb_update_cooldown_weeks(
+@router.callback_query(F.data == "admin:update_repeat_pair_cooldown_weeks")
+async def cb_update_repeat_pair_cooldown_weeks(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
@@ -99,10 +99,10 @@ async def cb_update_cooldown_weeks(
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Раз во сколько недель проводить встречи? (1 - 4)")
+    await cq.message.answer("Через сколько недель можно повторить пару? (1 - 12)")
 
     # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_cooldown_weeks)
+    await state.set_state(AdminSettingsStates.waiting_repeat_pair_cooldown_weeks)
 
 
 @router.callback_query(F.data == "admin:update_match_day")
@@ -260,19 +260,21 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_cooldown_weeks))
-async def on_cooldown_weeks_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_repeat_pair_cooldown_weeks))
+async def on_repeat_pair_cooldown_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения периодичности встреч в неделях.
     """
-    cooldown_weeks: int | None = try_to_input_cooldown_weeks(msg.text)
+    cooldown_weeks: int | None = try_to_input_repeat_pair_cooldown_weeks(msg.text)
     if cooldown_weeks is None:
         await msg.answer(
-            "Некорректный ввод. Пожалуйста, введите число в диапазоне 1 - 4."
+            "Некорректный ввод. Пожалуйста, введите число в диапазоне 1 - 12."
         )
         return
 
-    draft = await update_draft_setting(state, "cooldown_weeks", cooldown_weeks)
+    draft = await update_draft_setting(
+        state, "repeat_pair_cooldown_weeks", cooldown_weeks
+    )
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

@@ -272,3 +272,54 @@ def kb_admin_user_actions(
             [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="admin:back_to_menu")],
         ]
     )
+
+
+def kb_complaint_actions(complaint_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для действий по жалобе.
+
+    Args:
+        complaint_id: ID жалобы для формирования callback data.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопками действий.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔒 Заблокировать",
+                    callback_data=f"complaint:block:{complaint_id}",
+                ),
+                InlineKeyboardButton(
+                    text="⚠️ Отправить предупреждение",
+                    callback_data=f"complaint:warn:{complaint_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Закрыть",
+                    callback_data=f"complaint:close:{complaint_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def kb_complaint_cancel_warning() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для отмены ввода текста предупреждения.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопкой отмены.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data="complaint:cancel_warning",
+                ),
+            ],
+        ]
+    )

@@ -70,6 +70,9 @@ class User(Base):
         JSON, nullable=True
     )  # {"интересы": [...]}
 
+    # Счётчик предупреждений
+    warnings_count: Mapped[int] = mapped_column(Integer, default=0)
+
     # Аудит и временные метки
     registered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True
@@ -347,13 +350,30 @@ class Complaint(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )  # ID пользователя, на которого пожаловались
     text: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Текст жалобы
-    admin_response: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Ответ администратора
+    admin_response: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)  # Ответ администратора (текст предупреждения)
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True
     )  # Время создания жалобы
     status: Mapped[str] = mapped_column(
         String(16), default="pending", index=True
-    )  # pending, reviewed, resolved, rejected
+    )  # pending, closed, warned, blocked
+
+    # Поля для обработки жалобы админом
+    admin_message_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # ID сообщения в админ-чате для редактирования
+    reviewed_by: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True
+    )  # telegram_id админа, который обработал жалобу
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # Время обработки жалобы
+    meeting_start_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )  # Время начала встречи, по которой жалоба
+    warnings_count_at_complaint: Mapped[int] = mapped_column(
+        Integer, default=0
+    )  # Количество предупреждений у reported на момент жалобы
 
     reporter: Mapped["User"] = relationship("User", foreign_keys=[reporter_id], back_populates="complaints_as_reporter")
     reported: Mapped["User"] = relationship("User", foreign_keys=[reported_id], back_populates="complaints_as_reported")

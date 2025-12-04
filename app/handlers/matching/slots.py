@@ -356,7 +356,7 @@ match_slots_dialog = Dialog(
             item_id_getter=lambda item: item["id"],
             items="time_windows",
             on_click=_on_time_toggle,
-            columns=3,
+            columns=2,
         ),
         Group(
             Button(

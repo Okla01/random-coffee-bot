@@ -77,8 +77,8 @@ async def cmd_reset_matching(
         # Удаляем все записи из matches
         await session.execute(delete(Match))
         await session.execute(delete(MatchSlot))
-        # Очищаем last_pairing_at у всех пользователей
-        await session.execute(update(User).values(last_pairing_at=None))
+        # Очищаем last_pairing_at и last_match_at у всех пользователей
+        await session.execute(update(User).values(last_pairing_at=None, last_match_at=None))
         
         await session.commit()
 

@@ -9,5 +9,6 @@
 
 from .db_session import DbSessionMiddleware
 from .blocked_user import BlockedUserMiddleware
+from .scheduler import SchedulerMiddleware
 
-__all__ = ["DbSessionMiddleware", "BlockedUserMiddleware"]
+__all__ = ["DbSessionMiddleware", "BlockedUserMiddleware", "SchedulerMiddleware"]

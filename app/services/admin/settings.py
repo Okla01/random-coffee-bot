@@ -82,10 +82,12 @@ def format_settings_text(settings: dict) -> str:
 
     try:
         msk_hour = int(settings.get("match_msk_hour", 12))
+        msk_minute = int(settings.get("match_msk_minute", 0))
     except (TypeError, ValueError):
         msk_hour = 12
+        msk_minute = 0
 
-    text += f"🔹 Час мэтчинга (МСК): {msk_hour:02d}:00\n"
+    text += f"🔹 Час мэтчинга (МСК): {msk_hour:02d}:{msk_minute:02d}\n"
     text += (
         "🔹 Таймаут ответа (часы): "
         f"{settings.get('response_timeout_hours', '8')}\n"
@@ -174,6 +176,23 @@ def try_to_input_match_msk_hour(msg: str) -> int | None:
         return None
     
     if 0 <= value <= 23:
+        return value
+
+    return None
+
+
+def try_to_input_match_msk_minute(msg: str) -> int | None:
+    """
+    Пытается преобразовать введённый текст в числовое значение минут (типа int).
+
+    Также сразу происходит проверка на вхождение числа в промежуток 0-59.
+    """
+    try:
+        value = int(msg.strip())
+    except ValueError:
+        return None
+    
+    if 0 <= value <= 59:
         return value
 
     return None

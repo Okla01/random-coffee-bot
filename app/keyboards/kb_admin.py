@@ -83,6 +83,9 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🕓 Изменить час совпадения", callback_data="admin:update_match_msk_hour"),
             ],
             [
+                InlineKeyboardButton(text="🕐 Изменить минуты совпадения", callback_data="admin:update_match_msk_minute"),
+            ],
+            [
                 InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),
                 InlineKeyboardButton(text="❌ Отмена", callback_data="admin:cancel_admin_settings"),
             ],

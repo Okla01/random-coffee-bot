@@ -22,8 +22,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "repeat_pair_cooldown_weeks": "1",
     "match_day": "fri",
     "match_msk_hour": "12",
+    "match_msk_minute": "0",
     "response_timeout_hours": "8",
-    "reminder_interval_hours": "2",
+    "reminder_interval_hours": "1",
 }
 
 # Названия ролей в БД (ключи)

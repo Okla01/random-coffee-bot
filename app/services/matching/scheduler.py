@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -17,6 +19,8 @@ from app.services.matching.jobs import (
     process_match_timeouts_and_reminders,
 )
 from app.services.matching.settings import load_matching_settings
+
+logger = logging.getLogger(__name__)
 
 
 async def setup_matching_scheduler(
@@ -49,7 +53,7 @@ async def setup_matching_scheduler(
         CronTrigger(
             day_of_week=settings.match_day or "fri",
             hour=settings.match_msk_hour,
-            minute=0,
+            minute=settings.match_msk_minute,
             timezone=MOSCOW_TZ,
         ),
         args=[session_factory, bot],
@@ -78,6 +82,46 @@ async def setup_matching_scheduler(
     return scheduler
 
 
+async def refresh_matching_round_schedule(
+    scheduler: AsyncIOScheduler,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Перечитывает match_day/match_msk_hour и обновляет cron-триггер джобы.
+
+    Используется при сохранении настроек в админке, чтобы не требовался рестарт.
+    """
+    async with session_factory() as session:
+        settings = await load_matching_settings(session)
+
+    logger.info(
+        "Refreshing matching round schedule: day=%s, hour=%d, minute=%d",
+        settings.match_day,
+        settings.match_msk_hour,
+        settings.match_msk_minute,
+    )
+
+    scheduler.reschedule_job(
+        "matching_round",
+        trigger=CronTrigger(
+            day_of_week=settings.match_day or "fri",
+            hour=settings.match_msk_hour,
+            minute=settings.match_msk_minute,
+            timezone=MOSCOW_TZ,
+        ),
+    )
+
+    # Получаем информацию о следующем запуске для логирования
+    job = scheduler.get_job("matching_round")
+    if job and job.next_run_time:
+        logger.info(
+            "Matching round job rescheduled. Next run: %s",
+            job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        )
+    else:
+        logger.warning("Matching round job not found or has no next run time")
+
+
 async def _matching_round_job(
     session_factory: async_sessionmaker[AsyncSession],
     bot: Bot,
@@ -94,8 +138,14 @@ async def _matching_round_job(
     Returns:
         None: ничего не возвращает.
     """
-    async with session_factory() as session:
-        await run_matching_round(session, bot)
+    logger.info("Matching round job started by scheduler")
+    try:
+        async with session_factory() as session:
+            await run_matching_round(session, bot)
+        logger.info("Matching round job completed successfully")
+    except Exception as e:
+        logger.exception("Matching round job failed with error: %s", e)
+        raise
 
 
 async def _complete_meetings_job(
@@ -114,8 +164,14 @@ async def _complete_meetings_job(
     Returns:
         None: ничего не возвращает.
     """
-    async with session_factory() as session:
-        await complete_due_meetings(session, bot)
+    logger.debug("Complete meetings job started by scheduler")
+    try:
+        async with session_factory() as session:
+            await complete_due_meetings(session, bot)
+        logger.debug("Complete meetings job completed successfully")
+    except Exception as e:
+        logger.exception("Complete meetings job failed with error: %s", e)
+        raise
 
 
 async def _timeouts_job(
@@ -134,7 +190,13 @@ async def _timeouts_job(
     Returns:
         None: ничего не возвращает.
     """
-    async with session_factory() as session:
-        settings = await load_matching_settings(session)
-        await process_match_timeouts_and_reminders(session, settings, bot)
+    logger.debug("Timeouts and reminders job started by scheduler")
+    try:
+        async with session_factory() as session:
+            settings = await load_matching_settings(session)
+            await process_match_timeouts_and_reminders(session, settings, bot)
+        logger.debug("Timeouts and reminders job completed successfully")
+    except Exception as e:
+        logger.exception("Timeouts and reminders job failed with error: %s", e)
+        raise
 

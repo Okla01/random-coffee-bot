@@ -14,6 +14,7 @@ from aiogram import Router, F
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
@@ -28,10 +29,12 @@ from app.services.admin.settings import (
     get_current_settings,
     save_settings,
     try_to_input_match_msk_hour,
+    try_to_input_match_msk_minute,
     try_to_input_min_jaccard,
     try_to_input_repeat_pair_cooldown_weeks,
     update_draft_setting,
 )
+from app.services.matching.scheduler import refresh_matching_round_schedule
 from app.handlers.fsm import AdminSettingsStates, FSMDataKeys
 
 router = Router()
@@ -139,11 +142,27 @@ async def cb_update_match_msk_hour(
     await state.set_state(AdminSettingsStates.waiting_match_msk_hour)
 
 
+@router.callback_query(F.data == "admin:update_match_msk_minute")
+async def cb_update_match_msk_minute(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Запрашивает новые минуты мэтчинга (МСК)."""
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    await cq.message.answer("Введите минуты подбора (0 - 59):")
+
+    # Переход с состояние ожидания значения
+    await state.set_state(AdminSettingsStates.waiting_match_msk_minute)
+
+
 @router.callback_query(F.data == "admin:save_admin_settings")
 async def cb_save_admin_settings(
     cq: CallbackQuery,
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
+    matching_scheduler: AsyncIOScheduler | None = None,
 ) -> None:
     """Сохраняет все изменения настроек в базу данных."""
 
@@ -158,6 +177,12 @@ async def cb_save_admin_settings(
 
     # Сохранение настроек в базу данных
     await save_settings(session_factory, draft)
+    if matching_scheduler:
+        await refresh_matching_round_schedule(matching_scheduler, session_factory)
+    else:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning("Matching scheduler not available when saving settings")
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
@@ -301,6 +326,32 @@ async def on_match_msk_hour_input(msg: Message, state: FSMContext) -> None:
         return
 
     draft = await update_draft_setting(state, "match_msk_hour", match_msk_hour)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
+
+    # Выход из состояния ожидания значения
+    await state.set_state(None)
+
+    # Возвращение в меню настроек
+    sent = await msg.answer(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+
+
+@router.message(StateFilter(AdminSettingsStates.waiting_match_msk_minute))
+async def on_match_msk_minute_input(msg: Message, state: FSMContext) -> None:
+    """
+    Обрабатывает ввод нового значения минут рассылки.
+    """
+    match_msk_minute: int | None = try_to_input_match_msk_minute(msg.text)
+    if match_msk_minute is None:
+        await msg.answer(
+            "Некорректный ввод. Пожалуйста, введите число в диапазоне 0 - 59."
+        )
+        return
+
+    draft = await update_draft_setting(state, "match_msk_minute", match_msk_minute)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

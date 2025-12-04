@@ -84,3 +84,35 @@ async def cmd_reset_matching(
 
     await message.answer("✅ Все матчи удалены, last_pairing_at сброшен у всех пользователей.")
 
+
+@router.message(Command("test_scheduler"))
+async def cmd_test_scheduler(
+    message: Message,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Немедленно запускает джобу матчинга из планировщика (доступно только администраторам).
+
+    Полезно для тестирования работы планировщика без ожидания наступления времени.
+
+    Args:
+        message (Message): объект сообщения от пользователя.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+        settings (Settings): настройки приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    async with session_factory() as session:
+        if not await is_admin(session, settings, message.from_user.id):
+            await message.answer("Команда доступна только администраторам.")
+            return
+
+    await message.answer("Запускаю джобу матчинга из планировщика...")
+
+    from app.services.matching.scheduler import _matching_round_job
+
+    await _matching_round_job(session_factory, message.bot)
+    await message.answer("✅ Джоба выполнена.")
+

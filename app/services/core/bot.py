@@ -21,7 +21,7 @@ from aiogram_dialog import setup_dialogs
 from .config import Settings
 from .logger import setup_logging
 from app.database import lifespan_db
-from app.middlewares import DbSessionMiddleware, BlockedUserMiddleware
+from app.middlewares import DbSessionMiddleware, BlockedUserMiddleware, SchedulerMiddleware
 
 # импортируем роутеры в нужном порядке
 from app.handlers import matching_router, start_router
@@ -95,6 +95,8 @@ async def run_bot() -> None:
 
         scheduler = await setup_matching_scheduler(session_factory, bot)
         scheduler.start()
+        dp["matching_scheduler"] = scheduler
+        dp.update.outer_middleware(SchedulerMiddleware(scheduler))
 
         loop = asyncio.get_running_loop()
 

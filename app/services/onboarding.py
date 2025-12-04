@@ -32,6 +32,7 @@ ActionType = Literal[
     "ask_email",           # запросить корпоративный e-mail
     "ask_code",            # запросить код подтверждения
     "ask_profile_name",    # запросить имя (или показать предзаполненное)
+    "wait_name_approval",  # ожидание одобрения заявки на доступ к анкете
     "ask_profile_photo",   # запросить/показать фото профиля
     "ask_profile_bio",     # запросить текст "о себе"
     "ask_profile_age",     # запросить возраст
@@ -105,6 +106,11 @@ async def process_start(
     if user.stage == "profile_name":
         await session.commit()
         return StartResult(action="ask_profile_name")
+
+    # Пользователь ожидает одобрения заявки на доступ
+    if user.stage == "profile_name_pending":
+        await session.commit()
+        return StartResult(action="wait_name_approval")
 
     # Шаг загрузки фото профиля
     if user.stage == "profile_photo":
@@ -185,6 +191,14 @@ async def handle_start_result(
 
     if result.action == "ask_profile_name":
         await answer("Давайте заполним анкету! Как вас зовут?")
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        return
+
+    if result.action == "wait_name_approval":
+        await answer(
+            "Ваша заявка на доступ к анкетированию отправлена администратору. "
+            "Ожидайте рассмотрения."
+        )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 

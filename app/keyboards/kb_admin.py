@@ -59,6 +59,25 @@ def kb_admin_decision(user_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def kb_admin_name_approval(user_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для принятия решения по заявке на доступ к анкетированию.
+
+    Содержит кнопки для одобрения и отклонения заявки пользователя на доступ к анкете.
+
+    Args:
+        user_id (int): ID пользователя в БД (для формирования callback data).
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="❌ Отклонить", callback_data=f"admin:name:reject:{user_id}"),
+                InlineKeyboardButton(text="✅ Одобрить", callback_data=f"admin:name:approve:{user_id}"),
+            ]
+        ]
+    )
+
+
 def kb_admin_settings() -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру для настроек администратора.

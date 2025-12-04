@@ -18,7 +18,7 @@ from app.services.matching.jobs import (
     complete_due_meetings,
     process_match_timeouts_and_reminders,
 )
-from app.services.matching.settings import load_matching_settings
+from app.services.matching.settings import load_matching_settings, parse_time_to_hours_minutes
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ async def setup_matching_scheduler(
     Создаёт и конфигурирует APScheduler для фоновых задач матчинга.
 
     Регистрирует три периодические задачи:
-    - еженедельный раунд матчинга (по настройкам match_day и match_msk_hour);
+    - еженедельный раунд матчинга (по настройкам match_day и match_msk_time);
     - завершение наступивших встреч (каждые 5 минут);
     - обработка таймаутов и напоминаний (каждые 30 минут).
 
@@ -47,13 +47,21 @@ async def setup_matching_scheduler(
     async with session_factory() as session:
         settings = await load_matching_settings(session)
 
+    # Парсинг времени подбора из формата "ЧЧ:ММ"
+    time_parts = parse_time_to_hours_minutes(settings.match_msk_time)
+    if time_parts is None:
+        logger.warning("Invalid match_msk_time format, using default 12:00")
+        match_hour, match_minute = 12, 0
+    else:
+        match_hour, match_minute = time_parts
+    
     # Cron-триггер для раунда матчинга
     scheduler.add_job(
         _matching_round_job,
         CronTrigger(
             day_of_week=settings.match_day or "fri",
-            hour=settings.match_msk_hour,
-            minute=settings.match_msk_minute,
+            hour=match_hour,
+            minute=match_minute,
             timezone=MOSCOW_TZ,
         ),
         args=[session_factory, bot],
@@ -87,26 +95,35 @@ async def refresh_matching_round_schedule(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """
-    Перечитывает match_day/match_msk_hour и обновляет cron-триггер джобы.
+    Перечитывает match_day/match_msk_time и обновляет cron-триггер джобы.
 
     Используется при сохранении настроек в админке, чтобы не требовался рестарт.
     """
     async with session_factory() as session:
         settings = await load_matching_settings(session)
 
+    # Парсинг времени подбора из формата "ЧЧ:ММ"
+    time_parts = parse_time_to_hours_minutes(settings.match_msk_time)
+    if time_parts is None:
+        logger.warning("Invalid match_msk_time format, using default 12:00")
+        match_hour, match_minute = 12, 0
+    else:
+        match_hour, match_minute = time_parts
+
     logger.info(
-        "Refreshing matching round schedule: day=%s, hour=%d, minute=%d",
+        "Refreshing matching round schedule: day=%s, time=%s (%d:%02d)",
         settings.match_day,
-        settings.match_msk_hour,
-        settings.match_msk_minute,
+        settings.match_msk_time,
+        match_hour,
+        match_minute,
     )
 
     scheduler.reschedule_job(
         "matching_round",
         trigger=CronTrigger(
             day_of_week=settings.match_day or "fri",
-            hour=settings.match_msk_hour,
-            minute=settings.match_msk_minute,
+            hour=match_hour,
+            minute=match_minute,
             timezone=MOSCOW_TZ,
         ),
     )

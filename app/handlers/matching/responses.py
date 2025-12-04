@@ -211,6 +211,10 @@ async def on_match_confirm(
         if both_confirmed:
             match.status = MATCH_STATUS_SCHEDULED
             match.last_reminder_at = None
+            # Очищаем слоты и message_id после подтверждения встречи
+            await clear_match_slots(session, match.id)
+            match.last_message_id_a = None
+            match.last_message_id_b = None
 
         await session.commit()
 

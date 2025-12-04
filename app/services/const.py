@@ -21,10 +21,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "min_jaccard": "0.3",
     "repeat_pair_cooldown_weeks": "1",
     "match_day": "fri",
-    "match_msk_hour": "12",
-    "match_msk_minute": "0",
-    "response_timeout_hours": "8",
-    "reminder_interval_hours": "1",
+    "match_msk_time": "12:00",
+    "response_timeout_hours": "8:00",
+    "reminder_interval_hours": "1:00",
 }
 
 # Названия ролей в БД (ключи)

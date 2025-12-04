@@ -121,12 +121,21 @@ async def process_match_timeouts_and_reminders(
 
     for match in matches:
         stage = stage_map[match.status]
-        stage_start = match.meeting_start_at if stage == "waiting_confirm" else match.created_at
+        
+        # Определяем момент начала стадии согласно ТЗ:
+        # - для pending_response: created_at (момент нахождения пары)
+        # - для waiting_slots и waiting_confirm: updated_at (момент перехода в стадию)
+        if stage == "pending_response":
+            stage_start = match.created_at
+        else:
+            stage_start = match.updated_at
+        
         if not stage_start:
             stage_start = match.created_at or now
 
         elapsed = now - stage_start
 
+        # Проверяем таймаут: если прошло больше response_timeout_hours
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
             match.user_a_response = MATCH_USER_RESPONSE_NONE
@@ -135,18 +144,30 @@ async def process_match_timeouts_and_reminders(
             stats["expired"] += 1
             continue
 
+        # Напоминания отправляются только если:
+        # 1. Прошло k * reminder_interval_hours (k >= 1), но меньше response_timeout_hours
+        # 2. С момента последнего напоминания прошло >= reminder_interval_hours
         if reminder_delta <= timedelta(0) or bot is None:
             continue
 
-        since_last = (
-            now - match.last_reminder_at if match.last_reminder_at else None
-        )
-        if elapsed >= reminder_delta and (
-            since_last is None or since_last >= reminder_delta
-        ):
-            await notify_match_reminder(bot, match, stage)
-            match.last_reminder_at = now
-            stats["reminded"] += 1
+        # Проверяем, что не превышен таймаут (напоминания только до таймаута)
+        if elapsed >= timeout_delta:
+            continue
+
+        # Напоминание отправляется если:
+        # - прошло >= reminder_interval_hours с начала стадии
+        # - и (еще не отправляли ИЛИ с последнего напоминания прошло >= reminder_interval_hours)
+        if elapsed >= reminder_delta:
+            since_last = (
+                now - match.last_reminder_at if match.last_reminder_at else None
+            )
+            # Отправляем напоминание если:
+            # - еще не отправляли (since_last is None)
+            # - или с последнего напоминания прошло >= reminder_interval_hours
+            if since_last is None or since_last >= reminder_delta:
+                await notify_match_reminder(bot, match, stage)
+                match.last_reminder_at = now
+                stats["reminded"] += 1
 
     await session.commit()
 

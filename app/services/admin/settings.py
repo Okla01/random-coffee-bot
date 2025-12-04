@@ -80,41 +80,54 @@ def format_settings_text(settings: dict) -> str:
         f"{DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
     )
 
-    try:
-        msk_hour = int(settings.get("match_msk_hour", 12))
-        msk_minute = int(settings.get("match_msk_minute", 0))
-    except (TypeError, ValueError):
-        msk_hour = 12
-        msk_minute = 0
-
-    text += f"🔹 Время подбора: {msk_hour:02d}:{msk_minute:02d}\n"
+    # Форматирование времени подбора
+    match_time = settings.get("match_msk_time", "12:00")
+    if ":" not in match_time:
+        # Миграция со старого формата
+        try:
+            msk_hour = int(settings.get("match_msk_hour", 12))
+            msk_minute = int(settings.get("match_msk_minute", 0))
+            match_time = f"{msk_hour:02d}:{msk_minute:02d}"
+        except (TypeError, ValueError):
+            match_time = "12:00"
+    text += f"🔹 Время подбора: {match_time}\n"
     
     # Форматирование таймаута ответа
-    try:
-        timeout_hours = float(settings.get("response_timeout_hours", "8"))
-        timeout_minutes = int(timeout_hours * 60)
-        timeout_h = timeout_minutes // 60
-        timeout_m = timeout_minutes % 60
-        if timeout_h > 0:
-            timeout_display = f"{timeout_h}:{timeout_m:02d}"
-        else:
-            timeout_display = f"{timeout_m} мин"
-    except (TypeError, ValueError):
-        timeout_display = settings.get("response_timeout_hours", "8")
+    timeout_value = settings.get("response_timeout_hours", "8:00")
+    if ":" in timeout_value:
+        timeout_display = timeout_value
+    else:
+        # Миграция со старого формата (часы как число)
+        try:
+            timeout_hours = float(timeout_value)
+            timeout_minutes = int(timeout_hours * 60)
+            timeout_h = timeout_minutes // 60
+            timeout_m = timeout_minutes % 60
+            if timeout_h > 0:
+                timeout_display = f"{timeout_h}:{timeout_m:02d}"
+            else:
+                timeout_display = f"{timeout_m} мин"
+        except (TypeError, ValueError):
+            timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
     
     # Форматирование интервала напоминаний
-    try:
-        interval_hours = float(settings.get("reminder_interval_hours", "1"))
-        interval_minutes = int(interval_hours * 60)
-        interval_h = interval_minutes // 60
-        interval_m = interval_minutes % 60
-        if interval_h > 0:
-            interval_display = f"{interval_h}:{interval_m:02d}"
-        else:
-            interval_display = f"{interval_m} мин"
-    except (TypeError, ValueError):
-        interval_display = settings.get("reminder_interval_hours", "1")
+    interval_value = settings.get("reminder_interval_hours", "1:00")
+    if ":" in interval_value:
+        interval_display = interval_value
+    else:
+        # Миграция со старого формата (часы как число)
+        try:
+            interval_hours = float(interval_value)
+            interval_minutes = int(interval_hours * 60)
+            interval_h = interval_minutes // 60
+            interval_m = interval_minutes % 60
+            if interval_h > 0:
+                interval_display = f"{interval_h}:{interval_m:02d}"
+            else:
+                interval_display = f"{interval_m} мин"
+        except (TypeError, ValueError):
+            interval_display = interval_value
     text += f"🔹 Интервал напоминаний: {interval_display}\n"
 
     return text
@@ -183,36 +196,102 @@ def try_to_input_repeat_pair_cooldown_weeks(msg: str) -> int | None:
     return None
 
 
-def try_to_input_match_msk_hour(msg: str) -> int | None:
+def try_to_input_time(msg: str) -> str | None:
     """
-    Пытается преобразовать введённый текст в числовое значения (типа int).
+    Пытается преобразовать введённый текст во время в формате ЧЧ:ММ.
 
-    Также сразу происходит проверка на вхождение числа в промежуток.
+    Проверяет корректность формата и значений (час 0-23, минуты 0-59).
+    Возвращает строку в формате "ЧЧ:ММ" или None при некорректном вводе.
     """
-
+    text = msg.strip()
+    
+    # Проверка формата ЧЧ:ММ
+    if ":" not in text:
+        return None
+    
+    parts = text.split(":")
+    if len(parts) != 2:
+        return None
+    
     try:
-        value = int(msg.strip())
+        hour = int(parts[0])
+        minute = int(parts[1])
     except ValueError:
         return None
     
-    if 0 <= value <= 23:
-        return value
-
-    return None
-
-
-def try_to_input_match_msk_minute(msg: str) -> int | None:
-    """
-    Пытается преобразовать введённый текст в числовое значение минут (типа int).
-
-    Также сразу происходит проверка на вхождение числа в промежуток 0-59.
-    """
-    try:
-        value = int(msg.strip())
-    except ValueError:
+    # Проверка диапазонов
+    if not (0 <= hour <= 23):
+        return None
+    if not (0 <= minute <= 59):
         return None
     
-    if 0 <= value <= 59:
-        return value
+    return f"{hour:02d}:{minute:02d}"
 
-    return None
+
+def parse_time_to_hours_minutes(time_str: str) -> tuple[int, int] | None:
+    """
+    Парсит время в формате ЧЧ:ММ на час и минуты.
+
+    Args:
+        time_str: строка в формате "ЧЧ:ММ"
+
+    Returns:
+        tuple[int, int] | None: кортеж (час, минуты) или None при ошибке
+    """
+    if ":" not in time_str:
+        return None
+    
+    parts = time_str.split(":")
+    if len(parts) != 2:
+        return None
+    
+    try:
+        hour = int(parts[0])
+        minute = int(parts[1])
+        return (hour, minute)
+    except ValueError:
+        return None
+
+
+def parse_time_to_hours(time_str: str) -> float | None:
+    """
+    Парсит время в формате ЧЧ:ММ и конвертирует в часы (десятичное число).
+
+    Например: "8:30" -> 8.5, "1:15" -> 1.25
+
+    Args:
+        time_str: строка в формате "ЧЧ:ММ"
+
+    Returns:
+        float | None: количество часов или None при ошибке
+    """
+    parsed = parse_time_to_hours_minutes(time_str)
+    if parsed is None:
+        return None
+    
+    hour, minute = parsed
+    return hour + (minute / 60.0)
+
+
+def toggle_matching_enabled(current_value: str | bool) -> str:
+    """
+    Переключает значение matching_enabled (true/false).
+
+    Args:
+        current_value: текущее значение (строка или bool)
+
+    Returns:
+        str: "true" или "false"
+    """
+    current_bool = _as_bool(current_value)
+    return "false" if current_bool else "true"
+
+
+def try_to_input_time_as_hours(msg: str) -> str | None:
+    """
+    Пытается преобразовать введённый текст во время в формате ЧЧ:ММ
+    и возвращает его как есть для сохранения.
+
+    Используется для response_timeout_hours и reminder_interval_hours.
+    """
+    return try_to_input_time(msg)

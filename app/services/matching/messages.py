@@ -366,7 +366,7 @@ async def notify_match_reminder(bot: Bot, match: Match, stage: str) -> None:
     """
     if stage == "pending_response":
         text = (
-            "Напоминаем, что у вас есть новая пара Random Coffee. "
+            "Напоминаем, что у вас есть пара для Random Coffee. "
             "Нажмите «Готов познакомиться» или «Пропустить на этой неделе»."
         )
     elif stage == "waiting_slots":

@@ -2,10 +2,13 @@
 Обработчик кнопок с настройками панели администратора.
 
 Обрабатывает callback-запросы для просмотра и изменения настроек системы:
+- включение/выключение мэтчинга
 - минимальный Jaccard коэффициент
 - периодичность встреч (в неделях)
 - день недели для встреч
-- час мэтчинга (МСК)
+- время подбора (МСК) в формате ЧЧ:ММ
+- таймаут ответа в формате ЧЧ:ММ
+- интервал напоминаний в формате ЧЧ:ММ
 """
 
 from __future__ import annotations
@@ -28,10 +31,11 @@ from app.services.admin.settings import (
     format_settings_text,
     get_current_settings,
     save_settings,
-    try_to_input_match_msk_hour,
-    try_to_input_match_msk_minute,
+    toggle_matching_enabled,
     try_to_input_min_jaccard,
     try_to_input_repeat_pair_cooldown_weeks,
+    try_to_input_time,
+    try_to_input_time_as_hours,
     update_draft_setting,
 )
 from app.services.matching.scheduler import refresh_matching_round_schedule
@@ -127,34 +131,74 @@ async def cb_update_match_day(
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.callback_query(F.data == "admin:update_match_msk_hour")
-async def cb_update_match_msk_hour(
+@router.callback_query(F.data == "admin:toggle_matching_enabled")
+async def cb_toggle_matching_enabled(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новый час мэтчинга (МСК)."""
+    """Переключает включен/выключен мэтчинг."""
+    data = await state.get_data()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
+    
+    current_value = draft.get("matching_enabled", "true")
+    new_value = toggle_matching_enabled(current_value)
+    
+    draft = await update_draft_setting(state, "matching_enabled", new_value)
+    
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+    
+    # Возвращение в меню настроек
+    sent = await cq.message.answer(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
-    await cq.message.answer("Введите новый час подбора (0 - 23):")
 
-    # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_match_msk_hour)
-
-
-@router.callback_query(F.data == "admin:update_match_msk_minute")
-async def cb_update_match_msk_minute(
+@router.callback_query(F.data == "admin:update_match_msk_time")
+async def cb_update_match_msk_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новые минуты мэтчинга (МСК)."""
+    """Запрашивает новое время мэтчинга (МСК) в формате ЧЧ:ММ."""
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Введите минуты подбора (0 - 59):")
+    await cq.message.answer("Введите новое время подбора в формате ЧЧ:ММ (например, 12:00):")
 
     # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_match_msk_minute)
+    await state.set_state(AdminSettingsStates.waiting_match_msk_time)
+
+
+@router.callback_query(F.data == "admin:update_response_timeout_hours")
+async def cb_update_response_timeout_hours(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Запрашивает новый таймаут ответа в формате ЧЧ:ММ."""
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    await cq.message.answer("Введите новый таймаут ответа в формате ЧЧ:ММ (например, 8:00):")
+
+    # Переход с состояние ожидания значения
+    await state.set_state(AdminSettingsStates.waiting_response_timeout_hours)
+
+
+@router.callback_query(F.data == "admin:update_reminder_interval_hours")
+async def cb_update_reminder_interval_hours(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Запрашивает новый интервал напоминаний в формате ЧЧ:ММ."""
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    await cq.message.answer("Введите новый интервал напоминаний в формате ЧЧ:ММ (например, 1:00):")
+
+    # Переход с состояние ожидания значения
+    await state.set_state(AdminSettingsStates.waiting_reminder_interval_hours)
 
 
 @router.callback_query(F.data == "admin:save_admin_settings")
@@ -313,19 +357,19 @@ async def on_repeat_pair_cooldown_input(msg: Message, state: FSMContext) -> None
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_match_msk_hour))
-async def on_match_msk_hour_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_match_msk_time))
+async def on_match_msk_time_input(msg: Message, state: FSMContext) -> None:
     """
-    Обрабатывает ввод нового значения часа рассылки.
+    Обрабатывает ввод нового значения времени подбора в формате ЧЧ:ММ.
     """
-    match_msk_hour: int | None = try_to_input_match_msk_hour(msg.text)
-    if match_msk_hour is None:
+    match_time: str | None = try_to_input_time(msg.text)
+    if match_time is None:
         await msg.answer(
-            "Некорректный ввод. Пожалуйста, введите число в диапазоне 0 - 23."
+            "Некорректный ввод. Пожалуйста, введите время в формате ЧЧ:ММ (например, 12:00)."
         )
         return
 
-    draft = await update_draft_setting(state, "match_msk_hour", match_msk_hour)
+    draft = await update_draft_setting(state, "match_msk_time", match_time)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения
@@ -339,19 +383,45 @@ async def on_match_msk_hour_input(msg: Message, state: FSMContext) -> None:
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_match_msk_minute))
-async def on_match_msk_minute_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_response_timeout_hours))
+async def on_response_timeout_hours_input(msg: Message, state: FSMContext) -> None:
     """
-    Обрабатывает ввод нового значения минут рассылки.
+    Обрабатывает ввод нового значения таймаута ответа в формате ЧЧ:ММ.
     """
-    match_msk_minute: int | None = try_to_input_match_msk_minute(msg.text)
-    if match_msk_minute is None:
+    timeout_time: str | None = try_to_input_time_as_hours(msg.text)
+    if timeout_time is None:
         await msg.answer(
-            "Некорректный ввод. Пожалуйста, введите число в диапазоне 0 - 59."
+            "Некорректный ввод. Пожалуйста, введите время в формате ЧЧ:ММ (например, 8:00)."
         )
         return
 
-    draft = await update_draft_setting(state, "match_msk_minute", match_msk_minute)
+    draft = await update_draft_setting(state, "response_timeout_hours", timeout_time)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
+
+    # Выход из состояния ожидания значения
+    await state.set_state(None)
+
+    # Возвращение в меню настроек
+    sent = await msg.answer(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+
+
+@router.message(StateFilter(AdminSettingsStates.waiting_reminder_interval_hours))
+async def on_reminder_interval_hours_input(msg: Message, state: FSMContext) -> None:
+    """
+    Обрабатывает ввод нового значения интервала напоминаний в формате ЧЧ:ММ.
+    """
+    interval_time: str | None = try_to_input_time_as_hours(msg.text)
+    if interval_time is None:
+        await msg.answer(
+            "Некорректный ввод. Пожалуйста, введите время в формате ЧЧ:ММ (например, 1:00)."
+        )
+        return
+
+    draft = await update_draft_setting(state, "reminder_interval_hours", interval_time)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

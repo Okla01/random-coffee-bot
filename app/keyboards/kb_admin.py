@@ -105,10 +105,10 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🕐 Изменить время подбора", callback_data="admin:update_match_msk_time"),
             ],
             [
-                InlineKeyboardButton(text="⏱️ Изменить таймаут ответа", callback_data="admin:update_response_timeout_hours"),
+                InlineKeyboardButton(text="⏱️ Изменить таймаут ответа", callback_data="admin:update_response_timeout_time"),
             ],
             [
-                InlineKeyboardButton(text="🔔 Изменить интервал напоминаний", callback_data="admin:update_reminder_interval_hours"),
+                InlineKeyboardButton(text="🔔 Изменить интервал напоминаний", callback_data="admin:update_reminder_interval_time"),
             ],
             [
                 InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),

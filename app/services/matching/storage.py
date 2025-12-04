@@ -261,3 +261,27 @@ async def clear_match_slots(session: AsyncSession, match_id: int) -> None:
     await session.execute(delete(MatchSlot).where(MatchSlot.match_id == match_id))
     await session.flush()
 
+
+async def cleanup_inactive_match(
+    session: AsyncSession,
+    match: Match,
+) -> None:
+    """
+    Очищает данные матча при переходе в неактивный статус.
+
+    Обнуляет поля last_message_id_a и last_message_id_b, а также удаляет
+    все выбранные временные слоты пользователей для данного матча.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        match (Match): объект матча.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    # Обнуляем ID последних сообщений
+    match.last_message_id_a = None
+    match.last_message_id_b = None
+    
+    # Удаляем все временные слоты для данного матча
+    await clear_match_slots(session, match.id)

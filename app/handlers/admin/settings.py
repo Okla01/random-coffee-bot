@@ -7,8 +7,8 @@
 - периодичность встреч (в неделях)
 - день недели для встреч
 - время подбора (МСК) в формате ЧЧ:ММ
-- таймаут ответа в формате ЧЧ:ММ
-- интервал напоминаний в формате ЧЧ:ММ
+- таймаут ответа (response_timeout_time) в формате ЧЧ:ММ
+- интервал напоминаний (reminder_interval_time) в формате ЧЧ:ММ
 """
 
 from __future__ import annotations
@@ -171,8 +171,8 @@ async def cb_update_match_msk_time(
     await state.set_state(AdminSettingsStates.waiting_match_msk_time)
 
 
-@router.callback_query(F.data == "admin:update_response_timeout_hours")
-async def cb_update_response_timeout_hours(
+@router.callback_query(F.data == "admin:update_response_timeout_time")
+async def cb_update_response_timeout_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
@@ -183,11 +183,11 @@ async def cb_update_response_timeout_hours(
     await cq.message.answer("Введите новый таймаут ответа в формате ЧЧ:ММ (например, 8:00):")
 
     # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_response_timeout_hours)
+    await state.set_state(AdminSettingsStates.waiting_response_timeout_time)
 
 
-@router.callback_query(F.data == "admin:update_reminder_interval_hours")
-async def cb_update_reminder_interval_hours(
+@router.callback_query(F.data == "admin:update_reminder_interval_time")
+async def cb_update_reminder_interval_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
@@ -198,7 +198,7 @@ async def cb_update_reminder_interval_hours(
     await cq.message.answer("Введите новый интервал напоминаний в формате ЧЧ:ММ (например, 1:00):")
 
     # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_reminder_interval_hours)
+    await state.set_state(AdminSettingsStates.waiting_reminder_interval_time)
 
 
 @router.callback_query(F.data == "admin:save_admin_settings")
@@ -383,8 +383,8 @@ async def on_match_msk_time_input(msg: Message, state: FSMContext) -> None:
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_response_timeout_hours))
-async def on_response_timeout_hours_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_response_timeout_time))
+async def on_response_timeout_time_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения таймаута ответа в формате ЧЧ:ММ.
     """
@@ -395,7 +395,7 @@ async def on_response_timeout_hours_input(msg: Message, state: FSMContext) -> No
         )
         return
 
-    draft = await update_draft_setting(state, "response_timeout_hours", timeout_time)
+    draft = await update_draft_setting(state, "response_timeout_time", timeout_time)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения
@@ -409,8 +409,8 @@ async def on_response_timeout_hours_input(msg: Message, state: FSMContext) -> No
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
-@router.message(StateFilter(AdminSettingsStates.waiting_reminder_interval_hours))
-async def on_reminder_interval_hours_input(msg: Message, state: FSMContext) -> None:
+@router.message(StateFilter(AdminSettingsStates.waiting_reminder_interval_time))
+async def on_reminder_interval_time_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения интервала напоминаний в формате ЧЧ:ММ.
     """
@@ -421,7 +421,7 @@ async def on_reminder_interval_hours_input(msg: Message, state: FSMContext) -> N
         )
         return
 
-    draft = await update_draft_setting(state, "reminder_interval_hours", interval_time)
+    draft = await update_draft_setting(state, "reminder_interval_time", interval_time)
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

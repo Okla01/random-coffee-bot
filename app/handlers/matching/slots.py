@@ -31,6 +31,7 @@ from app.services.matching.messages import (
     notify_waiting_confirm,
 )
 from app.services.matching.storage import (
+    cleanup_inactive_match,
     SlotEntry,
     find_first_common_slot,
     get_match_with_relations,
@@ -315,6 +316,8 @@ async def _on_save_slots(
             else:
                 match.status = MATCH_STATUS_EXPIRED_TIMEOUT
                 match.last_reminder_at = None
+                # Очищаем данные неактивного матча
+                await cleanup_inactive_match(session, match)
                 result_status = "expired"
 
         await session.commit()

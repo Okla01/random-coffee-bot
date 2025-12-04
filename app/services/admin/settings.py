@@ -92,8 +92,8 @@ def format_settings_text(settings: dict) -> str:
             match_time = "12:00"
     text += f"🔹 Время подбора: {match_time}\n"
     
-    # Форматирование таймаута ответа
-    timeout_value = settings.get("response_timeout_hours", "8:00")
+    # Форматирование таймаута ответа (поддержка миграции со старого имени)
+    timeout_value = settings.get("response_timeout_time") or settings.get("response_timeout_hours", "8:00")
     if ":" in timeout_value:
         timeout_display = timeout_value
     else:
@@ -111,8 +111,8 @@ def format_settings_text(settings: dict) -> str:
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
     
-    # Форматирование интервала напоминаний
-    interval_value = settings.get("reminder_interval_hours", "1:00")
+    # Форматирование интервала напоминаний (поддержка миграции со старого имени)
+    interval_value = settings.get("reminder_interval_time") or settings.get("reminder_interval_hours", "1:00")
     if ":" in interval_value:
         interval_display = interval_value
     else:
@@ -292,6 +292,6 @@ def try_to_input_time_as_hours(msg: str) -> str | None:
     Пытается преобразовать введённый текст во время в формате ЧЧ:ММ
     и возвращает его как есть для сохранения.
 
-    Используется для response_timeout_hours и reminder_interval_hours.
+    Используется для response_timeout_time и reminder_interval_time.
     """
     return try_to_input_time(msg)

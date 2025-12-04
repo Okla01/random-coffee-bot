@@ -128,8 +128,8 @@ class MatchingSettings:
     matching_enabled: bool
     match_day: str
     match_msk_time: str  # Формат "ЧЧ:ММ"
-    response_timeout_hours: float  # Конвертировано из формата "ЧЧ:ММ" в часы
-    reminder_interval_hours: float  # Конвертировано из формата "ЧЧ:ММ" в часы
+    response_timeout_time: str  # Формат "ЧЧ:ММ"
+    reminder_interval_time: str  # Формат "ЧЧ:ММ"
     repeat_pair_cooldown_weeks: int
     min_jaccard: float
 
@@ -140,7 +140,7 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
 
     Читает все необходимые настройки из БД и возвращает их в виде типизированного объекта.
     Использует значения по умолчанию, если настройки отсутствуют.
-    Поддерживает миграцию со старого формата (match_msk_hour/minute, часы как числа).
+    Поддерживает миграцию со старого формата (match_msk_hour/minute, response_timeout_hours, reminder_interval_hours).
 
     Args:
         session (AsyncSession): активная сессия БД.
@@ -162,33 +162,47 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             match_msk_time = "12:00"
     
     # Загрузка таймаута ответа с поддержкой миграции
-    timeout_value = await _get_setting_value(session, "response_timeout_hours")
+    timeout_value = await _get_setting_value(session, "response_timeout_time")
+    if not timeout_value:
+        # Пробуем старое имя для миграции
+        timeout_value = await _get_setting_value(session, "response_timeout_hours")
+    
     if timeout_value and ":" in timeout_value:
-        response_timeout_hours = parse_time_to_hours(timeout_value)
+        response_timeout_time = timeout_value
     else:
         # Миграция со старого формата (часы как число)
         try:
-            response_timeout_hours = float(str(timeout_value or "8").strip().replace(",", "."))
+            hours_float = float(str(timeout_value or "8").strip().replace(",", "."))
+            hours = int(hours_float)
+            minutes = int((hours_float - hours) * 60)
+            response_timeout_time = f"{hours:02d}:{minutes:02d}"
         except (TypeError, ValueError):
-            response_timeout_hours = 8.0
+            response_timeout_time = "8:00"
     
     # Загрузка интервала напоминаний с поддержкой миграции
-    interval_value = await _get_setting_value(session, "reminder_interval_hours")
+    interval_value = await _get_setting_value(session, "reminder_interval_time")
+    if not interval_value:
+        # Пробуем старое имя для миграции
+        interval_value = await _get_setting_value(session, "reminder_interval_hours")
+    
     if interval_value and ":" in interval_value:
-        reminder_interval_hours = parse_time_to_hours(interval_value)
+        reminder_interval_time = interval_value
     else:
         # Миграция со старого формата (часы как число)
         try:
-            reminder_interval_hours = float(str(interval_value or "1").strip().replace(",", "."))
+            hours_float = float(str(interval_value or "1").strip().replace(",", "."))
+            hours = int(hours_float)
+            minutes = int((hours_float - hours) * 60)
+            reminder_interval_time = f"{hours:02d}:{minutes:02d}"
         except (TypeError, ValueError):
-            reminder_interval_hours = 1.0
+            reminder_interval_time = "1:00"
     
     return MatchingSettings(
         matching_enabled=await get_setting_bool(session, "matching_enabled"),
         match_day=await _require_setting(session, "match_day"),
         match_msk_time=match_msk_time,
-        response_timeout_hours=response_timeout_hours,
-        reminder_interval_hours=reminder_interval_hours,
+        response_timeout_time=response_timeout_time,
+        reminder_interval_time=reminder_interval_time,
         repeat_pair_cooldown_weeks=await get_setting_int(
             session,
             "repeat_pair_cooldown_weeks",

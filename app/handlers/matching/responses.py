@@ -37,7 +37,7 @@ from app.services.matching.messages import (
     notify_waiting_partner_ready,
 )
 from app.services.matching.storage import (
-    clear_match_slots,
+    cleanup_inactive_match,
     get_match_with_relations,
     set_match_response,
 )
@@ -150,6 +150,8 @@ async def on_match_skip(
 
         match.status = MATCH_STATUS_SKIPPED
         match.last_reminder_at = None
+        # Очищаем данные неактивного матча
+        await cleanup_inactive_match(session, match)
         await session.commit()
 
         await notify_match_skip_self(cq.bot, user)
@@ -212,9 +214,7 @@ async def on_match_confirm(
             match.status = MATCH_STATUS_SCHEDULED
             match.last_reminder_at = None
             # Очищаем слоты и message_id после подтверждения встречи
-            await clear_match_slots(session, match.id)
-            match.last_message_id_a = None
-            match.last_message_id_b = None
+            await cleanup_inactive_match(session, match)
 
         await session.commit()
 
@@ -265,9 +265,8 @@ async def on_match_reschedule(
         match.user_b_response = MATCH_USER_RESPONSE_NONE
         match.last_reminder_at = None
         await _remove_last_message_keyboards(cq.bot, match)
-        match.last_message_id_a = None
-        match.last_message_id_b = None
-        await clear_match_slots(session, match.id)
+        # Очищаем слоты и message_id при переназначении встречи
+        await cleanup_inactive_match(session, match)
         await session.commit()
 
     await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_a)

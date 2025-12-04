@@ -27,7 +27,8 @@ from app.services.matching.messages import (
     notify_match_timeout,
     notify_meeting_started,
 )
-from app.services.matching.settings import MatchingSettings
+from app.services.matching.settings import MatchingSettings, parse_time_to_hours
+from app.services.matching.storage import cleanup_inactive_match
 
 
 async def complete_due_meetings(
@@ -67,6 +68,8 @@ async def complete_due_meetings(
             match.user_a.last_match_at = now
         if match.user_b:
             match.user_b.last_match_at = now
+        # Очищаем данные неактивного матча
+        await cleanup_inactive_match(session, match)
 
     await session.commit()
 
@@ -86,8 +89,8 @@ async def process_match_timeouts_and_reminders(
     Обрабатывает напоминания и таймауты для матчей в активных стадиях.
 
     Проверяет матчи со статусами pending_response, waiting_slots, waiting_confirm:
-    - отправляет напоминания с интервалом reminder_interval_hours;
-    - переводит в expired_timeout при превышении response_timeout_hours.
+    - отправляет напоминания с интервалом reminder_interval_time;
+    - переводит в expired_timeout при превышении response_timeout_time.
 
     Args:
         session (AsyncSession): активная сессия БД.
@@ -98,8 +101,11 @@ async def process_match_timeouts_and_reminders(
         dict[str, int]: статистика обработки вида {"reminded": X, "expired": Y}.
     """
     now = now_msk()
-    reminder_delta = timedelta(hours=max(0, settings.reminder_interval_hours))
-    timeout_delta = timedelta(hours=max(1, settings.response_timeout_hours))
+    # Конвертация из формата ЧЧ:ММ в часы для timedelta
+    reminder_hours = parse_time_to_hours(settings.reminder_interval_time)
+    timeout_hours = parse_time_to_hours(settings.response_timeout_time)
+    reminder_delta = timedelta(hours=max(0, reminder_hours))
+    timeout_delta = timedelta(hours=max(1, timeout_hours))
 
     stats = {"reminded": 0, "expired": 0}
     stage_map = {
@@ -135,18 +141,20 @@ async def process_match_timeouts_and_reminders(
 
         elapsed = now - stage_start
 
-        # Проверяем таймаут: если прошло больше response_timeout_hours
+        # Проверяем таймаут: если прошло больше response_timeout_time
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
             match.user_a_response = MATCH_USER_RESPONSE_NONE
             match.user_b_response = MATCH_USER_RESPONSE_NONE
             match.last_reminder_at = None
+            # Очищаем данные неактивного матча
+            await cleanup_inactive_match(session, match)
             stats["expired"] += 1
             continue
 
         # Напоминания отправляются только если:
-        # 1. Прошло k * reminder_interval_hours (k >= 1), но меньше response_timeout_hours
-        # 2. С момента последнего напоминания прошло >= reminder_interval_hours
+        # 1. Прошло k * reminder_interval_time (k >= 1), но меньше response_timeout_time
+        # 2. С момента последнего напоминания прошло >= reminder_interval_time
         if reminder_delta <= timedelta(0) or bot is None:
             continue
 
@@ -155,15 +163,15 @@ async def process_match_timeouts_and_reminders(
             continue
 
         # Напоминание отправляется если:
-        # - прошло >= reminder_interval_hours с начала стадии
-        # - и (еще не отправляли ИЛИ с последнего напоминания прошло >= reminder_interval_hours)
+        # - прошло >= reminder_interval_time с начала стадии
+        # - и (еще не отправляли ИЛИ с последнего напоминания прошло >= reminder_interval_time)
         if elapsed >= reminder_delta:
             since_last = (
                 now - match.last_reminder_at if match.last_reminder_at else None
             )
             # Отправляем напоминание если:
             # - еще не отправляли (since_last is None)
-            # - или с последнего напоминания прошло >= reminder_interval_hours
+            # - или с последнего напоминания прошло >= reminder_interval_time
             if since_last is None or since_last >= reminder_delta:
                 await notify_match_reminder(bot, match, stage)
                 match.last_reminder_at = now

@@ -16,8 +16,8 @@ class AdminSettingsStates(StatesGroup):
     waiting_repeat_pair_cooldown_weeks = State()
     waiting_match_day = State()
     waiting_match_msk_time = State()
-    waiting_response_timeout_hours = State()
-    waiting_reminder_interval_hours = State()
+    waiting_response_timeout_time = State()
+    waiting_reminder_interval_time = State()
 
 
 class AdminUsersStates(StatesGroup):

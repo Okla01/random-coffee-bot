@@ -203,7 +203,17 @@ async def _on_back_to_calendar(
 ) -> None:
     """
     Возвращает пользователя к окну календаря.
+    Если для текущей даты не выбраны интервалы, удаляет дату из slots_map.
     """
+    date_str = manager.dialog_data.get("current_date")
+    slots_map = manager.dialog_data.get("slots_map", {})
+    
+    # Если для текущей даты нет выбранных интервалов, удаляем дату из slots_map
+    if date_str and date_str in slots_map:
+        if not slots_map[date_str]:  # список пустой
+            slots_map.pop(date_str, None)
+    
+    manager.dialog_data["current_date"] = None
     await manager.switch_to(MatchSlotsDialogSG.calendar)
     await callback.answer()
 
@@ -338,7 +348,7 @@ match_slots_dialog = Dialog(
                 when="has_any_slots",
             ),
             Button(
-                Const("✅ Сохранить слоты"),
+                Const("✅ Подтвердить"),
                 id="save_slots_calendar",
                 on_click=_on_save_slots,
                 when="has_any_slots",
@@ -422,8 +432,12 @@ def _format_slots_summary(slots_map: dict[str, list[str]]) -> str:
         return ""
     lines: list[str] = []
     for date_str in sorted(slots_map.keys()):
+        slots = slots_map[date_str]
+        # Пропускаем даты без выбранных интервалов
+        if not slots:
+            continue
         caption = _format_date_caption(date_str)
-        times = ", ".join(slots_map[date_str])
+        times = ", ".join(slots)
         lines.append(f"{caption}: {times}")
     return "\n".join(lines)
 
@@ -442,7 +456,9 @@ def _build_day_items(
         dt = base + timedelta(days=offset)
         date_str = dt.strftime("%Y%m%d")
         label = f"{weekday_names[dt.weekday()]} {dt:%d.%m}"
-        if slots_map.get(date_str):
+        # Показываем маркер только если есть выбранные интервалы (не пустой список)
+        slots = slots_map.get(date_str)
+        if slots:  # список не пустой
             label += " •"
         if date_str == current_date:
             label = f"👉 {label}"

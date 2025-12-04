@@ -34,6 +34,7 @@ from app.services.profile.editing import (
     process_interests_field,
     process_save_profile,
     process_edit_review,
+    notify_admin_on_name_request,
 )
 from app.services.profile.photo import send_photo_request
 
@@ -82,6 +83,14 @@ async def on_profile_text(
     async with session_factory() as session:
         user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
 
+        # Если пользователь ожидает одобрения заявки, отвечаем сообщением об ожидании
+        if user.stage == "profile_name_pending":
+            await session.commit()
+            await message.answer(
+                "Ваша заявка на доступ к анкетированию отправлена администратору. Ожидайте рассмотрения."
+            )
+            return
+
         # обрабатываем только свои стадии — если не наша стадия, отменяем обработчик
         if user.stage not in {
             "profile_name",
@@ -117,7 +126,17 @@ async def on_profile_text(
                 return
             
             if result.result_type == "field_updated_continue":
-                await send_photo_request(message, state, kb_profile_photo())
+                # Если перешли на этап ожидания одобрения заявки
+                if result.next_stage == "profile_name_pending":
+                    # Отправляем заявку в админский чат
+                    await notify_admin_on_name_request(session, settings, user, message.bot)
+                    await message.answer(
+                        "Ваша заявка на доступ к анкетированию отправлена администратору. "
+                        "Ожидайте рассмотрения."
+                    )
+                else:
+                    # Переход на этап загрузки фото (старая логика для редактирования)
+                    await send_photo_request(message, state, kb_profile_photo())
                 return
 
         # BIO

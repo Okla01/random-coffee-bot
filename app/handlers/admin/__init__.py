@@ -11,6 +11,7 @@ from .exit import router as exit_router
 from .users import router as users_router
 from .inline_search import router as inline_search_router
 from .user_card import router as user_card_router
+from .name_approval import router as name_approval_router
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше
@@ -18,6 +19,7 @@ router = Router()
 router.include_router(admin_router)
 router.include_router(settings_router)  # Специфичные callback-обработчики настроек
 router.include_router(blocking_router)  # Обработчики блокировки (из уведомлений)
+router.include_router(name_approval_router)  # Обработчики одобрения заявок на доступ к анкете
 router.include_router(user_card_router)  # Обработчики карточки пользователя (из inline-поиска)
 router.include_router(exit_router)  # Обработчик выхода из админ-панели
 router.include_router(users_router)  # Обработчик списка пользователей

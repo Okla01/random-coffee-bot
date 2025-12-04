@@ -22,8 +22,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.core.config import Settings
 from app.services.profile.banned_words import contains_banned_words
 from app.services.profile.utils import is_profile_complete
-
-from app.database.models import User
+from app.keyboards.kb_admin import kb_admin_name_approval
+from app.database.models import User, AdminLog
 
 # Типы результатов обработки полей профиля
 FieldResultType = Literal[
@@ -114,12 +114,12 @@ async def process_name_field(
             is_editing=True
         )
 
-    # Переход на этап загрузки фото
-    user.stage = "profile_photo"
+    # Переход на этап ожидания одобрения заявки на доступ
+    user.stage = "profile_name_pending"
     await session.commit()
     return FieldResult(
         result_type="field_updated_continue",
-        next_stage="profile_photo",
+        next_stage="profile_name_pending",
         is_editing=False
     )
 
@@ -384,4 +384,59 @@ async def process_edit_review(
     """
     user.stage = "profile_review"
     await session.commit()
+
+
+async def notify_admin_on_name_request(
+    session: AsyncSession,
+    settings: Settings,
+    user: User,
+    bot,
+) -> None:
+    """
+    Уведомляет администратора о заявке на доступ к анкетированию.
+
+    Логирует событие в admin_log, затем отправляет сообщение в admin_chat_id
+    с информацией о пользователе и кнопками для принятия решения (одобрить/отклонить).
+
+    Args:
+        session (AsyncSession): сессия БД.
+        settings (Settings): конфигурация (содержит admin_chat_id).
+        user (User): объект пользователя.
+        bot: объект бота для отправки сообщения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    if not settings.admin_chat_id:
+        return
+    
+    payload = {
+        "user_id": user.id,
+        "name": user.name,
+    }
+    session.add(
+        AdminLog(
+            admin_id=0,
+            action="name_approval_request",
+            payload=payload,
+        )
+    )
+    await session.commit()
+    
+    # Отправляем сообщение в админ-чат с информацией о пользователе и кнопками для принятия решения
+    try:
+        text = (
+            f"🙋‍♂️ Запрос на доступ к анкетированию\n"
+            f"👤: {user.name}\n"
+            f"🔗: {'@' + user.username if user.username else 'нет username'}\n"
+            f"🆔: {user.telegram_id}"
+        )
+        await bot.send_message(
+            chat_id=settings.admin_chat_id,
+            text=text,
+            reply_markup=kb_admin_name_approval(user.id),
+        )
+    except Exception:
+        # Не фейлим основную операцию из-за ошибки отправки нотификации
+        pass
 

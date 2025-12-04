@@ -424,9 +424,9 @@ async def _send_match_invite(
     )
     # Сохраняем message_id для возможности удаления клавиатуры
     if is_user_a:
-        match.invite_message_id_a = sent_message.message_id
+        match.last_message_id_a = sent_message.message_id
     else:
-        match.invite_message_id_b = sent_message.message_id
+        match.last_message_id_b = sent_message.message_id
     await session.flush()  # Сохраняем message_id в БД
 
 

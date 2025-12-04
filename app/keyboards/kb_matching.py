@@ -37,28 +37,6 @@ def kb_match_invitation(match_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def kb_match_slots_open(match_id: int) -> InlineKeyboardMarkup:
-    """
-    Кнопка для запуска диалога выбора слотов (aiogram_dialog).
-
-    Args:
-        match_id (int): ID матча для формирования callback_data.
-
-    Returns:
-        InlineKeyboardMarkup: клавиатура с кнопкой запуска диалога.
-    """
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="📅 Открыть календарь",
-                    callback_data=f"match_slots_open:{match_id}",
-                )
-            ]
-        ]
-    )
-
-
 def kb_match_confirm_prompt(match_id: int) -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру подтверждения встречи или повторного выбора времени.

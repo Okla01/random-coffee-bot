@@ -4,14 +4,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
-from aiogram import F, Router
-from aiogram.fsm.state import State, StatesGroup
+from aiogram import Router
 from aiogram.types import CallbackQuery
-from aiogram_dialog import Dialog, DialogManager, StartMode, Window
-from aiogram_dialog.widgets.kbd import Button, Calendar, Group, Select
-from aiogram_dialog.widgets.kbd.calendar_kbd import ManagedCalendar
+from aiogram.fsm.state import State, StatesGroup
+from aiogram_dialog import Dialog, DialogManager, Window
+from aiogram_dialog.widgets.kbd import Button, Group, Select
 from aiogram_dialog.widgets.text import Const, Format
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -50,33 +49,29 @@ class MatchSlotsDialogSG(StatesGroup):
     time = State()
 
 
-@router.callback_query(F.data.startswith("match_slots_open:"))
-async def on_match_slots_open(
-    cq: CallbackQuery,
-    dialog_manager: DialogManager,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """
-    Запускает диалог выбора слотов для конкретного матча.
+class GridSelect(Select):
+    """Select-виджет, который выводит элементы в несколько колонок."""
 
-    Args:
-        cq (CallbackQuery): событие нажатия на кнопку открытия диалога.
-        dialog_manager (DialogManager): менеджер aiogram_dialog.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-    """
-    match_id = int(cq.data.split(":")[1])
-    async with session_factory() as session:
-        match, user = await _ensure_slot_access(session, match_id, cq.from_user.id)
-        if not match or not user:
-            await cq.answer("Матч уже недоступен.", show_alert=True)
-            return
+    def __init__(self, *args, columns: int = 2, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.columns = max(1, columns)
 
-    await dialog_manager.start(
-        MatchSlotsDialogSG.calendar,
-        data={"match_id": match_id, "user_id": user.id},
-        mode=StartMode.RESET_STACK,
-    )
-    await cq.answer()
+    async def _render_keyboard(
+        self,
+        data: dict,
+        manager: DialogManager,
+    ):
+        items = list(self.items_getter(data))
+        keyboard: list[list] = []
+        row: list = []
+        for pos, item in enumerate(items):
+            row.append(await self._render_button(pos, item, item, data, manager))
+            if len(row) == self.columns:
+                keyboard.append(row)
+                row = []
+        if row:
+            keyboard.append(row)
+        return keyboard
 
 
 async def _dialog_on_start(start_data: dict, manager: DialogManager) -> None:
@@ -115,10 +110,13 @@ async def _calendar_getter(dialog_manager: DialogManager, **_) -> dict:
         dict: данные для шаблонов окна календаря.
     """
     slots_map = dialog_manager.dialog_data.get("slots_map", {})
+    current_date = dialog_manager.dialog_data.get("current_date")
     summary = _format_slots_summary(slots_map)
+    day_items = _build_day_items(slots_map, current_date)
     return {
         "slots_summary": summary or "Пока ничего не выбрано.",
         "has_any_slots": bool(slots_map),
+        "day_items": day_items,
     }
 
 
@@ -153,29 +151,20 @@ async def _time_getter(dialog_manager: DialogManager, **_) -> dict:
     }
 
 
-async def _on_calendar_selected(
+async def _on_day_selected(
     callback: CallbackQuery,
-    widget: ManagedCalendar,
+    widget: GridSelect,
     manager: DialogManager,
-    selected_date: date,
+    date_str: str,
 ) -> None:
     """
-    Обрабатывает выбор даты в календаре.
-
-    Args:
-        callback (CallbackQuery): событие выбора.
-        widget (ManagedCalendar): виджет календаря.
-        manager (DialogManager): менеджер aiogram_dialog.
-        selected_date (date): выбранная дата.
+    Обрабатывает выбор даты из списка ближайших 14 дней.
     """
-    if not _is_date_allowed(selected_date):
-        await callback.answer("Эта дата недоступна для выбора.", show_alert=True)
-        return
-    date_str = selected_date.strftime("%Y%m%d")
     slots_map = manager.dialog_data.setdefault("slots_map", {})
     slots_map.setdefault(date_str, [])
     manager.dialog_data["current_date"] = date_str
     await manager.switch_to(MatchSlotsDialogSG.time)
+    await callback.answer()
 
 
 async def _on_time_toggle(
@@ -252,18 +241,6 @@ async def _on_clear_date(
     await callback.answer("Слоты для даты очищены.", show_alert=True)
 
 
-async def _on_cancel_dialog(
-    callback: CallbackQuery,
-    button: Button,
-    manager: DialogManager,
-) -> None:
-    """
-    Закрывает диалог без сохранения.
-    """
-    await manager.done()
-    await callback.answer("Выбор слотов отменён.", show_alert=True)
-
-
 async def _on_save_slots(
     callback: CallbackQuery,
     button: Button,
@@ -306,6 +283,7 @@ async def _on_save_slots(
 
         result_status = "saved"
         common_slot: tuple[datetime, datetime] | None = None
+        confirm_message_ids: dict[int, int] | None = None
         if partner_has_slots:
             common_slot = await find_first_common_slot(session, match)
             if common_slot:
@@ -315,6 +293,15 @@ async def _on_save_slots(
                 match.user_a_response = MATCH_USER_RESPONSE_NONE
                 match.user_b_response = MATCH_USER_RESPONSE_NONE
                 result_status = "waiting_confirm"
+                confirm_message_ids = await notify_waiting_confirm(
+                    callback.bot,
+                    match,
+                    *common_slot,
+                )
+                if match.user_a_id:
+                    match.last_message_id_a = confirm_message_ids.get(match.user_a_id)
+                if match.user_b_id:
+                    match.last_message_id_b = confirm_message_ids.get(match.user_b_id)
             else:
                 match.status = MATCH_STATUS_EXPIRED_TIMEOUT
                 match.last_reminder_at = None
@@ -323,9 +310,8 @@ async def _on_save_slots(
         await session.commit()
 
     await manager.done()
-    await notify_match_slots_saved(callback.bot, user)
-    if result_status == "waiting_confirm" and common_slot:
-        await notify_waiting_confirm(callback.bot, match, *common_slot)
+    if result_status == "saved":
+        await notify_match_slots_saved(callback.bot, user)
     elif result_status == "expired":
         await notify_no_common_slot(callback.bot, match)
 
@@ -333,10 +319,17 @@ async def _on_save_slots(
 match_slots_dialog = Dialog(
     Window(
         Const(
-            "Выберите удобные даты на ближайшие две недели и укажите временные интервалы."
+            "Выберите дату из ближайших 14 дней и укажите временные интервалы."
         ),
         Format("{slots_summary}"),
-        Calendar(id="match_calendar", on_click=_on_calendar_selected),
+        GridSelect(
+            Format("{item[label]}"),
+            id="day_select",
+            item_id_getter=lambda item: item["id"],
+            items="day_items",
+            on_click=_on_day_selected,
+            columns=2,
+        ),
         Group(
             Button(
                 Const("🗑 Очистить всё"),
@@ -352,31 +345,25 @@ match_slots_dialog = Dialog(
             ),
             width=2,
         ),
-        Button(Const("Отмена"), id="cancel_dialog", on_click=_on_cancel_dialog),
         state=MatchSlotsDialogSG.calendar,
         getter=_calendar_getter,
     ),
     Window(
         Format("Дата: {current_date_caption}\nОтметьте подходящие интервалы:"),
-        Select(
+        GridSelect(
             Format("{item[label]}"),
             id="time_select",
             item_id_getter=lambda item: item["id"],
             items="time_windows",
             on_click=_on_time_toggle,
+            columns=3,
         ),
         Group(
             Button(
-                Const("🗑 Очистить дату"),
+                Const("🗑 Очистить интервалы"),
                 id="clear_date",
                 on_click=_on_clear_date,
                 when="current_date_selected",
-            ),
-            Button(
-                Const("✅ Сохранить слоты"),
-                id="save_slots_time",
-                on_click=_on_save_slots,
-                when="has_any_slots",
             ),
             width=1,
         ),
@@ -441,6 +428,28 @@ def _format_slots_summary(slots_map: dict[str, list[str]]) -> str:
     return "\n".join(lines)
 
 
+def _build_day_items(
+    slots_map: dict[str, list[str]],
+    current_date: str | None,
+) -> list[dict]:
+    """
+    Формирует список ближайших 14 дней для отображения в клавиатуре.
+    """
+    base = now_msk().date()
+    weekday_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    items: list[dict] = []
+    for offset in range(MATCH_SLOT_CALENDAR_DAYS):
+        dt = base + timedelta(days=offset)
+        date_str = dt.strftime("%Y%m%d")
+        label = f"{weekday_names[dt.weekday()]} {dt:%d.%m}"
+        if slots_map.get(date_str):
+            label += " •"
+        if date_str == current_date:
+            label = f"👉 {label}"
+        items.append({"id": date_str, "label": label})
+    return items
+
+
 def _format_date_caption(date_str: str | None) -> str:
     """
     Возвращает человекочитаемое представление даты.
@@ -450,15 +459,6 @@ def _format_date_caption(date_str: str | None) -> str:
     dt = datetime.strptime(date_str, "%Y%m%d").date()
     weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
     return f"{weekdays[dt.weekday()]} {dt:%d.%m}"
-
-
-def _is_date_allowed(selected: date) -> bool:
-    """
-    Проверяет, входит ли дата в доступный диапазон (14 дней от сегодня).
-    """
-    today = now_msk().date()
-    last = today + timedelta(days=MATCH_SLOT_CALENDAR_DAYS - 1)
-    return today <= selected <= last
 
 
 def _has_slots(slots_map: dict[str, list[str]]) -> bool:

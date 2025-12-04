@@ -281,13 +281,13 @@ class Match(Base):
     last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
-    # ID сообщений с приглашениями для возможности удаления клавиатур
-    invite_message_id_a: Mapped[Optional[int]] = mapped_column(
+    # ID последних сообщений с клавиатурами (для последующего удаления)
+    last_message_id_a: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
-    )  # message_id приглашения для user_a
-    invite_message_id_b: Mapped[Optional[int]] = mapped_column(
+    )
+    last_message_id_b: Mapped[Optional[int]] = mapped_column(
         Integer, nullable=True
-    )  # message_id приглашения для user_b
+    )
 
     user_a: Mapped["User"] = relationship("User", foreign_keys=[user_a_id], back_populates="matches_as_a")
     user_b: Mapped["User"] = relationship("User", foreign_keys=[user_b_id], back_populates="matches_as_b")

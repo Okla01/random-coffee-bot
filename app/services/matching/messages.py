@@ -12,7 +12,6 @@ from app.database import Match, User
 from app.database.utils import now_msk
 from app.keyboards.kb_matching import (
     kb_match_confirm_prompt,
-    kb_match_slots_open,
 )
 
 
@@ -59,14 +58,12 @@ async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
         text = (
             "🎉 Отличные новости!\n"
             f"Вы совпали с {partner_hint}.\n"
-            "Нажмите кнопку ниже, чтобы открыть календарь aiogram_dialog и "
-            "выбрать несколько удобных дней и временных интервалов "
-            "на ближайшие две недели."
+            "Мы открыли для вас календарь выбора времени. "
+            "Отметьте несколько удобных дней и интервалов на ближайшие две недели."
         )
         await bot.send_message(
             user.telegram_id,
             text,
-            reply_markup=kb_match_slots_open(match.id),
         )
 
 
@@ -110,10 +107,10 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
     
     # Удаляем клавиатуру из сообщения с приглашением у партнёра
     partner_message_id = None
-    if partner.id == match.user_a_id and match.invite_message_id_a:
-        partner_message_id = match.invite_message_id_a
-    elif partner.id == match.user_b_id and match.invite_message_id_b:
-        partner_message_id = match.invite_message_id_b
+    if partner.id == match.user_a_id and match.last_message_id_a:
+        partner_message_id = match.last_message_id_a
+    elif partner.id == match.user_b_id and match.last_message_id_b:
+        partner_message_id = match.last_message_id_b
     
     if partner_message_id:
         try:
@@ -194,7 +191,7 @@ async def notify_no_common_slot(bot: Bot, match: Match) -> None:
 
 async def notify_waiting_confirm(
     bot: Bot, match: Match, start_dt: datetime, end_dt: datetime
-) -> None:
+) -> dict[int, int]:
     """
     Уведомляет обоих участников о найденном пересечении и запрашивает подтверждение.
 
@@ -208,19 +205,26 @@ async def notify_waiting_confirm(
         end_dt (datetime): дата и время окончания встречи.
 
     Returns:
-        None: ничего не возвращает.
+        dict[int, int]: отображение user_id -> message_id отправленного сообщения.
     """
     text = (
         "✅ Обоим подходит "
         f"{start_dt:%d.%m %H:%M} – {end_dt:%H:%M}.\n"
         "Подтвердить встречу или выбрать время заново?"
     )
-    await _broadcast_with_markup(
-        bot,
-        match,
-        text,
-        kb_match_confirm_prompt(match.id),
-    )
+    message_ids: dict[int, int] = {}
+    markup = kb_match_confirm_prompt(match.id)
+    for user in (match.user_a, match.user_b):
+        if not user or not user.telegram_id:
+            continue
+        sent = await bot.send_message(
+            user.telegram_id,
+            text,
+            reply_markup=markup,
+        )
+        if user.id:
+            message_ids[user.id] = sent.message_id
+    return message_ids
 
 
 async def notify_match_confirm_waiting(bot: Bot, user: User) -> None:
@@ -285,7 +289,9 @@ async def notify_match_reschedule_partner(
         return
     await bot.send_message(
         partner.telegram_id,
-        "Ваша пара решила выбрать время заново.",
+        "Ваша пара решила выбрать время заново.\n"
+        "Давайте выберем удобное время для встречи.\n"
+        "Календарь открыт повторно — отметьте новые слоты.",
     )
 
 
@@ -305,13 +311,6 @@ async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
-        await bot.send_message(
-            user.telegram_id,
-            "Давайте выберем удобное время для встречи. "
-            "Откройте календарь, чтобы указать новые слоты.",
-            reply_markup=kb_match_slots_open(match.id),
-        )
-
 
 async def notify_meeting_started(bot: Bot, match: Match) -> None:
     """

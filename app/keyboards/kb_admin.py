@@ -323,3 +323,24 @@ def kb_complaint_cancel_warning() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def kb_admin_statistics() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для просмотра статистики.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="7️⃣ За 7 дней", callback_data="admin:statistics:7_days"),
+                InlineKeyboardButton(text="3️⃣0️⃣ За 30 дней", callback_data="admin:statistics:30_days"),
+            ],
+            [
+                InlineKeyboardButton(text="🗓️ За 6 месяцев", callback_data="admin:statistics:6_months"),
+                InlineKeyboardButton(text="📆 За всё время", callback_data="admin:statistics:all_time"),
+            ],
+            [InlineKeyboardButton(text="📤 Экспорт в Excel-таблицу", callback_data="admin:statistics:export_excel")],
+            [InlineKeyboardButton(text="📈 Графики за 6 месяцев", callback_data="admin:statistics:6_months_graphs")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:back_to_menu")],
+        ]
+    )

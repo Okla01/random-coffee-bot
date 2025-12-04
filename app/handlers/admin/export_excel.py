@@ -58,7 +58,8 @@ async def cb_admin_back_to_menu(
     Обрабатывает callback для возврата в главное меню администратора.
     """
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    await cq.message.answer(
+    sent = await cq.message.answer(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
     )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

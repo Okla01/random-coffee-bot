@@ -16,6 +16,7 @@ import asyncio
 
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
+from aiogram_dialog import setup_dialogs
 
 from .config import Settings
 from .logger import setup_logging
@@ -57,6 +58,7 @@ async def create_dispatcher(settings: Settings) -> Dispatcher:
     dp.include_router(commands_router)
     dp.include_router(export_excel_router)
     dp.include_router(matching_router)
+    setup_dialogs(dp)
 
     return dp
 

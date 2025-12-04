@@ -31,5 +31,4 @@ class FSMDataKeys(str, Enum):
     DRAFT_SETTINGS = "draft_settings"
     ADMIN_PANEL_ACTIVE = "admin_panel_active"
     EDITING_FIELD = "editing_field"
-    MATCH_SLOTS_DRAFT = "match_slots_draft"
 

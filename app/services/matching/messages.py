@@ -12,7 +12,7 @@ from app.database import Match, User
 from app.database.utils import now_msk
 from app.keyboards.kb_matching import (
     kb_match_confirm_prompt,
-    kb_match_slots_calendar,
+    kb_match_slots_open,
 )
 
 
@@ -51,7 +51,6 @@ async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
     Returns:
         None: ничего не возвращает.
     """
-    base_date = now_msk().date()
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
@@ -60,13 +59,14 @@ async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
         text = (
             "🎉 Отличные новости!\n"
             f"Вы совпали с {partner_hint}.\n"
-            "Выберите несколько удобных дней и временных интервалов "
-            "на ближайшие две недели. Когда закончите — нажмите «Готово»."
+            "Нажмите кнопку ниже, чтобы открыть календарь aiogram_dialog и "
+            "выбрать несколько удобных дней и временных интервалов "
+            "на ближайшие две недели."
         )
         await bot.send_message(
             user.telegram_id,
             text,
-            reply_markup=kb_match_slots_calendar(match.id, base_date=base_date),
+            reply_markup=kb_match_slots_open(match.id),
         )
 
 
@@ -302,14 +302,14 @@ async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
     Returns:
         None: ничего не возвращает.
     """
-    base_date = now_msk().date()
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
         await bot.send_message(
             user.telegram_id,
-            "Давайте выберем удобное время для встречи.",
-            reply_markup=kb_match_slots_calendar(match.id, base_date=base_date),
+            "Давайте выберем удобное время для встречи. "
+            "Откройте календарь, чтобы указать новые слоты.",
+            reply_markup=kb_match_slots_open(match.id),
         )
 
 

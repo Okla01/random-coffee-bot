@@ -1,24 +1,25 @@
 """
-Обработчики выбора дат и временных слотов для встречи.
+Диалог выбора дат и временных слотов для встречи (aiogram_dialog).
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from aiogram import F, Router
-from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
+from aiogram_dialog import Dialog, DialogManager, StartMode, Window
+from aiogram_dialog.widgets.kbd import Button, Calendar, Group, Select
+from aiogram_dialog.widgets.kbd.calendar_kbd import ManagedCalendar
+from aiogram_dialog.widgets.text import Const, Format
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import Match, User
 from app.database.db import get_user_by_tg_id
-from app.handlers.fsm import FSMDataKeys
-from app.keyboards.kb_matching import (
-    kb_match_slots_calendar,
-    kb_match_slots_time,
-)
+from app.database.utils import now_msk
 from app.services.matching.constants import (
+    MATCH_SLOT_CALENDAR_DAYS,
     MATCH_SLOT_TIME_WINDOWS,
     MATCH_STATUS_EXPIRED_TIMEOUT,
     MATCH_STATUS_WAITING_CONFIRM,
@@ -42,168 +43,273 @@ from app.services.matching.storage import (
 router = Router()
 
 
-@router.callback_query(F.data.startswith("match_slot_date:"))
-async def on_match_slot_date(
+class MatchSlotsDialogSG(StatesGroup):
+    """Состояния диалога выбора календаря и времени."""
+
+    calendar = State()
+    time = State()
+
+
+@router.callback_query(F.data.startswith("match_slots_open:"))
+async def on_match_slots_open(
     cq: CallbackQuery,
-    state: FSMContext,
+    dialog_manager: DialogManager,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """
-    Обрабатывает выбор даты в календаре выбора слотов.
-
-    Отображает клавиатуру с временными интервалами для выбранной даты.
+    Запускает диалог выбора слотов для конкретного матча.
 
     Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        state (FSMContext): контекст FSM для хранения черновика слотов.
+        cq (CallbackQuery): событие нажатия на кнопку открытия диалога.
+        dialog_manager (DialogManager): менеджер aiogram_dialog.
         session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
     """
-    match_id, date_str = _parse_date_payload(cq.data)
-
+    match_id = int(cq.data.split(":")[1])
     async with session_factory() as session:
         match, user = await _ensure_slot_access(session, match_id, cq.from_user.id)
-        if not match:
-            await cq.answer("Матч уже недоступен", show_alert=True)
+        if not match or not user:
+            await cq.answer("Матч уже недоступен.", show_alert=True)
             return
 
-        await _ensure_slots_loaded(state, session, match_id, user.id)
-        selected = await _get_selected_slots(state, match_id, date_str)
-
-    readable_date = datetime.strptime(date_str, "%Y%m%d").strftime("%d.%m.%Y")
-    await cq.message.answer(
-        f"Дата {readable_date}. Выберите один или несколько интервалов:",
-        reply_markup=kb_match_slots_time(match_id, date_str, selected),
+    await dialog_manager.start(
+        MatchSlotsDialogSG.calendar,
+        data={"match_id": match_id, "user_id": user.id},
+        mode=StartMode.RESET_STACK,
     )
     await cq.answer()
 
 
-@router.callback_query(F.data.startswith("match_slot_toggle:"))
-async def on_match_slot_toggle(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
+async def _dialog_on_start(start_data: dict, manager: DialogManager) -> None:
     """
-    Обрабатывает переключение выбора временного интервала.
-
-    Добавляет или удаляет интервал из черновика слотов пользователя и обновляет клавиатуру.
+    Инициализирует данные диалога (подгружает уже выбранные слоты).
 
     Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
+        start_data (dict): данные, переданные при запуске диалога.
+        manager (DialogManager): менеджер aiogram_dialog.
     """
-    match_id, date_str, slot_code = _parse_toggle_payload(cq.data)
+    match_id = int(start_data["match_id"])
+    user_id = int(start_data["user_id"])
+    session_factory: async_sessionmaker[AsyncSession] = manager.middleware_data[
+        "session_factory"
+    ]
 
     async with session_factory() as session:
-        match, user = await _ensure_slot_access(session, match_id, cq.from_user.id)
-        if not match:
-            await cq.answer("Матч уже недоступен", show_alert=True)
-            return
-        await _ensure_slots_loaded(state, session, match_id, user.id)
+        slots_map = await _load_user_slots_map(session, match_id, user_id)
 
-    slot_human = _decode_slot_code(slot_code)
-    if not _is_valid_window(slot_human):
-        await cq.answer("Недопустимый интервал", show_alert=True)
+    manager.dialog_data.update(
+        match_id=match_id,
+        user_id=user_id,
+        slots_map=slots_map,
+        current_date=None,
+    )
+
+
+async def _calendar_getter(dialog_manager: DialogManager, **_) -> dict:
+    """
+    Формирует данные для окна календаря.
+
+    Args:
+        dialog_manager (DialogManager): менеджер aiogram_dialog.
+
+    Returns:
+        dict: данные для шаблонов окна календаря.
+    """
+    slots_map = dialog_manager.dialog_data.get("slots_map", {})
+    summary = _format_slots_summary(slots_map)
+    return {
+        "slots_summary": summary or "Пока ничего не выбрано.",
+        "has_any_slots": bool(slots_map),
+    }
+
+
+async def _time_getter(dialog_manager: DialogManager, **_) -> dict:
+    """
+    Формирует данные для окна выбора временных интервалов.
+
+    Args:
+        dialog_manager (DialogManager): менеджер aiogram_dialog.
+
+    Returns:
+        dict: данные для шаблонов окна выбора времени.
+    """
+    date_str: str | None = dialog_manager.dialog_data.get("current_date")
+    slots_map = dialog_manager.dialog_data.get("slots_map", {})
+    selected = set(slots_map.get(date_str, [])) if date_str else set()
+    items = []
+    for start, end in MATCH_SLOT_TIME_WINDOWS:
+        slot_id = f"{start}-{end}"
+        items.append(
+            {
+                "id": slot_id,
+                "label": f"{'✅' if slot_id in selected else '▫️'} {start}-{end}",
+            }
+        )
+    return {
+        "current_date_caption": _format_date_caption(date_str),
+        "time_windows": items,
+        "has_time_selection": bool(selected),
+        "has_any_slots": bool(slots_map),
+        "current_date_selected": date_str is not None,
+    }
+
+
+async def _on_calendar_selected(
+    callback: CallbackQuery,
+    widget: ManagedCalendar,
+    manager: DialogManager,
+    selected_date: date,
+) -> None:
+    """
+    Обрабатывает выбор даты в календаре.
+
+    Args:
+        callback (CallbackQuery): событие выбора.
+        widget (ManagedCalendar): виджет календаря.
+        manager (DialogManager): менеджер aiogram_dialog.
+        selected_date (date): выбранная дата.
+    """
+    if not _is_date_allowed(selected_date):
+        await callback.answer("Эта дата недоступна для выбора.", show_alert=True)
+        return
+    date_str = selected_date.strftime("%Y%m%d")
+    slots_map = manager.dialog_data.setdefault("slots_map", {})
+    slots_map.setdefault(date_str, [])
+    manager.dialog_data["current_date"] = date_str
+    await manager.switch_to(MatchSlotsDialogSG.time)
+
+
+async def _on_time_toggle(
+    callback: CallbackQuery,
+    widget: Select,
+    manager: DialogManager,
+    item_id: str,
+) -> None:
+    """
+    Переключает временной интервал в списке выбранных.
+
+    Args:
+        callback (CallbackQuery): событие выбора времени.
+        widget (ManagedSelect): select-виджет временных окон.
+        manager (DialogManager): менеджер aiogram_dialog.
+        item_id (str): идентификатор интервала (HH:MM-HH:MM).
+    """
+    date_str = manager.dialog_data.get("current_date")
+    if not date_str:
+        await callback.answer("Сначала выберите дату.", show_alert=True)
+        return
+    slots_map = manager.dialog_data.setdefault("slots_map", {})
+    selected = set(slots_map.get(date_str, []))
+    if item_id in selected:
+        selected.remove(item_id)
+    else:
+        selected.add(item_id)
+    slots_map[date_str] = sorted(selected)
+    await manager.switch_to(MatchSlotsDialogSG.time)
+
+
+async def _on_back_to_calendar(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """
+    Возвращает пользователя к окну календаря.
+    """
+    await manager.switch_to(MatchSlotsDialogSG.calendar)
+    await callback.answer()
+
+
+async def _on_clear_all(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """
+    Очищает все выбранные даты и интервалы.
+    """
+    manager.dialog_data["slots_map"] = {}
+    manager.dialog_data["current_date"] = None
+    await manager.switch_to(MatchSlotsDialogSG.calendar)
+    await callback.answer("Выбор очищен.", show_alert=True)
+
+
+async def _on_clear_date(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """
+    Очищает выбор интервалов для текущей даты.
+    """
+    date_str = manager.dialog_data.get("current_date")
+    if not date_str:
+        await callback.answer("Дата не выбрана.", show_alert=True)
+        return
+    slots_map = manager.dialog_data.setdefault("slots_map", {})
+    slots_map.pop(date_str, None)
+    manager.dialog_data["current_date"] = None
+    await manager.switch_to(MatchSlotsDialogSG.calendar)
+    await callback.answer("Слоты для даты очищены.", show_alert=True)
+
+
+async def _on_cancel_dialog(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """
+    Закрывает диалог без сохранения.
+    """
+    await manager.done()
+    await callback.answer("Выбор слотов отменён.", show_alert=True)
+
+
+async def _on_save_slots(
+    callback: CallbackQuery,
+    button: Button,
+    manager: DialogManager,
+) -> None:
+    """
+    Сохраняет выбранные слоты и пытается найти пересечение с партнёром.
+    """
+    slots_map: dict[str, list[str]] = manager.dialog_data.get("slots_map", {})
+    if not _has_slots(slots_map):
+        await callback.answer("Выберите хотя бы один интервал.", show_alert=True)
         return
 
-    updated = await _toggle_slot(state, match_id, date_str, slot_human)
-    await cq.message.edit_reply_markup(
-        kb_match_slots_time(match_id, date_str, updated)
-    )
-    await cq.answer()
-
-
-@router.callback_query(F.data.startswith("match_slot_clear:"))
-async def on_match_slot_clear(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """
-    Обрабатывает очистку всех выбранных слотов.
-
-    Удаляет черновик слотов из FSM и возвращает пользователя к календарю.
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    match_id = int(cq.data.split(":")[1])
-    async with session_factory() as session:
-        match, user = await _ensure_slot_access(session, match_id, cq.from_user.id)
-        if not match:
-            await cq.answer("Матч уже недоступен", show_alert=True)
-            return
-
-    await _clear_match_slots_draft(state, match_id)
-    await cq.message.edit_reply_markup(kb_match_slots_calendar(match_id))
-    await cq.answer("Слоты очищены. Выберите даты заново.", show_alert=True)
-
-
-@router.callback_query(F.data.startswith("match_slot_done:"))
-async def on_match_slot_done(
-    cq: CallbackQuery,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """
-    Обрабатывает подтверждение выбора слотов (кнопка «Готово»).
-
-    Сохраняет выбранные слоты в БД, проверяет наличие слотов у партнёра,
-    ищет пересечение и переводит матч в соответствующий статус.
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    match_id = int(cq.data.split(":")[1])
+    match_id = int(manager.dialog_data["match_id"])
+    user_id = int(manager.dialog_data["user_id"])
+    session_factory: async_sessionmaker[AsyncSession] = manager.middleware_data[
+        "session_factory"
+    ]
 
     async with session_factory() as session:
-        match, user = await _ensure_slot_access(session, match_id, cq.from_user.id)
-        if not match:
-            await cq.answer("Матч уже недоступен", show_alert=True)
+        match = await get_match_with_relations(session, match_id)
+        if not match or match.status != MATCH_STATUS_WAITING_SLOTS:
+            await callback.answer("Матч уже недоступен.", show_alert=True)
+            await manager.done()
             return
-
-        slots_map = await _get_slots_map(state, match_id)
-        if not slots_map:
-            await cq.answer("Выберите хотя бы один интервал", show_alert=True)
+        user = await session.get(User, user_id)
+        if not user:
+            await callback.answer("Обновите регистрацию.", show_alert=True)
+            await manager.done()
             return
 
         slot_entries = _make_slot_entries(slots_map)
         if not slot_entries:
-            await cq.answer("Выберите хотя бы один интервал", show_alert=True)
+            await callback.answer("Выберите хотя бы один интервал.", show_alert=True)
             return
+
         await replace_user_match_slots(session, match.id, user.id, slot_entries)
-
-        partner_id = (
-            match.user_b_id if user.id == match.user_a_id else match.user_a_id
-        )
+        partner_id = match.user_b_id if user.id == match.user_a_id else match.user_a_id
         partner_has_slots = await user_has_match_slots(session, match.id, partner_id)
-
-        await session.flush()
 
         result_status = "saved"
         common_slot: tuple[datetime, datetime] | None = None
         if partner_has_slots:
             common_slot = await find_first_common_slot(session, match)
             if common_slot:
-                match.meeting_start_at = common_slot[0]
-                match.meeting_end_at = common_slot[1]
+                match.meeting_start_at, match.meeting_end_at = common_slot
                 match.status = MATCH_STATUS_WAITING_CONFIRM
                 match.last_reminder_at = None
                 match.user_a_response = MATCH_USER_RESPONSE_NONE
@@ -216,15 +322,76 @@ async def on_match_slot_done(
 
         await session.commit()
 
-    await _clear_match_slots_draft(state, match_id)
-    await notify_match_slots_saved(cq.bot, user)
-
+    await manager.done()
+    await notify_match_slots_saved(callback.bot, user)
     if result_status == "waiting_confirm" and common_slot:
-        await notify_waiting_confirm(cq.bot, match, *common_slot)
+        await notify_waiting_confirm(callback.bot, match, *common_slot)
     elif result_status == "expired":
-        await notify_no_common_slot(cq.bot, match)
+        await notify_no_common_slot(callback.bot, match)
 
-    await cq.answer()
+
+match_slots_dialog = Dialog(
+    Window(
+        Const(
+            "Выберите удобные даты на ближайшие две недели и укажите временные интервалы."
+        ),
+        Format("{slots_summary}"),
+        Calendar(id="match_calendar", on_click=_on_calendar_selected),
+        Group(
+            Button(
+                Const("🗑 Очистить всё"),
+                id="clear_all",
+                on_click=_on_clear_all,
+                when="has_any_slots",
+            ),
+            Button(
+                Const("✅ Сохранить слоты"),
+                id="save_slots_calendar",
+                on_click=_on_save_slots,
+                when="has_any_slots",
+            ),
+            width=2,
+        ),
+        Button(Const("Отмена"), id="cancel_dialog", on_click=_on_cancel_dialog),
+        state=MatchSlotsDialogSG.calendar,
+        getter=_calendar_getter,
+    ),
+    Window(
+        Format("Дата: {current_date_caption}\nОтметьте подходящие интервалы:"),
+        Select(
+            Format("{item[label]}"),
+            id="time_select",
+            item_id_getter=lambda item: item["id"],
+            items="time_windows",
+            on_click=_on_time_toggle,
+        ),
+        Group(
+            Button(
+                Const("🗑 Очистить дату"),
+                id="clear_date",
+                on_click=_on_clear_date,
+                when="current_date_selected",
+            ),
+            Button(
+                Const("✅ Сохранить слоты"),
+                id="save_slots_time",
+                on_click=_on_save_slots,
+                when="has_any_slots",
+            ),
+            width=1,
+        ),
+        Button(
+            Const("⬅️ Назад к календарю"),
+            id="back_calendar",
+            on_click=_on_back_to_calendar,
+        ),
+        state=MatchSlotsDialogSG.time,
+        getter=_time_getter,
+    ),
+    on_start=_dialog_on_start,
+)
+
+router.include_router(match_slots_dialog)
 
 
 async def _ensure_slot_access(
@@ -233,246 +400,85 @@ async def _ensure_slot_access(
     telegram_id: int,
 ) -> tuple[Match | None, User | None]:
     """
-    Проверяет доступ пользователя к выбору слотов для матча.
-
-    Валидирует, что матч существует, находится в статусе waiting_slots,
-    и пользователь является одним из участников.
-
-    Args:
-        session (AsyncSession): активная сессия БД.
-        match_id (int): ID матча.
-        telegram_id (int): Telegram ID пользователя.
-
-    Returns:
-        tuple[Match | None, User | None]: кортеж (матч, пользователь) или (None, None)
-            если доступ запрещён.
+    Проверяет, может ли пользователь выбирать слоты для матча.
     """
     match = await get_match_with_relations(session, match_id)
     if not match or match.status != MATCH_STATUS_WAITING_SLOTS:
         return None, None
-
     user = await get_user_by_tg_id(session, telegram_id)
-    if not user:
-        return None, None
-    if user.id not in {match.user_a_id, match.user_b_id}:
+    if not user or user.id not in {match.user_a_id, match.user_b_id}:
         return None, None
     return match, user
 
 
-async def _ensure_slots_loaded(
-    state: FSMContext,
-    session: AsyncSession,
-    match_id: int,
-    user_id: int,
-) -> None:
+async def _load_user_slots_map(
+    session: AsyncSession, match_id: int, user_id: int
+) -> dict[str, list[str]]:
     """
-    Загружает существующие слоты пользователя в FSM, если они ещё не загружены.
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        session (AsyncSession): активная сессия БД.
-        match_id (int): ID матча.
-        user_id (int): ID пользователя.
-
-    Returns:
-        None: ничего не возвращает.
+    Загружает выбранные слоты пользователя из БД.
     """
-    data = await state.get_data()
-    drafts = data.get(FSMDataKeys.MATCH_SLOTS_DRAFT.value) or {}
-    match_key = str(match_id)
-    if match_key in drafts:
-        return
-
-    slots_map: dict[str, list[str]] = {}
     slots = await load_user_match_slots(session, match_id, user_id)
+    slots_map: dict[str, list[str]] = {}
     for slot in slots:
         date_str = slot.date.strftime("%Y%m%d")
         slots_map.setdefault(date_str, []).append(f"{slot.time_from}-{slot.time_to}")
-    drafts[match_key] = {"slots": slots_map}
-    await state.update_data(**{FSMDataKeys.MATCH_SLOTS_DRAFT.value: drafts})
+    for values in slots_map.values():
+        values.sort()
+    return slots_map
 
 
-async def _get_selected_slots(
-    state: FSMContext,
-    match_id: int,
-    date_str: str,
-) -> set[str]:
+def _format_slots_summary(slots_map: dict[str, list[str]]) -> str:
     """
-    Получает множество выбранных слотов для указанной даты из FSM.
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        match_id (int): ID матча.
-        date_str (str): дата в формате YYYYMMDD.
-
-    Returns:
-        set[str]: множество выбранных интервалов (формат "HH:MM-HH:MM").
+    Форматирует выбранные слоты в текст для вывода в календаре.
     """
-    slots_map = await _get_slots_map(state, match_id)
-    return set(slots_map.get(date_str, []))
+    if not slots_map:
+        return ""
+    lines: list[str] = []
+    for date_str in sorted(slots_map.keys()):
+        caption = _format_date_caption(date_str)
+        times = ", ".join(slots_map[date_str])
+        lines.append(f"{caption}: {times}")
+    return "\n".join(lines)
 
 
-async def _toggle_slot(
-    state: FSMContext,
-    match_id: int,
-    date_str: str,
-    slot: str,
-) -> set[str]:
+def _format_date_caption(date_str: str | None) -> str:
     """
-    Переключает выбор временного интервала для даты (добавляет или удаляет).
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        match_id (int): ID матча.
-        date_str (str): дата в формате YYYYMMDD.
-        slot (str): интервал в формате "HH:MM-HH:MM".
-
-    Returns:
-        set[str]: обновлённое множество выбранных интервалов для даты.
+    Возвращает человекочитаемое представление даты.
     """
-    slots_map = await _get_slots_map(state, match_id)
-    selected = set(slots_map.get(date_str, []))
-    if slot in selected:
-        selected.remove(slot)
-    else:
-        selected.add(slot)
-    slots_map[date_str] = sorted(selected)
-    await _store_slots_map(state, match_id, slots_map)
-    return set(slots_map[date_str])
+    if not date_str:
+        return "не выбрана"
+    dt = datetime.strptime(date_str, "%Y%m%d").date()
+    weekdays = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    return f"{weekdays[dt.weekday()]} {dt:%d.%m}"
 
 
-async def _get_slots_map(state: FSMContext, match_id: int) -> dict[str, list[str]]:
+def _is_date_allowed(selected: date) -> bool:
     """
-    Получает словарь выбранных слотов из FSM для матча.
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        match_id (int): ID матча.
-
-    Returns:
-        dict[str, list[str]]: словарь {дата: [список интервалов]}, где дата в формате YYYYMMDD.
+    Проверяет, входит ли дата в доступный диапазон (14 дней от сегодня).
     """
-    data = await state.get_data()
-    drafts = data.get(FSMDataKeys.MATCH_SLOTS_DRAFT.value) or {}
-    match_key = str(match_id)
-    draft = drafts.setdefault(match_key, {"slots": {}})
-    return draft["slots"]
+    today = now_msk().date()
+    last = today + timedelta(days=MATCH_SLOT_CALENDAR_DAYS - 1)
+    return today <= selected <= last
 
 
-async def _store_slots_map(
-    state: FSMContext,
-    match_id: int,
-    slots_map: dict[str, list[str]],
-) -> None:
+def _has_slots(slots_map: dict[str, list[str]]) -> bool:
     """
-    Сохраняет словарь выбранных слотов в FSM для матча.
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        match_id (int): ID матча.
-        slots_map (dict[str, list[str]]): словарь {дата: [список интервалов]}.
-
-    Returns:
-        None: ничего не возвращает.
+    Проверяет, есть ли в словаре хотя бы один выбранный интервал.
     """
-    data = await state.get_data()
-    drafts = data.get(FSMDataKeys.MATCH_SLOTS_DRAFT.value) or {}
-    drafts[str(match_id)] = {"slots": slots_map}
-    await state.update_data(**{FSMDataKeys.MATCH_SLOTS_DRAFT.value: drafts})
-
-
-async def _clear_match_slots_draft(state: FSMContext, match_id: int) -> None:
-    """
-    Удаляет черновик слотов для матча из FSM.
-
-    Args:
-        state (FSMContext): контекст FSM для хранения черновика слотов.
-        match_id (int): ID матча.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    data = await state.get_data()
-    drafts = data.get(FSMDataKeys.MATCH_SLOTS_DRAFT.value) or {}
-    if str(match_id) in drafts:
-        drafts.pop(str(match_id))
-        await state.update_data(**{FSMDataKeys.MATCH_SLOTS_DRAFT.value: drafts})
-
-
-def _parse_date_payload(data: str) -> tuple[int, str]:
-    """
-    Парсит callback_data для выбора даты.
-
-    Args:
-        data (str): callback_data в формате "match_slot_date:match_id:YYYYMMDD".
-
-    Returns:
-        tuple[int, str]: кортеж (match_id, date_str).
-    """
-    _, match_id, date_str = data.split(":")
-    return int(match_id), date_str
-
-
-def _parse_toggle_payload(data: str) -> tuple[int, str, str]:
-    """
-    Парсит callback_data для переключения слота.
-
-    Args:
-        data (str): callback_data в формате "match_slot_toggle:match_id:YYYYMMDD:HHMM-HHMM".
-
-    Returns:
-        tuple[int, str, str]: кортеж (match_id, date_str, slot_code).
-    """
-    _, match_id, date_str, slot_code = data.split(":")
-    return int(match_id), date_str, slot_code
-
-
-def _decode_slot_code(code: str) -> str:
-    """
-    Декодирует закодированный интервал времени в читаемый формат.
-
-    Args:
-        code (str): закодированный интервал в формате "HHMM-HHMM".
-
-    Returns:
-        str: интервал в формате "HH:MM-HH:MM".
-    """
-    start_raw, end_raw = code.split("-")
-    start = f"{start_raw[:2]}:{start_raw[2:]}"
-    end = f"{end_raw[:2]}:{end_raw[2:]}"
-    return f"{start}-{end}"
-
-
-def _is_valid_window(slot: str) -> bool:
-    """
-    Проверяет, является ли интервал допустимым временным окном.
-
-    Args:
-        slot (str): интервал в формате "HH:MM-HH:MM".
-
-    Returns:
-        bool: True если интервал присутствует в списке допустимых окон, иначе False.
-    """
-    start, end = slot.split("-")
-    return (start, end) in MATCH_SLOT_TIME_WINDOWS
+    return any(slots_map.values())
 
 
 def _make_slot_entries(slots_map: dict[str, list[str]]) -> list[SlotEntry]:
     """
-    Преобразует словарь слотов из FSM в список объектов SlotEntry.
-
-    Args:
-        slots_map (dict[str, list[str]]): словарь {дата: [список интервалов]},
-            где дата в формате YYYYMMDD, интервалы в формате "HH:MM-HH:MM".
-
-    Returns:
-        list[SlotEntry]: список объектов SlotEntry для сохранения в БД.
+    Конвертирует словарь выбранных слотов в список SlotEntry для БД.
     """
     entries: list[SlotEntry] = []
     for date_str, slots in slots_map.items():
         match_date = datetime.strptime(date_str, "%Y%m%d").date()
         for slot in slots:
             start, end = slot.split("-")
-            entries.append(SlotEntry(match_date=match_date, time_from=start, time_to=end))
+            entries.append(
+                SlotEntry(match_date=match_date, time_from=start, time_to=end)
+            )
     return entries
 

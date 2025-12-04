@@ -38,7 +38,10 @@ from app.services.admin.settings import (
     try_to_input_time_as_hours,
     update_draft_setting,
 )
-from app.services.matching.scheduler import refresh_matching_round_schedule
+from app.services.matching.scheduler import (
+    refresh_matching_round_schedule,
+    refresh_timeouts_schedule,
+)
 from app.handlers.fsm import AdminSettingsStates, FSMDataKeys
 
 router = Router()
@@ -223,6 +226,7 @@ async def cb_save_admin_settings(
     await save_settings(session_factory, draft)
     if matching_scheduler:
         await refresh_matching_round_schedule(matching_scheduler, session_factory)
+        await refresh_timeouts_schedule(matching_scheduler, session_factory)
     else:
         import logging
         logger = logging.getLogger(__name__)

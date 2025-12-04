@@ -116,6 +116,70 @@ def parse_time_to_hours(time_str: str) -> float:
     return hour + (minute / 60.0)
 
 
+def parse_time_to_minutes(time_str: str) -> float:
+    """
+    Парсит время в формате ЧЧ:ММ и конвертирует в минуты (десятичное число).
+
+    Например: "0:30" -> 30.0, "1:15" -> 75.0, "2:05" -> 125.0
+
+    Args:
+        time_str: строка в формате "ЧЧ:ММ"
+
+    Returns:
+        float: количество минут
+    """
+    parsed = parse_time_to_hours_minutes(time_str)
+    if parsed is None:
+        raise ValueError(f"Некорректный формат времени: {time_str}")
+    
+    hour, minute = parsed
+    return (hour * 60.0) + minute
+
+
+def calculate_optimal_scheduler_interval(
+    reminder_interval_time: str,
+    response_timeout_time: str,
+) -> tuple[float, str]:
+    """
+    Вычисляет оптимальный интервал планировщика на основе настроек напоминаний и таймаутов.
+
+    Интервал планировщика должен быть достаточно маленьким, чтобы гарантировать
+    своевременную отправку напоминаний и обработку таймаутов.
+
+    Логика:
+    - Берется половина интервала напоминаний, чтобы напоминания отправлялись точно
+    - Также учитывается таймаут (берется 1/10 часть для точности обработки)
+    - Выбирается минимальное значение, но не меньше 1 минуты
+
+    Args:
+        reminder_interval_time: интервал напоминаний в формате "ЧЧ:ММ"
+        response_timeout_time: таймаут ответа в формате "ЧЧ:ММ"
+
+    Returns:
+        tuple[float, str]: (интервал, единица измерения) где единица - "minutes" или "seconds"
+    """
+    reminder_minutes = parse_time_to_minutes(reminder_interval_time)
+    timeout_minutes = parse_time_to_minutes(response_timeout_time)
+
+    # Половина интервала напоминаний (чтобы напоминания отправлялись точно)
+    reminder_half = reminder_minutes / 2.0
+
+    # 1/10 таймаута (для точной обработки таймаутов)
+    timeout_tenth = timeout_minutes / 10.0
+
+    # Выбираем минимальное значение
+    optimal_interval_minutes = min(reminder_half, timeout_tenth)
+    
+    # Если интервал меньше 1 минуты, используем секунды для большей точности
+    if optimal_interval_minutes < 1.0:
+        optimal_interval_seconds = optimal_interval_minutes * 60.0
+        # Округляем до целого числа секунд, минимум 30 секунд
+        return (max(30.0, round(optimal_interval_seconds)), "seconds")
+    else:
+        # Округляем до 1 знака после запятой, минимум 1 минута
+        return (max(1.0, round(optimal_interval_minutes, 1)), "minutes")
+
+
 @dataclass(slots=True)
 class MatchingSettings:
     """

@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database import Match
+from app.database import Match, User
 from app.database.utils import ensure_aware_msk, now_msk
 from app.services.matching.constants import (
     MATCH_ACTIVE_STATUSES,
@@ -22,6 +22,7 @@ from app.services.matching.constants import (
     MATCH_STATUS_WAITING_CONFIRM,
     MATCH_STATUS_WAITING_SLOTS,
     MATCH_USER_RESPONSE_NONE,
+    MATCH_USER_RESPONSE_CONFIRM,
 )
 from app.services.matching.messages import (
     notify_match_reminder,
@@ -29,7 +30,7 @@ from app.services.matching.messages import (
     notify_meeting_started,
 )
 from app.services.matching.settings import MatchingSettings, parse_time_to_hours
-from app.services.matching.storage import cleanup_inactive_match
+from app.services.matching.storage import cleanup_inactive_match, user_has_match_slots
 
 
 async def complete_due_meetings(
@@ -79,6 +80,46 @@ async def complete_due_meetings(
             await notify_meeting_started(bot, match)
 
     return len(matches)
+
+
+async def _get_users_to_remind(
+    session: AsyncSession, match: Match, stage: str
+) -> list[User]:
+    """
+    Определяет список пользователей, которым нужно отправить напоминание на текущем этапе.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        match (Match): объект матча с загруженными user_a и user_b.
+        stage (str): текущая стадия матча (pending_response, waiting_slots, waiting_confirm).
+
+    Returns:
+        list: список пользователей (User), которым нужно отправить напоминание.
+    """
+    users_to_remind = []
+    
+    if stage == "pending_response":
+        # Напоминаем только тем, кто еще не ответил (response == "none")
+        if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_NONE:
+            users_to_remind.append(match.user_a)
+        if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_NONE:
+            users_to_remind.append(match.user_b)
+    
+    elif stage == "waiting_slots":
+        # Напоминаем только тем, кто еще не выбрал слоты
+        if match.user_a and not await user_has_match_slots(session, match.id, match.user_a_id):
+            users_to_remind.append(match.user_a)
+        if match.user_b and not await user_has_match_slots(session, match.id, match.user_b_id):
+            users_to_remind.append(match.user_b)
+    
+    elif stage == "waiting_confirm":
+        # Напоминаем только тем, кто еще не подтвердил (response != "confirm")
+        if match.user_a and match.user_a_response != MATCH_USER_RESPONSE_CONFIRM:
+            users_to_remind.append(match.user_a)
+        if match.user_b and match.user_b_response != MATCH_USER_RESPONSE_CONFIRM:
+            users_to_remind.append(match.user_b)
+    
+    return users_to_remind
 
 
 async def process_match_timeouts_and_reminders(
@@ -179,9 +220,11 @@ async def process_match_timeouts_and_reminders(
             # - еще не отправляли (since_last is None)
             # - или с последнего напоминания прошло >= reminder_interval_time
             if since_last is None or since_last >= reminder_delta:
-                await notify_match_reminder(bot, match, stage)
-                match.last_reminder_at = now
-                stats["reminded"] += 1
+                users_to_remind = await _get_users_to_remind(session, match, stage)
+                if users_to_remind:
+                    await notify_match_reminder(bot, match, stage, users_to_remind)
+                    match.last_reminder_at = now
+                    stats["reminded"] += 1
 
     await session.commit()
 
@@ -370,9 +413,11 @@ async def process_match_reminders_only(
             # - еще не отправляли (since_last is None)
             # - или с последнего напоминания прошло >= reminder_interval_time
             if since_last is None or since_last >= reminder_delta:
-                await notify_match_reminder(bot, match, stage)
-                match.last_reminder_at = now
-                reminded_count += 1
+                users_to_remind = await _get_users_to_remind(session, match, stage)
+                if users_to_remind:
+                    await notify_match_reminder(bot, match, stage, users_to_remind)
+                    match.last_reminder_at = now
+                    reminded_count += 1
 
     await session.commit()
 

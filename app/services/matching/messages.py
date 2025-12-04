@@ -352,14 +352,20 @@ async def notify_match_timeout(bot: Bot, match: Match) -> None:
     await _broadcast(bot, match, text)
 
 
-async def notify_match_reminder(bot: Bot, match: Match, stage: str) -> None:
+async def notify_match_reminder(
+    bot: Bot, match: Match, stage: str, users_to_remind: list[User] | None = None
+) -> None:
     """
-    Отправляет напоминание обоим участникам в зависимости от текущей стадии матча.
+    Отправляет напоминание указанным пользователям в зависимости от текущей стадии матча.
+
+    Если users_to_remind не указан, отправляет напоминание обоим участникам (обратная совместимость).
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
         match (Match): объект матча с загруженными user_a и user_b.
         stage (str): текущая стадия матча (pending_response, waiting_slots, waiting_confirm).
+        users_to_remind (list[User] | None): список пользователей, которым нужно отправить напоминание.
+            Если None, отправляет обоим участникам.
 
     Returns:
         None: ничего не возвращает.
@@ -378,7 +384,15 @@ async def notify_match_reminder(bot: Bot, match: Match, stage: str) -> None:
             "Напоминаем, что нужно подтвердить предложенное время "
             "или выбрать «Назначить заново»."
         )
-    await _broadcast(bot, match, text)
+    
+    if users_to_remind is None:
+        # Обратная совместимость: отправляем обоим участникам
+        await _broadcast(bot, match, text)
+    else:
+        # Отправляем только указанным пользователям
+        for user in users_to_remind:
+            if user and user.telegram_id:
+                await bot.send_message(user.telegram_id, text)
 
 
 async def _broadcast(bot: Bot, match: Match, text: str) -> None:

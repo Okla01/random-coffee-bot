@@ -18,7 +18,11 @@ from app.services.matching.jobs import (
     complete_due_meetings,
     process_match_timeouts_and_reminders,
 )
-from app.services.matching.settings import load_matching_settings, parse_time_to_hours_minutes
+from app.services.matching.settings import (
+    calculate_optimal_scheduler_interval,
+    load_matching_settings,
+    parse_time_to_hours_minutes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,13 +82,31 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
 
-    # Джоба напоминаний/таймаутов — каждые 5 минут
+    # Джоба напоминаний/таймаутов — динамический интервал на основе настроек
+    timeout_interval, interval_unit = calculate_optimal_scheduler_interval(
+        settings.reminder_interval_time,
+        settings.response_timeout_time,
+    )
+    if interval_unit == "seconds":
+        trigger = IntervalTrigger(seconds=timeout_interval, timezone=MOSCOW_TZ)
+        interval_display = f"{timeout_interval:.0f} seconds"
+    else:
+        trigger = IntervalTrigger(minutes=timeout_interval, timezone=MOSCOW_TZ)
+        interval_display = f"{timeout_interval:.1f} minutes"
+    
     scheduler.add_job(
         _timeouts_job,
-        IntervalTrigger(minutes=1, timezone=MOSCOW_TZ),
+        trigger,
         args=[session_factory, bot],
         id="match_timeouts",
         replace_existing=True,
+    )
+    logger.info(
+        "Timeouts/reminders job scheduled with interval: %s "
+        "(based on reminder_interval=%s, response_timeout=%s)",
+        interval_display,
+        settings.reminder_interval_time,
+        settings.response_timeout_time,
     )
 
     return scheduler
@@ -137,6 +159,58 @@ async def refresh_matching_round_schedule(
         )
     else:
         logger.warning("Matching round job not found or has no next run time")
+
+
+async def refresh_timeouts_schedule(
+    scheduler: AsyncIOScheduler,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Перечитывает reminder_interval_time и response_timeout_time и обновляет интервал джобы таймаутов/напоминаний.
+
+    Используется при сохранении настроек в админке, чтобы не требовался рестарт.
+
+    Args:
+        scheduler (AsyncIOScheduler): планировщик задач.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+    """
+    async with session_factory() as session:
+        settings = await load_matching_settings(session)
+
+    timeout_interval, interval_unit = calculate_optimal_scheduler_interval(
+        settings.reminder_interval_time,
+        settings.response_timeout_time,
+    )
+    
+    if interval_unit == "seconds":
+        trigger = IntervalTrigger(seconds=timeout_interval, timezone=MOSCOW_TZ)
+        interval_display = f"{timeout_interval:.0f} seconds"
+    else:
+        trigger = IntervalTrigger(minutes=timeout_interval, timezone=MOSCOW_TZ)
+        interval_display = f"{timeout_interval:.1f} minutes"
+
+    logger.info(
+        "Refreshing timeouts/reminders schedule: interval=%s "
+        "(reminder_interval=%s, response_timeout=%s)",
+        interval_display,
+        settings.reminder_interval_time,
+        settings.response_timeout_time,
+    )
+
+    scheduler.reschedule_job(
+        "match_timeouts",
+        trigger=trigger,
+    )
+
+    # Получаем информацию о следующем запуске для логирования
+    job = scheduler.get_job("match_timeouts")
+    if job and job.next_run_time:
+        logger.info(
+            "Timeouts/reminders job rescheduled. Next run: %s",
+            job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        )
+    else:
+        logger.warning("Timeouts/reminders job not found or has no next run time")
 
 
 async def _matching_round_job(

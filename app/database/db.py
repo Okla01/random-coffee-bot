@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Optional
 from aiogram.fsm.context import FSMContext
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy import select
+from sqlalchemy import event, func, select
 
 from app.database.models import User
 from app.database.utils import now_msk
@@ -53,6 +53,23 @@ def make_session_factory(engine) -> async_sessionmaker[AsyncSession]:
         async_sessionmaker[AsyncSession]: фабрика асинхронных сессий.
     """
     return async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+
+async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
+    """
+    Получает пользователя из БД по ID.
+
+    Args:
+        session (AsyncSession): сессия БД.
+        user_id (int): ID пользователя в БД.
+
+    Returns:
+        User | None: объект пользователя или None, если не найден.
+    """
+    user = (
+        await session.execute(select(User).where(User.id == user_id))
+    ).scalar_one_or_none()
+    return user
 
 
 async def get_user_by_tg_id(
@@ -103,6 +120,68 @@ async def search_users_by_username(
         select(User)
         .where(User.username.ilike(f"%{query}%"))
         .order_by(User.username)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def search_users_by_telegram_id(
+    session: AsyncSession,
+    query: str,
+    limit: int = 10,
+) -> list[User]:
+    """
+    Ищет пользователей по Telegram ID (частичное совпадение).
+
+    Args:
+        session (AsyncSession): сессия БД.
+        query (str): строка поиска (часть Telegram ID).
+        limit (int): максимальное количество результатов.
+
+    Returns:
+        list[User]: список найденных пользователей.
+    """
+    query = query.strip()
+    if not query:
+        return []
+
+    # Поиск по частичному совпадению telegram_id (приведённого к строке)
+    from sqlalchemy import cast, String
+    result = await session.execute(
+        select(User)
+        .where(cast(User.telegram_id, String).like(f"%{query}%"))
+        .order_by(User.telegram_id)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def search_users_by_name(
+    session: AsyncSession,
+    query: str,
+    limit: int = 10,
+) -> list[User]:
+    """
+    Ищет пользователей по имени в анкете (частичное совпадение).
+
+    Args:
+        session (AsyncSession): сессия БД.
+        query (str): строка поиска (часть имени).
+        limit (int): максимальное количество результатов.
+
+    Returns:
+        list[User]: список найденных пользователей.
+    """
+    query = query.strip()
+    if not query:
+        return []
+
+    needle = query.casefold()
+
+    result = await session.execute(
+        select(User)
+        .where(func.py_casefold(User.name).like(f"%{needle}%"))
+        .order_by(User.name)
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -221,6 +300,23 @@ async def lifespan_db(
         Exception: если не удаётся подключиться к БД или создать таблицы.
     """
     engine = make_engine(settings)
+
+    # Регистрация функции casefold для SQLite
+    # Это нужно для корректной работы с кириллицей в SQLite
+    def _register_casefold(dbapi_conn, _):
+        # Работает только для SQLite. Для Postgres/MySQL просто не регистрируем.
+        try:
+            dbapi_conn.create_function(
+                "py_casefold",
+                1,
+                lambda s: s.casefold() if s is not None else None,
+            )
+        except Exception:
+            # если это не sqlite соединение или драйвер не поддерживает
+            pass
+
+    event.listen(engine.sync_engine, "connect", _register_casefold)
+
     session_factory = make_session_factory(engine)
 
     from .models import Base as _Base  # импорт отложенно, чтобы не образовать циклы

@@ -24,9 +24,6 @@ def kb_admin_menu() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="👥 Пользователи", callback_data="admin:users"),
             ],
             [
-                InlineKeyboardButton(text="🚩 Жалобы", callback_data="admin:complaints"),
-            ],
-            [
                 InlineKeyboardButton(text="📊 Статистика", callback_data="admin:statistics"),
             ],
             [
@@ -55,8 +52,8 @@ def kb_admin_decision(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Заблокировать 🔒", callback_data=f"admin:block:{user_id}"),
-                InlineKeyboardButton(text="Разблокировать 🔓", callback_data=f"admin:unblock:{user_id}"),
+                InlineKeyboardButton(text="Заблокировать 🔒", callback_data=f"admin:notify:block:{user_id}"),
+                InlineKeyboardButton(text="Разблокировать 🔓", callback_data=f"admin:notify:unblock:{user_id}"),
             ]
         ]
     )
@@ -188,7 +185,7 @@ def kb_admin_users(
     # Третья строка: Поиск (через inline-режим)
     kb.row(
         InlineKeyboardButton(
-            text="🔍 Поиск по username",
+            text="🔍 Поиск",
             switch_inline_query_current_chat="user:"
         )
     )
@@ -202,3 +199,45 @@ def kb_admin_users(
     )
 
     return kb.as_markup()
+
+def kb_admin_user_actions(
+    user_id: int,
+    *,
+    is_blocked: bool,
+    is_admin: bool,
+) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для действий над пользователем (динамически по состоянию).
+    """
+
+    # 1) Блок/разблок
+    if is_blocked:
+        block_btn = InlineKeyboardButton(
+            text="🔓 Разблокировать",
+            callback_data=f"admin:unblock:{user_id}",
+        )
+    else:
+        block_btn = InlineKeyboardButton(
+            text="🔒 Заблокировать",
+            callback_data=f"admin:block:{user_id}",
+        )
+
+    # 2) Назначить/лишить прав админа
+    if is_admin:
+        role_btn = InlineKeyboardButton(
+            text="👤 Лишить прав администратора",
+            callback_data=f"admin:remove_admin:{user_id}",
+        )
+    else:
+        role_btn = InlineKeyboardButton(
+            text="🔄 Назначить администратором",
+            callback_data=f"admin:make_admin:{user_id}",
+        )
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [block_btn],
+            [role_btn],
+            [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="admin:back_to_menu")],
+        ]
+    )

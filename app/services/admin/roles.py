@@ -59,6 +59,85 @@ async def sync_admin_role(
         await session.flush()
 
 
+async def grant_admin_role(session: AsyncSession, admin_tg_id: int, user: User) -> None:
+    """
+    Назначает пользователю роль администратора.
+
+    Args:
+        session (AsyncSession): сессия БД.
+        admin_tg_id (int): Telegram ID администратора, выполняющего действие.
+        user (User): объект пользователя для назначения роли.
+    """
+    from app.database import AdminLog
+
+    # Получаем или создаём роль admin
+    role = (
+        await session.execute(select(Role).where(Role.name == ROLE_ADMIN))
+    ).scalar_one_or_none()
+    if not role:
+        role = Role(name=ROLE_ADMIN)
+        session.add(role)
+        await session.flush()
+
+    # Проверяем, есть ли уже связь пользователь-роль
+    link = (
+        await session.execute(
+            select(UserRole).where(
+                UserRole.user_id == user.id, UserRole.role_id == role.id
+            )
+        )
+    ).scalar_one_or_none()
+    if not link:
+        session.add(UserRole(user_id=user.id, role_id=role.id))
+
+    # Логируем действие
+    session.add(
+        AdminLog(
+            admin_id=admin_tg_id,
+            action="grant_admin",
+            payload={"user_id": user.id},
+        )
+    )
+    await session.commit()
+
+
+async def revoke_admin_role(session: AsyncSession, admin_tg_id: int, user: User) -> None:
+    """
+    Лишает пользователя роли администратора.
+
+    Args:
+        session (AsyncSession): сессия БД.
+        admin_tg_id (int): Telegram ID администратора, выполняющего действие.
+        user (User): объект пользователя для лишения роли.
+    """
+    from sqlalchemy import delete
+    from app.database import AdminLog
+
+    # Получаем роль admin
+    role = (
+        await session.execute(select(Role).where(Role.name == ROLE_ADMIN))
+    ).scalar_one_or_none()
+    if not role:
+        return
+
+    # Удаляем связь пользователь-роль
+    await session.execute(
+        delete(UserRole).where(
+            UserRole.user_id == user.id, UserRole.role_id == role.id
+        )
+    )
+
+    # Логируем действие
+    session.add(
+        AdminLog(
+            admin_id=admin_tg_id,
+            action="revoke_admin",
+            payload={"user_id": user.id},
+        )
+    )
+    await session.commit()
+
+
 async def is_admin(session: AsyncSession, settings: Settings, tg_id: int) -> bool:
     """
     Проверяет, является ли пользователь администратором.

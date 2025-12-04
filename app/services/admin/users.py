@@ -13,10 +13,16 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Role, User, UserRole
-from app.services.const import ROLE_NAMES, USER_STATUS_ACTIVE, USER_STATUS_BLOCKED, USERS_PER_PAGE, USER_STATUS_NAMES
-
+from app.services.const import (
+    ROLE_NAMES,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_BLOCKED,
+    USERS_PER_PAGE,
+    USER_STATUS_NAMES,
+)
 
 # ----------------------------- Получение списка пользователей ----------------------------- #
+
 
 async def get_users_page(
     session: AsyncSession,
@@ -69,12 +75,7 @@ async def get_users_page(
     total_users = total_users or 0
 
     # Получение конкретной страницы
-    query = (
-        base_query
-        .order_by(User.id)
-        .offset(offset)
-        .limit(per_page)
-    )
+    query = base_query.order_by(User.id).offset(offset).limit(per_page)
 
     result = await session.execute(query)
     users = result.scalars().all()
@@ -120,10 +121,7 @@ def format_user_for_admin(user: User, roles: list[Role] | None = None) -> str:
     )
 
 
-async def build_users_page_text(
-    session: AsyncSession, 
-    users: list[User]
-) -> str:
+async def build_users_page_text(session: AsyncSession, users: list[User]) -> str:
     """
     Формирует текстовое представление страницы списка пользователей.
     """
@@ -136,8 +134,14 @@ async def build_users_page_text(
     if not blocks:
         return "Пользователей пока нет."
 
-    return "\n".join(blocks)
+    text = "\n".join(blocks)
+    # Добавляем инструкцию по поиску внизу
+    text += "\n\n🔍 <b>Для поиска нажмите кнопку ниже и введите <code>user:</code> + запрос:"
+    text += "\n\t— <code>@username</code> — поиск по username"
+    text += "\n\t— <code>123456789</code> — поиск по Telegram ID"
+    text += "\n\t— <code>Имя</code> — поиск по имени в анкете</b>"
+
+    return text
 
 
 # ---------------------- Блокировка/разблокировка пользователей ---------------------- #
-

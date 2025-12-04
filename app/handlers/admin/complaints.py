@@ -174,10 +174,26 @@ async def cb_complaint_block(
         except Exception:
             pass
 
-        # Редактируем сообщение с жалобой
+        # Редактируем сообщение с жалобой (пересоздаём текст в новом формате)
+        from app.services.admin.complaints import format_complaint_message
+        
+        reporter = (
+            await session.execute(
+                select(User).where(User.id == complaint.reporter_id)
+            )
+        ).scalar_one()
+
+        original_text = format_complaint_message(
+            reporter=reporter,
+            reported=reported_user,
+            complaint_text=complaint.text,
+            warnings_count=complaint.warnings_count_at_complaint,
+            meeting_start_at=complaint.meeting_start_at,
+        )
+
         admin_display = _get_admin_display(cq.from_user)
         new_text = format_complaint_result(
-            original_text=cq.message.text,
+            original_text=original_text,
             decision="Заблокирован",
             admin_username=admin_display,
         )
@@ -227,10 +243,32 @@ async def cb_complaint_close(
             admin_tg_id=cq.from_user.id,
         )
 
-        # Редактируем сообщение с жалобой
+        # Редактируем сообщение с жалобой (пересоздаём текст в новом формате)
+        from app.services.admin.complaints import format_complaint_message
+        
+        reporter = (
+            await session.execute(
+                select(User).where(User.id == complaint.reporter_id)
+            )
+        ).scalar_one()
+        
+        reported_user = (
+            await session.execute(
+                select(User).where(User.id == complaint.reported_id)
+            )
+        ).scalar_one()
+
+        original_text = format_complaint_message(
+            reporter=reporter,
+            reported=reported_user,
+            complaint_text=complaint.text,
+            warnings_count=complaint.warnings_count_at_complaint,
+            meeting_start_at=complaint.meeting_start_at,
+        )
+
         admin_display = _get_admin_display(cq.from_user)
         new_text = format_complaint_result(
-            original_text=cq.message.text,
+            original_text=original_text,
             decision="Закрыто",
             admin_username=admin_display,
         )
@@ -283,10 +321,15 @@ async def cb_complaint_warn_start(
         await state.set_state(ComplaintStates.waiting_warning_text)
 
         # Просим ввести текст предупреждения
-        await cq.message.answer(
+        cancel_message = await cq.message.answer(
             "📝 Введите текст предупреждения для пользователя:",
             reply_markup=kb_complaint_cancel_warning(),
         )
+        
+        # Сохраняем ID сообщения с кнопкой отмены для последующего удаления
+        await state.update_data(**{
+            FSMDataKeys.COMPLAINT_CANCEL_MESSAGE_ID: cancel_message.message_id,
+        })
         await cq.answer()
 
 
@@ -321,6 +364,17 @@ async def handle_warning_text(
     data = await state.get_data()
     complaint_id = data.get(FSMDataKeys.COMPLAINT_ID)
     admin_message_id = data.get(FSMDataKeys.COMPLAINT_ADMIN_MESSAGE_ID)
+    cancel_message_id = data.get(FSMDataKeys.COMPLAINT_CANCEL_MESSAGE_ID)
+
+    # Удаляем сообщение с кнопкой отмены
+    if cancel_message_id:
+        try:
+            await message.bot.delete_message(
+                chat_id=message.chat.id,
+                message_id=cancel_message_id,
+            )
+        except Exception:
+            pass
 
     if not complaint_id:
         await message.answer("❌ Произошла ошибка. Попробуйте начать заново.")
@@ -362,7 +416,7 @@ async def handle_warning_text(
 
         # Выдаём предупреждение (функция сама отправляет сообщение и увеличивает счётчик только при успехе)
         try:
-            warning_number = await warn_user(
+            await warn_user(
                 session=session,
                 complaint=complaint,
                 admin_tg_id=message.from_user.id,
@@ -416,7 +470,6 @@ async def handle_warning_text(
                     decision="Предупреждение",
                     admin_username=admin_display,
                     warning_text=warning_text,
-                    warning_number=warning_number,
                 )
 
                 await message.bot.edit_message_text(
@@ -428,6 +481,6 @@ async def handle_warning_text(
             except Exception:
                 pass
 
-        await message.answer(f"✅ Предупреждение №{warning_number} отправлено пользователю.")
+        await message.answer(f"✅ Предупреждение отправлено пользователю @{reported_user.username}.")
         await state.clear()
 

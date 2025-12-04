@@ -27,15 +27,28 @@ from app.services.const import (
 )
 
 
-def _format_user_display(user: User) -> str:
-    """Форматирует отображение пользователя: имя + @username + ID."""
-    parts = []
-    if user.name:
-        parts.append(user.name)
+def _format_user_info(user: User) -> str:
+    """
+    Форматирует информацию о пользователе в новом формате.
+    
+    Returns:
+        str: отформатированная информация о пользователе
+    """
+    lines = []
+    # Имя
+    name = user.name if user.name else "Не указано"
+    lines.append(f"👤: {name}")
+    
+    # Username
     if user.username:
-        parts.append(f"@{user.username}")
-    parts.append(f"(ID: {user.telegram_id})")
-    return " ".join(parts)
+        lines.append(f"🔗: @{user.username}")
+    else:
+        lines.append("🔗: Не указан")
+    
+    # Telegram ID
+    lines.append(f"🆔: {user.telegram_id}")
+    
+    return "\n".join(lines)
 
 
 def _format_meeting_time(meeting_start_at: Optional[datetime]) -> str:
@@ -69,9 +82,11 @@ def format_complaint_message(
     """
     return (
         f"⚠️ <b>Новая жалоба</b>\n\n"
-        f"<b>Отправитель жалобы:</b> {_format_user_display(reporter)}\n"
+        f"<b>На кого:</b>\n"
+        f"{_format_user_info(reported)}\n\n"
+        f"<b>От кого:</b>\n"
+        f"{_format_user_info(reporter)}\n\n"
         f"<b>Текст жалобы:</b> {complaint_text}\n"
-        f"<b>На кого жалоба:</b> {_format_user_display(reported)}\n"
         f"<b>Предупреждений:</b> {warnings_count}\n"
         f"<b>Время встречи:</b> {_format_meeting_time(meeting_start_at)}"
     )
@@ -324,7 +339,6 @@ def format_complaint_result(
     decision: str,
     admin_username: str,
     warning_text: Optional[str] = None,
-    warning_number: Optional[int] = None,
 ) -> str:
     """
     Форматирует итоговое сообщение жалобы после обработки.
@@ -334,16 +348,16 @@ def format_complaint_result(
         decision: решение (Закрыто/Заблокирован/Предупреждение)
         admin_username: username или ID админа
         warning_text: текст предупреждения (для решения "Предупреждение")
-        warning_number: номер предупреждения (для решения "Предупреждение")
 
     Returns:
         str: итоговый текст сообщения
     """
     result = f"\n\n<b>Решение:</b> {decision}"
+    
+    if warning_text:
+        result += f"\n<b>Текст предупреждения:</b> {warning_text}"
+    
     result += f"\n👨‍💻<b>Рассмотрел:</b> @{admin_username}"
-
-    if warning_text and warning_number:
-        result += f"\n<b>Выдано предупреждение №{warning_number}:</b> {warning_text}"
 
     return original_text + result
 

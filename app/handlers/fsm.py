@@ -44,4 +44,5 @@ class FSMDataKeys(str, Enum):
     COMPLAINT_ID = "complaint_id"
     COMPLAINT_ADMIN_MESSAGE_ID = "complaint_admin_message_id"
     COMPLAINT_REPORTED_USER_ID = "complaint_reported_user_id"
+    COMPLAINT_CANCEL_MESSAGE_ID = "complaint_cancel_message_id"
 

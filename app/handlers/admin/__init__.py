@@ -11,11 +11,8 @@ from .exit import router as exit_router
 from .users import router as users_router
 from .inline_search import router as inline_search_router
 from .user_card import router as user_card_router
-<<<<<<< HEAD
 from .name_approval import router as name_approval_router
-=======
 from .complaints import router as complaints_router
->>>>>>> origin/main
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше

@@ -25,6 +25,12 @@ class AdminUsersStates(StatesGroup):
     waiting_search_telegram_id = State()
 
 
+class ComplaintStates(StatesGroup):
+    """Состояния FSM для обработки жалоб."""
+
+    waiting_warning_text = State()
+
+
 class FSMDataKeys(str, Enum):
     """Ключи для данных, сохраняемых в FSMContext."""
 
@@ -32,4 +38,9 @@ class FSMDataKeys(str, Enum):
     DRAFT_SETTINGS = "draft_settings"
     ADMIN_PANEL_ACTIVE = "admin_panel_active"
     EDITING_FIELD = "editing_field"
+
+    # Ключи для обработки жалоб
+    COMPLAINT_ID = "complaint_id"
+    COMPLAINT_ADMIN_MESSAGE_ID = "complaint_admin_message_id"
+    COMPLAINT_REPORTED_USER_ID = "complaint_reported_user_id"
 

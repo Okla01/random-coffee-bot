@@ -11,11 +11,13 @@ from .exit import router as exit_router
 from .users import router as users_router
 from .inline_search import router as inline_search_router
 from .user_card import router as user_card_router
+from .complaints import router as complaints_router
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше
 router = Router()
 router.include_router(admin_router)
+router.include_router(complaints_router)  # Обработчики жалоб
 router.include_router(settings_router)  # Специфичные callback-обработчики настроек
 router.include_router(blocking_router)  # Обработчики блокировки (из уведомлений)
 router.include_router(user_card_router)  # Обработчики карточки пользователя (из inline-поиска)

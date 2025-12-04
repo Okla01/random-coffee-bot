@@ -65,3 +65,16 @@ IS_RESULT_KEY_HAS_PHOTOS = "has_photos"
 UPD_KEY_PROFILE_TEXT = "profile_text"
 UPD_KEY_PHOTOS_LIST = "photos_list"
 UPD_KEY_HAS_PHOTOS = "has_photos"
+
+# Статусы жалоб
+COMPLAINT_STATUS_PENDING = "pending"  # Ожидает рассмотрения
+COMPLAINT_STATUS_CLOSED = "closed"  # Закрыта без санкций
+COMPLAINT_STATUS_WARNED = "warned"  # Выдано предупреждение
+COMPLAINT_STATUS_BLOCKED = "blocked"  # Пользователь заблокирован
+
+COMPLAINT_STATUS_NAMES: dict[str, str] = {
+    COMPLAINT_STATUS_PENDING: "Ожидает",
+    COMPLAINT_STATUS_CLOSED: "Закрыто",
+    COMPLAINT_STATUS_WARNED: "Предупреждение",
+    COMPLAINT_STATUS_BLOCKED: "Заблокирован",
+}

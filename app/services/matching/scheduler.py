@@ -33,7 +33,7 @@ async def setup_matching_scheduler(
     Регистрирует три периодические задачи:
     - еженедельный раунд матчинга (по настройкам match_day и match_msk_time);
     - завершение наступивших встреч (каждые 5 минут);
-    - обработка таймаутов и напоминаний (каждые 30 минут).
+    - обработка таймаутов и напоминаний (каждые 5 минут).
 
     Args:
         session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
@@ -78,10 +78,10 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
 
-    # Джоба напоминаний/таймаутов — каждые 30 минут
+    # Джоба напоминаний/таймаутов — каждые 5 минут
     scheduler.add_job(
         _timeouts_job,
-        IntervalTrigger(minutes=30, timezone=MOSCOW_TZ),
+        IntervalTrigger(minutes=1, timezone=MOSCOW_TZ),
         args=[session_factory, bot],
         id="match_timeouts",
         replace_existing=True,
@@ -198,7 +198,7 @@ async def _timeouts_job(
     """
     Внутренняя джоба для обработки таймаутов и напоминаний.
 
-    Вызывается APScheduler каждые 30 минут (IntervalTrigger).
+    Вызывается APScheduler каждые 5 минут (IntervalTrigger).
 
     Args:
         session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.

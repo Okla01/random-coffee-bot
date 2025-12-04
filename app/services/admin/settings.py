@@ -68,7 +68,7 @@ def format_settings_text(settings: dict) -> str:
     """
     text = "Настройки для организации встреч.\n\n"
     match_enabled = _as_bool(settings.get("matching_enabled", "true"))
-    text += f"🔹 Матчинг включён: {'Да' if match_enabled else 'Нет'}\n"
+    text += f"🔹 Мэтчинг включён: {'Да' if match_enabled else 'Нет'}\n"
     text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
     text += (
         "🔹 Кулдаун повторной пары (недели): "
@@ -76,7 +76,7 @@ def format_settings_text(settings: dict) -> str:
     )
     match_day_code = settings.get("match_day", "fri")
     text += (
-        "🔹 День недели для встреч: "
+        "🔹 День подбора: "
         f"{DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
     )
 
@@ -87,15 +87,35 @@ def format_settings_text(settings: dict) -> str:
         msk_hour = 12
         msk_minute = 0
 
-    text += f"🔹 Час мэтчинга (МСК): {msk_hour:02d}:{msk_minute:02d}\n"
-    text += (
-        "🔹 Таймаут ответа (часы): "
-        f"{settings.get('response_timeout_hours', '8')}\n"
-    )
-    text += (
-        "🔹 Интервал напоминаний (часы): "
-        f"{settings.get('reminder_interval_hours', '2')}\n"
-    )
+    text += f"🔹 Время подбора: {msk_hour:02d}:{msk_minute:02d}\n"
+    
+    # Форматирование таймаута ответа
+    try:
+        timeout_hours = float(settings.get("response_timeout_hours", "8"))
+        timeout_minutes = int(timeout_hours * 60)
+        timeout_h = timeout_minutes // 60
+        timeout_m = timeout_minutes % 60
+        if timeout_h > 0:
+            timeout_display = f"{timeout_h}:{timeout_m:02d}"
+        else:
+            timeout_display = f"{timeout_m} мин"
+    except (TypeError, ValueError):
+        timeout_display = settings.get("response_timeout_hours", "8")
+    text += f"🔹 Таймаут ответа: {timeout_display}\n"
+    
+    # Форматирование интервала напоминаний
+    try:
+        interval_hours = float(settings.get("reminder_interval_hours", "1"))
+        interval_minutes = int(interval_hours * 60)
+        interval_h = interval_minutes // 60
+        interval_m = interval_minutes % 60
+        if interval_h > 0:
+            interval_display = f"{interval_h}:{interval_m:02d}"
+        else:
+            interval_display = f"{interval_m} мин"
+    except (TypeError, ValueError):
+        interval_display = settings.get("reminder_interval_hours", "1")
+    text += f"🔹 Интервал напоминаний: {interval_display}\n"
 
     return text
 

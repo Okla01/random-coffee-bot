@@ -68,6 +68,9 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
+                InlineKeyboardButton(text="⚙️ Переключить мэтчинг", callback_data="admin:toggle_matching_enabled"),
+            ],
+            [
                 InlineKeyboardButton(text="🔄 Изменить минимальный Jaccard", callback_data="admin:update_min_jaccard"),
             ],
             [
@@ -77,13 +80,16 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 ),
             ],
             [
-                InlineKeyboardButton(text="🗓️ Изменить день недели для встреч", callback_data="admin:update_match_day"),
+                InlineKeyboardButton(text="🗓️ Изменить день побора", callback_data="admin:update_match_day"),
             ],
             [
-                InlineKeyboardButton(text="🕓 Изменить час совпадения", callback_data="admin:update_match_msk_hour"),
+                InlineKeyboardButton(text="🕐 Изменить время подбора", callback_data="admin:update_match_msk_time"),
             ],
             [
-                InlineKeyboardButton(text="🕐 Изменить минуты совпадения", callback_data="admin:update_match_msk_minute"),
+                InlineKeyboardButton(text="⏱️ Изменить таймаут ответа", callback_data="admin:update_response_timeout_hours"),
+            ],
+            [
+                InlineKeyboardButton(text="🔔 Изменить интервал напоминаний", callback_data="admin:update_reminder_interval_hours"),
             ],
             [
                 InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),

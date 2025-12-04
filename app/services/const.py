@@ -50,3 +50,17 @@ USER_STATUS_NAMES: dict[str, str] = {
     USER_STATUS_BLOCKED: "Заблокирован",
     USER_STATUS_NOT_ACTIVE: "Не активен",
 }
+
+# Константы для inline-поиска
+
+# Ключи для словаря результата inline-поиска
+IS_RESULT_KEY_ID = "id"
+IS_RESULT_KEY_TITLE = "title"
+IS_RESULT_KEY_DESCRIPTION = "description"
+IS_RESULT_KEY_MESSAGE_TEXT = "message_text"
+IS_RESULT_KEY_HAS_PHOTOS = "has_photos"
+
+# Ключи для словаря данных профиля пользователя
+UPD_KEY_PROFILE_TEXT = "profile_text"
+UPD_KEY_PHOTOS_LIST = "photos_list"
+UPD_KEY_HAS_PHOTOS = "has_photos"

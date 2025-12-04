@@ -2,7 +2,7 @@
 Обработчики блокировки и разблокировки пользователей.
 
 Обрабатывает callback-запросы для блокировки/разблокировки пользователей
-с уведомлениями и логированием действий.
+с уведомлениями и логированием действий (из уведомлений о подозрительной активности).
 """
 
 from __future__ import annotations
@@ -21,20 +21,19 @@ router = Router()
 
 
 @router.callback_query(
-    F.data.startswith("admin:block:") | F.data.startswith("admin:unblock:")
+    F.data.startswith("admin:notify:block:") | F.data.startswith("admin:notify:unblock:")
 )
-async def admin_callbacks(
+async def admin_notify_callbacks(
     cq: CallbackQuery,
     session_factory: async_sessionmaker[AsyncSession],
     settings: Settings,
 ) -> None:
     """
-    Обрабатывает callback-запросы для блокировки/разблокировки пользователей.
+    Обрабатывает callback-запросы для блокировки/разблокировки из уведомлений.
 
-    Интерпретирует callback data формата 'admin:block:ID' или 'admin:unblock:ID'.
+    Интерпретирует callback data формата 'admin:notify:block:ID' или 'admin:notify:unblock:ID'.
     Изменяет статус пользователя, уведомляет его о решении, логирует действие
     и обновляет исходное сообщение с указанием администратора.
-    Отказывает в доступе если caller не администратор.
     """
     data = cq.data or ""
 
@@ -44,7 +43,7 @@ async def admin_callbacks(
             await cq.answer("Нет прав")
             return
 
-        _, action, user_id_str = data.split(":")
+        _, _, action, user_id_str = data.split(":")  # admin:notify:block:ID
         target_id = int(user_id_str)
 
         user = (
@@ -64,7 +63,7 @@ async def admin_callbacks(
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             await cq.message.edit_text(
                 cq.message.text
-                + f"\n\nРешение: Пользователь {'@' + user.username} заблокирован."
+                + f"\n\nРешение: Пользователь {'@' + user.username if user.username else f'ID:{user.telegram_id}'} заблокирован."
                   f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
                 reply_markup=None,
             )
@@ -80,7 +79,6 @@ async def admin_callbacks(
                         ),
                     )
                 except Exception:
-                    # Здесь можно залогировать, если используешь логгер
                     pass
 
         else:
@@ -90,7 +88,7 @@ async def admin_callbacks(
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             await cq.message.edit_text(
                 cq.message.text
-                + f"\n\nРешение: Пользователь {'@' + user.username} разблокирован "
+                + f"\n\nРешение: Пользователь {'@' + user.username if user.username else f'ID:{user.telegram_id}'} разблокирован "
                   f"и возвращён к вводу корпоративного e-mail."
                   f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
                 reply_markup=None,
@@ -108,9 +106,7 @@ async def admin_callbacks(
                         ),
                     )
                 except Exception:
-                    # Здесь тоже можно залогировать
                     pass
 
         # Закрываем "часы" у колбэка
         await cq.answer()
-

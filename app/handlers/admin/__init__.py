@@ -12,6 +12,7 @@ from .users import router as users_router
 from .inline_search import router as inline_search_router
 from .user_card import router as user_card_router
 from .complaints import router as complaints_router
+from .statistics import router as statistics_router
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше
@@ -24,6 +25,7 @@ router.include_router(user_card_router)  # Обработчики карточк
 router.include_router(exit_router)  # Обработчик выхода из админ-панели
 router.include_router(users_router)  # Обработчик списка пользователей
 router.include_router(inline_search_router)  # Inline-поиск пользователей
+router.include_router(statistics_router)  # Обработчик статистики
 
 __all__ = ["router"]
 

@@ -53,11 +53,11 @@ def kb_match_confirm_prompt(match_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Подтвердить",
+                    text="✅ Подтвердить",
                     callback_data=f"match_confirm:{match_id}",
                 ),
                 InlineKeyboardButton(
-                    text="Назначить заново",
+                    text="🔁 Назначить заново",
                     callback_data=f"match_reschedule:{match_id}",
                 ),
             ],

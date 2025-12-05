@@ -266,12 +266,21 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
     """
     if not match.meeting_start_at:
         return
-    text = (
-        "⏰ Встреча назначена!\n"
-        f"Дата и время: {match.meeting_start_at:%d.%m %H:%M}.\n"
-        "Приятного общения!"
-    )
-    await _broadcast(bot, match, text)
+    
+    # Отправляем персонализированное сообщение каждому участнику
+    for user in (match.user_a, match.user_b):
+        if not user or not user.telegram_id:
+            continue
+        
+        partner = _get_partner(match, user)
+        partner_username = f"@{partner.username}" if partner and partner.username else "вашей парой"
+        
+        text = (
+            f"⏰ Встреча назначена с {partner_username}!\n"
+            f"Дата и время: {match.meeting_start_at:%d.%m %H:%M}.\n"
+            "Приятного общения!"
+        )
+        await bot.send_message(user.telegram_id, text)
 
 
 async def notify_match_reschedule_partner(

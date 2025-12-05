@@ -230,8 +230,8 @@ async def _on_clear_all(
     manager.dialog_data["slots_map"] = {}
     manager.dialog_data["current_date"] = None
     await manager.switch_to(MatchSlotsDialogSG.calendar)
-    await callback.answer("Выбор очищен.", show_alert=True)
-
+    await callback.answer("Выбор очищен.", show_alert=False)
+    
 
 async def _on_clear_date(
     callback: CallbackQuery,
@@ -249,7 +249,7 @@ async def _on_clear_date(
     slots_map.pop(date_str, None)
     manager.dialog_data["current_date"] = None
     await manager.switch_to(MatchSlotsDialogSG.calendar)
-    await callback.answer("Слоты для даты очищены.", show_alert=True)
+    await callback.answer("Слоты для даты очищены.", show_alert=False)
 
 
 async def _on_save_slots(
@@ -262,7 +262,7 @@ async def _on_save_slots(
     """
     slots_map: dict[str, list[str]] = manager.dialog_data.get("slots_map", {})
     if not _has_slots(slots_map):
-        await callback.answer("Выберите хотя бы один интервал.", show_alert=True)
+        await callback.answer("Выберите хотя бы один интервал.", show_alert=False)
         return
 
     match_id = int(manager.dialog_data["match_id"])
@@ -274,7 +274,7 @@ async def _on_save_slots(
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_WAITING_SLOTS:
-            await callback.answer("Матч уже недоступен.", show_alert=True)
+            await callback.answer("Матч уже недоступен.", show_alert=False)
             await manager.done()
             return
         user = await session.get(User, user_id)

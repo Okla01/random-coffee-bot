@@ -110,8 +110,6 @@ async def on_match_ready(
             await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_a)
             await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_b)
             await notify_waiting_partner_ready(cq.bot, match)
-        else:
-            await cq.answer("Ждём подтверждения вашей пары", show_alert=False)
 
 
 @router.callback_query(F.data.startswith("match_skip:"))
@@ -163,9 +161,6 @@ async def on_match_skip(
 
         await notify_match_skip_self(cq.bot, user)
         await notify_match_skip_partner(cq.bot, match, user)
-        await cq.answer(
-            "Вы пропустили раунд. До встречи в следующий раз!", show_alert=True
-        )
 
 
 @router.callback_query(F.data.startswith("match_confirm:"))
@@ -227,10 +222,8 @@ async def on_match_confirm(
 
     if both_confirmed:
         await notify_match_scheduled(cq.bot, match)
-        await cq.answer("Встреча подтверждена!", show_alert=True)
     else:
         await notify_match_confirm_waiting(cq.bot, user)
-        await cq.answer("Ждём подтверждения вашей пары.", show_alert=False)
 
 
 @router.callback_query(F.data.startswith("match_reschedule:"))
@@ -276,11 +269,12 @@ async def on_match_reschedule(
         await cleanup_inactive_match(session, match)
         await session.commit()
 
+    # Сначала отправляем сообщение партнёру, затем открываем календари
+    await notify_match_reschedule_partner(cq.bot, match, user)
     await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_a)
     await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_b)
-    await notify_match_reschedule_partner(cq.bot, match, user)
     await notify_match_reschedule_prompt(cq.bot, match)
-    await cq.answer("Выбор времени сброшен. Заполните новые слоты.", show_alert=True)
+    await cq.answer("Выбор времени сброшен. Заполните новые слоты.", show_alert=False)
 
 
 async def _get_user(session: AsyncSession, telegram_id: int) -> User | None:

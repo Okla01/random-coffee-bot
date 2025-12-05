@@ -111,8 +111,8 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🔔 Изменить интервал напоминаний", callback_data="admin:update_reminder_interval_time"),
             ],
             [
-                InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),
                 InlineKeyboardButton(text="❌ Отмена", callback_data="admin:cancel_admin_settings"),
+                InlineKeyboardButton(text="✅ Сохранить", callback_data="admin:save_admin_settings"),
             ],
         ]
     )

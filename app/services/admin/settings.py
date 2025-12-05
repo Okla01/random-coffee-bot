@@ -60,13 +60,88 @@ def _as_bool(value: str | int | float | None) -> bool:
     return str(value).strip().lower() in {"1", "true", "t", "yes", "on"}
 
 
+def format_time_readable(time_str: str) -> str:
+    """
+    Форматирует время в формате ЧЧ:ММ в читаемый формат.
+    
+    Примеры:
+    - "00:01" -> "1 минута"
+    - "00:02" -> "2 минуты"
+    - "00:05" -> "5 минут"
+    - "1:00" -> "1 час"
+    - "2:00" -> "2 часа"
+    - "5:00" -> "5 часов"
+    - "1:30" -> "1 час 30 минут"
+    - "2:15" -> "2 часа 15 минут"
+    
+    Args:
+        time_str: строка в формате "ЧЧ:ММ"
+    
+    Returns:
+        str: отформатированная строка с правильными склонениями
+    """
+    if ":" not in time_str:
+        return time_str
+    
+    try:
+        parts = time_str.split(":")
+        hours = int(parts[0])
+        minutes = int(parts[1])
+    except (ValueError, IndexError):
+        return time_str
+    
+    # Функция для склонения минут
+    def format_minutes(m: int) -> str:
+        if m == 0:
+            return ""
+        if m == 1:
+            return "1 минута"
+        elif 2 <= m <= 4:
+            return f"{m} минуты"
+        elif 5 <= m <= 20:
+            return f"{m} минут"
+        elif m % 10 == 1:
+            return f"{m} минута"
+        elif m % 10 in (2, 3, 4):
+            return f"{m} минуты"
+        else:
+            return f"{m} минут"
+    
+    # Функция для склонения часов
+    def format_hours(h: int) -> str:
+        if h == 0:
+            return ""
+        if h == 1:
+            return "1 час"
+        elif 2 <= h <= 4:
+            return f"{h} часа"
+        elif 5 <= h <= 20:
+            return f"{h} часов"
+        elif h % 10 == 1:
+            return f"{h} час"
+        elif h % 10 in (2, 3, 4):
+            return f"{h} часа"
+        else:
+            return f"{h} часов"
+    
+    # Формируем результат
+    if hours == 0 and minutes == 0:
+        return "0 минут"
+    elif hours == 0:
+        return format_minutes(minutes)
+    elif minutes == 0:
+        return format_hours(hours)
+    else:
+        return f"{format_hours(hours)} {format_minutes(minutes)}"
+
+
 def format_settings_text(settings: dict) -> str:
     """
     Форматирует настройки в текстовую строку.
 
     Примечание: Данный текст будет отображён над меню с настройками панели администратора.
     """
-    text = "Настройки для организации встреч.\n\n"
+    text = "Настройки для организации встреч.\nВыберете настройку, которую хотите изменить.\n\n"
     match_enabled = _as_bool(settings.get("matching_enabled", "true"))
     text += f"🔹 Мэтчинг включён: {'Да' if match_enabled else 'Нет'}\n"
     text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
@@ -90,12 +165,13 @@ def format_settings_text(settings: dict) -> str:
             match_time = f"{msk_hour:02d}:{msk_minute:02d}"
         except (TypeError, ValueError):
             match_time = "12:00"
+    # Время подбора оставляем в формате ЧЧ:ММ (это время суток, не интервал)
     text += f"🔹 Время подбора: {match_time}\n"
     
     # Форматирование таймаута ответа (поддержка миграции со старого имени)
     timeout_value = settings.get("response_timeout_time") or settings.get("response_timeout_hours", "8:00")
     if ":" in timeout_value:
-        timeout_display = timeout_value
+        timeout_display = format_time_readable(timeout_value)
     else:
         # Миграция со старого формата (часы как число)
         try:
@@ -103,10 +179,7 @@ def format_settings_text(settings: dict) -> str:
             timeout_minutes = int(timeout_hours * 60)
             timeout_h = timeout_minutes // 60
             timeout_m = timeout_minutes % 60
-            if timeout_h > 0:
-                timeout_display = f"{timeout_h}:{timeout_m:02d}"
-            else:
-                timeout_display = f"{timeout_m} мин"
+            timeout_display = format_time_readable(f"{timeout_h}:{timeout_m:02d}")
         except (TypeError, ValueError):
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
@@ -114,7 +187,7 @@ def format_settings_text(settings: dict) -> str:
     # Форматирование интервала напоминаний (поддержка миграции со старого имени)
     interval_value = settings.get("reminder_interval_time") or settings.get("reminder_interval_hours", "1:00")
     if ":" in interval_value:
-        interval_display = interval_value
+        interval_display = format_time_readable(interval_value)
     else:
         # Миграция со старого формата (часы как число)
         try:
@@ -122,10 +195,7 @@ def format_settings_text(settings: dict) -> str:
             interval_minutes = int(interval_hours * 60)
             interval_h = interval_minutes // 60
             interval_m = interval_minutes % 60
-            if interval_h > 0:
-                interval_display = f"{interval_h}:{interval_m:02d}"
-            else:
-                interval_display = f"{interval_m} мин"
+            interval_display = format_time_readable(f"{interval_h}:{interval_m:02d}")
         except (TypeError, ValueError):
             interval_display = interval_value
     text += f"🔹 Интервал напоминаний: {interval_display}\n"

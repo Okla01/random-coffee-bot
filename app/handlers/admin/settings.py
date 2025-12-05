@@ -25,6 +25,7 @@ from app.keyboards.kb_admin import (
     kb_admin_menu,
     kb_admin_settings,
     kb_admin_settings_change_day_of_week,
+    kb_admin_settings_change_cooldown_weeks,
 )
 from app.keyboards.utils import clear_last_kb
 from app.services.admin.settings import (
@@ -33,7 +34,6 @@ from app.services.admin.settings import (
     save_settings,
     toggle_matching_enabled,
     try_to_input_min_jaccard,
-    try_to_input_repeat_pair_cooldown_weeks,
     try_to_input_time,
     try_to_input_time_as_hours,
     update_draft_setting,
@@ -106,14 +106,24 @@ async def cb_update_repeat_pair_cooldown_weeks(
     state: FSMContext,
 ) -> None:
     """Запрашивает новое значение периодичности встреч в неделях."""
-
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Через сколько недель можно повторить пару? (1 - 12)")
+    data = await state.get_data()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
+    
+    # Получаем текущее значение кулдауна
+    try:
+        current_weeks = int(draft.get("repeat_pair_cooldown_weeks", "1"))
+    except (ValueError, TypeError):
+        current_weeks = 1
 
-    # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_repeat_pair_cooldown_weeks)
+    # Редактируем текущее сообщение с клавиатурой выбора
+    await cq.message.edit_text(
+        "Выберите кулдаун повторной пары (недели):",
+        reply_markup=kb_admin_settings_change_cooldown_weeks(current_weeks),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data == "admin:update_match_day")
@@ -329,6 +339,42 @@ async def cb_change_day_of_week(
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
+@router.callback_query(F.data.startswith("admin:change_cooldown_weeks:"))
+async def cb_change_cooldown_weeks(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Обрабатывает выбор нового кулдауна повторной пары в неделях."""
+    # Получение количества недель из callback_data
+    # "admin:change_cooldown_weeks:3" -> "3"
+    try:
+        weeks = int(cq.data.split(":")[-1])
+    except (ValueError, IndexError):
+        await cq.answer("Ошибка: некорректное значение")
+        return
+
+    # Проверка диапазона
+    if not (1 <= weeks <= 4):
+        await cq.answer("Ошибка: значение должно быть от 1 до 4")
+        return
+
+    # Обновление кулдауна в черновых настройках
+    draft = await update_draft_setting(state, "repeat_pair_cooldown_weeks", str(weeks))
+
+    # Выход из состояния ожидания значения
+    await state.set_state(None)
+
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    # Возвращение в меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
+
+
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------
 
 
@@ -347,53 +393,6 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
         return
 
     draft = await update_draft_setting(state, "min_jaccard", min_jaccard)
-    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
-
-    # Выход из состояния ожидания значения
-    await state.set_state(None)
-
-    # Редактируем последнее сообщение с настройками
-    data = await state.get_data()
-    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
-    if settings_msg_id:
-        try:
-            await msg.bot.edit_message_text(
-                chat_id=msg.chat.id,
-                message_id=settings_msg_id,
-                text=format_settings_text(draft),
-                reply_markup=kb_admin_settings(),
-            )
-        except Exception:
-            # Если не удалось отредактировать, создаём новое сообщение
-            sent = await msg.answer(
-                format_settings_text(draft),
-                reply_markup=kb_admin_settings(),
-            )
-            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
-    else:
-        # Если нет ID сообщения, создаём новое
-        sent = await msg.answer(
-            format_settings_text(draft),
-            reply_markup=kb_admin_settings(),
-        )
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
-
-
-@router.message(StateFilter(AdminSettingsStates.waiting_repeat_pair_cooldown_weeks))
-async def on_repeat_pair_cooldown_input(msg: Message, state: FSMContext) -> None:
-    """
-    Обрабатывает ввод нового значения периодичности встреч в неделях.
-    """
-    cooldown_weeks: int | None = try_to_input_repeat_pair_cooldown_weeks(msg.text)
-    if cooldown_weeks is None:
-        await msg.answer(
-            "Некорректный ввод. Пожалуйста, введите число в диапазоне 1 - 12."
-        )
-        return
-
-    draft = await update_draft_setting(
-        state, "repeat_pair_cooldown_weeks", cooldown_weeks
-    )
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     # Выход из состояния ожидания значения

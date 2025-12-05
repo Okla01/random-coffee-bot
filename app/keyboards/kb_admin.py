@@ -144,6 +144,42 @@ def kb_admin_settings_change_day_of_week(current_day_of_week: str) -> InlineKeyb
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
+def kb_admin_settings_change_cooldown_weeks(current_weeks: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для выбора кулдауна повторной пары в неделях.
+
+    Args:
+        current_weeks (int): текущее значение кулдауна в неделях (1-4).
+    """
+    keyboard = []
+    row = []
+    
+    for week in range(1, 5):  # 1-4 недели
+        if len(row) == 2:  # 2 кнопки в ряд
+            keyboard.append(row)
+            row = []
+
+        mark = "✅" if week == current_weeks else "❌"
+        # Формируем правильное склонение для "неделя/недели/недель"
+        if week == 1:
+            week_label = "1 неделя"
+        elif 2 <= week <= 4:
+            week_label = f"{week} недели"
+        else:
+            week_label = f"{week} недель"
+        
+        row.append(
+            InlineKeyboardButton(
+                text=f"{mark} {week_label}",
+                callback_data=f"admin:change_cooldown_weeks:{week}"
+            )
+        )
+
+    keyboard.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
 def kb_admin_back_to_menu() -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру для возврата в главное меню администратора.

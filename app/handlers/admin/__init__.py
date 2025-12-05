@@ -20,6 +20,7 @@ from .user_card import router as user_card_router
 from .name_approval import router as name_approval_router
 from .complaints import router as complaints_router
 from .statistics import router as statistics_router
+from .export_excel import router as export_excel_router
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше
@@ -38,5 +39,6 @@ router.include_router(exit_router)  # Обработчик выхода из а�
 router.include_router(users_router)  # Обработчик списка пользователей
 router.include_router(inline_search_router)  # Inline-поиск пользователей
 router.include_router(statistics_router)  # Обработчик статистики
+router.include_router(export_excel_router)  # Обработчик экспорта Excel
 
 __all__ = ["router"]

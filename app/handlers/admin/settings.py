@@ -70,12 +70,12 @@ async def cb_admin_settings(
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    # Отображение меню настроек
-    sent = await cq.message.answer(
+    # Отображение меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
         text,
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 # ----------------------------- Обработчики кнопок меню настроек -----------------------------
@@ -127,11 +127,12 @@ async def cb_update_match_day(
     data = await state.get_data()
     draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
 
-    sent = await cq.message.answer(
+    # Редактируем текущее сообщение
+    await cq.message.edit_text(
         "Выберите новый день недели для встреч:",
         reply_markup=kb_admin_settings_change_day_of_week(draft["match_day"]),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data == "admin:toggle_matching_enabled")
@@ -151,12 +152,12 @@ async def cb_toggle_matching_enabled(
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
     
-    # Возвращение в меню настроек
-    sent = await cq.message.answer(
+    # Возвращение в меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data == "admin:update_match_msk_time")
@@ -237,12 +238,12 @@ async def cb_save_admin_settings(
 
     await cq.answer("Настройки сохранены")
 
-    # Переход в главное меню настроек
-    sent = await cq.message.answer(
+    # Переход в главное меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data == "admin:cancel_admin_settings")
@@ -264,12 +265,12 @@ async def cb_cancel_admin_settings(
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
     # Отправка сообщения о отмене изменений
     await cq.answer("Выход без сохранения")
-    # Переход в главное меню настроек
-    sent = await cq.message.answer(
+    # Переход в главное меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 # ----------------------------- Обработчик выбора дня недели -----------------------------
@@ -294,12 +295,12 @@ async def cb_change_day_of_week(
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    # Возвращение в меню настроек
-    sent = await cq.message.answer(
+    # Возвращение в меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
         format_settings_text(draft),
         reply_markup=kb_admin_settings(),
     )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------
@@ -325,12 +326,31 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
     # Выход из состояния ожидания значения
     await state.set_state(None)
 
-    # Возвращение в меню настроек
-    sent = await msg.answer(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    # Редактируем последнее сообщение с настройками
+    data = await state.get_data()
+    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
+    if settings_msg_id:
+        try:
+            await msg.bot.edit_message_text(
+                chat_id=msg.chat.id,
+                message_id=settings_msg_id,
+                text=format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await msg.answer(
+                format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если нет ID сообщения, создаём новое
+        sent = await msg.answer(
+            format_settings_text(draft),
+            reply_markup=kb_admin_settings(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_repeat_pair_cooldown_weeks))
@@ -353,12 +373,31 @@ async def on_repeat_pair_cooldown_input(msg: Message, state: FSMContext) -> None
     # Выход из состояния ожидания значения
     await state.set_state(None)
 
-    # Возвращение в меню настроек
-    sent = await msg.answer(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    # Редактируем последнее сообщение с настройками
+    data = await state.get_data()
+    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
+    if settings_msg_id:
+        try:
+            await msg.bot.edit_message_text(
+                chat_id=msg.chat.id,
+                message_id=settings_msg_id,
+                text=format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await msg.answer(
+                format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если нет ID сообщения, создаём новое
+        sent = await msg.answer(
+            format_settings_text(draft),
+            reply_markup=kb_admin_settings(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_match_msk_time))
@@ -379,12 +418,31 @@ async def on_match_msk_time_input(msg: Message, state: FSMContext) -> None:
     # Выход из состояния ожидания значения
     await state.set_state(None)
 
-    # Возвращение в меню настроек
-    sent = await msg.answer(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    # Редактируем последнее сообщение с настройками
+    data = await state.get_data()
+    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
+    if settings_msg_id:
+        try:
+            await msg.bot.edit_message_text(
+                chat_id=msg.chat.id,
+                message_id=settings_msg_id,
+                text=format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await msg.answer(
+                format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если нет ID сообщения, создаём новое
+        sent = await msg.answer(
+            format_settings_text(draft),
+            reply_markup=kb_admin_settings(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_response_timeout_time))
@@ -405,12 +463,31 @@ async def on_response_timeout_time_input(msg: Message, state: FSMContext) -> Non
     # Выход из состояния ожидания значения
     await state.set_state(None)
 
-    # Возвращение в меню настроек
-    sent = await msg.answer(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    # Редактируем последнее сообщение с настройками
+    data = await state.get_data()
+    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
+    if settings_msg_id:
+        try:
+            await msg.bot.edit_message_text(
+                chat_id=msg.chat.id,
+                message_id=settings_msg_id,
+                text=format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await msg.answer(
+                format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если нет ID сообщения, создаём новое
+        sent = await msg.answer(
+            format_settings_text(draft),
+            reply_markup=kb_admin_settings(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_reminder_interval_time))
@@ -431,9 +508,28 @@ async def on_reminder_interval_time_input(msg: Message, state: FSMContext) -> No
     # Выход из состояния ожидания значения
     await state.set_state(None)
 
-    # Возвращение в меню настроек
-    sent = await msg.answer(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    # Редактируем последнее сообщение с настройками
+    data = await state.get_data()
+    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
+    if settings_msg_id:
+        try:
+            await msg.bot.edit_message_text(
+                chat_id=msg.chat.id,
+                message_id=settings_msg_id,
+                text=format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await msg.answer(
+                format_settings_text(draft),
+                reply_markup=kb_admin_settings(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если нет ID сообщения, создаём новое
+        sent = await msg.answer(
+            format_settings_text(draft),
+            reply_markup=kb_admin_settings(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

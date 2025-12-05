@@ -44,12 +44,13 @@ async def cb_admin_users(
         )
 
         text = await build_users_page_text(session, users)
-        sent = await cq.message.answer(
+        # Редактируем текущее сообщение
+        await cq.message.edit_text(
             text,
             reply_markup=kb_admin_users(page=1, total_users=total_users, filters=filters),
         )
         # Сохранение ID последней отправленной клавиатуры
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data.startswith("admin:users:filter:"))

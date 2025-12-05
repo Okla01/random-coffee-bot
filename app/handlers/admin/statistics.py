@@ -39,10 +39,11 @@ async def cb_admin_statistics(
         stats = await get_all_statistics(session, period="7_days")
         text = format_statistics_text(stats)
 
-    sent = await cq.message.answer(text, reply_markup=kb_admin_statistics())
+    # Редактируем текущее сообщение
+    await cq.message.edit_text(text, reply_markup=kb_admin_statistics())
 
     # Сохранение ID последней отправленной клавиатуры
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 # ------------------------- Обработчики кнопок периодов -------------------------

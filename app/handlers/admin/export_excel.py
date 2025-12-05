@@ -58,8 +58,27 @@ async def cb_admin_back_to_menu(
     Обрабатывает callback для возврата в главное меню администратора.
     """
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    sent = await cq.message.answer(
-        "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
-        reply_markup=kb_admin_menu(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    
+    # Проверяем, есть ли текст в сообщении (если это документ, текста не будет)
+    if cq.message.text or cq.message.caption:
+        # Редактируем текущее сообщение
+        try:
+            await cq.message.edit_text(
+                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+                reply_markup=kb_admin_menu(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
+        except Exception:
+            # Если не удалось отредактировать, создаём новое сообщение
+            sent = await cq.message.answer(
+                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+                reply_markup=kb_admin_menu(),
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+    else:
+        # Если это сообщение с документом (без текста), создаём новое сообщение
+        sent = await cq.message.answer(
+            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+            reply_markup=kb_admin_menu(),
+        )
+        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

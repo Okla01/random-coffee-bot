@@ -7,12 +7,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
+import logging
 
 from app.database import Match, User
 from app.database.utils import now_msk
 from app.keyboards.kb_matching import (
     kb_match_confirm_prompt,
 )
+
+logger = logging.getLogger(__name__)
 
 
 async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
@@ -337,6 +341,7 @@ async def notify_match_timeout(bot: Bot, match: Match) -> None:
     Уведомляет обоих участников об истечении времени на согласование встречи.
 
     Вызывается автоматической джобой при переводе матча в статус expired_timeout.
+    Перед отправкой уведомления удаляет клавиатуры из старых сообщений.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
@@ -345,6 +350,9 @@ async def notify_match_timeout(bot: Bot, match: Match) -> None:
     Returns:
         None: ничего не возвращает.
     """
+    # Удаляем клавиатуры из старых сообщений перед отправкой уведомления
+    await remove_match_keyboards(bot, match)
+    
     text = (
         "Время на согласование встречи истекло. "
         "Вы сможете участвовать в следующих раундах."
@@ -468,4 +476,41 @@ def _format_partner_hint(partner: User | None) -> str:
     if not parts and partner.telegram_id:
         parts.append(f"tg://user?id={partner.telegram_id}")
     return " ".join(parts)
+
+
+async def remove_match_keyboards(bot: Bot, match: Match) -> None:
+    """
+    Удаляет inline-клавиатуры по сохранённым message_id у обоих участников матча.
+
+    Args:
+        bot (Bot): экземпляр бота для отправки сообщений.
+        match (Match): объект матча с загруженными user_a и user_b.
+    """
+    for user, message_id_attr in (
+        (match.user_a, "last_message_id_a"),
+        (match.user_b, "last_message_id_b"),
+    ):
+        message_id = getattr(match, message_id_attr, None)
+        if not user or not user.telegram_id or not message_id:
+            continue
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=user.telegram_id,
+                message_id=message_id,
+                reply_markup=None,
+            )
+        except TelegramBadRequest as exc:
+            if "message is not modified" not in str(exc):
+                logger.exception(
+                    "Failed to remove keyboard for user %s message %s: %s",
+                    getattr(user, "id", None),
+                    message_id,
+                    exc,
+                )
+        except Exception:
+            logger.exception(
+                "Failed to remove keyboard for user %s message %s",
+                getattr(user, "id", None),
+                message_id,
+            )
 

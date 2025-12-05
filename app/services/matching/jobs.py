@@ -28,6 +28,7 @@ from app.services.matching.messages import (
     notify_match_reminder,
     notify_match_timeout,
     notify_meeting_started,
+    remove_match_keyboards,
 )
 from app.services.matching.settings import MatchingSettings, parse_time_to_hours
 from app.services.matching.storage import cleanup_inactive_match, user_has_match_slots
@@ -147,7 +148,7 @@ async def process_match_timeouts_and_reminders(
     reminder_hours = parse_time_to_hours(settings.reminder_interval_time)
     timeout_hours = parse_time_to_hours(settings.response_timeout_time)
     reminder_delta = timedelta(hours=max(0, reminder_hours))
-    timeout_delta = timedelta(hours=max(1, timeout_hours))
+    timeout_delta = timedelta(hours=max(0, timeout_hours))
 
     stats = {"reminded": 0, "expired": 0}
     stage_map = {
@@ -192,6 +193,9 @@ async def process_match_timeouts_and_reminders(
             match.user_a_response = MATCH_USER_RESPONSE_NONE
             match.user_b_response = MATCH_USER_RESPONSE_NONE
             match.last_reminder_at = None
+            # Удаляем клавиатуры из старых сообщений перед очисткой данных
+            if bot:
+                await remove_match_keyboards(bot, match)
             # Очищаем данные неактивного матча
             await cleanup_inactive_match(session, match)
             stats["expired"] += 1
@@ -257,7 +261,7 @@ async def process_match_timeouts_only(
     """
     now = now_msk()
     timeout_hours = parse_time_to_hours(settings.response_timeout_time)
-    timeout_delta = timedelta(hours=max(1, timeout_hours))
+    timeout_delta = timedelta(hours=max(0, timeout_hours))
 
     # Статусы, для которых проверяются таймауты (исключаем scheduled, там нет таймаутов)
     timeout_check_statuses = {
@@ -309,6 +313,9 @@ async def process_match_timeouts_only(
             match.user_a_response = MATCH_USER_RESPONSE_NONE
             match.user_b_response = MATCH_USER_RESPONSE_NONE
             match.last_reminder_at = None
+            # Удаляем клавиатуры из старых сообщений перед очисткой данных
+            if bot:
+                await remove_match_keyboards(bot, match)
             # Очищаем данные неактивного матча
             await cleanup_inactive_match(session, match)
             expired_count += 1
@@ -349,7 +356,7 @@ async def process_match_reminders_only(
     reminder_hours = parse_time_to_hours(settings.reminder_interval_time)
     timeout_hours = parse_time_to_hours(settings.response_timeout_time)
     reminder_delta = timedelta(hours=max(0, reminder_hours))
-    timeout_delta = timedelta(hours=max(1, timeout_hours))
+    timeout_delta = timedelta(hours=max(0, timeout_hours))
 
     if reminder_delta <= timedelta(0):
         return 0

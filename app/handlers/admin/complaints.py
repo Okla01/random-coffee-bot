@@ -4,15 +4,11 @@
 Обрабатывает:
 - callback-запросы для действий с жалобами (блокировка, предупреждение, закрытие)
 - ввод текста предупреждения
-- тестовую команду для создания жалоб
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
-
 from aiogram import Router, F, Bot
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -20,7 +16,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import User
-from app.database.utils import now_msk
 from app.handlers.fsm import ComplaintStates, FSMDataKeys
 from app.keyboards.kb_admin import kb_complaint_cancel_warning
 from app.services.admin import is_admin
@@ -41,83 +36,6 @@ router = Router()
 def _get_admin_display(user) -> str:
     """Возвращает отображаемое имя админа."""
     return user.username if user.username else str(user.id)
-
-
-# ----------------------------- Тестовая команда ----------------------------- #
-
-
-@router.message(Command("test_complaint"))
-async def cmd_test_complaint(
-    message: Message,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-    bot: Bot,
-) -> None:
-    """
-    Тестовая команда для создания жалобы.
-
-    Формат: /test_complaint <reported_tg_id> <текст жалобы...>
-
-    Создаёт жалобу от имени отправителя на указанного пользователя.
-    """
-    async with session_factory() as session:
-        # Проверяем права администратора
-        if not await is_admin(session, settings, message.from_user.id):
-            await message.answer("⛔️ Нет прав.")
-            return
-
-        if not settings.admin_chat_id:
-            await message.answer("❌ ADMIN_CHAT_ID не настроен.")
-            return
-
-        # Парсим аргументы команды
-        args = message.text.split(maxsplit=2)
-        if len(args) < 3:
-            await message.answer(
-                "❌ Использование: /test_complaint <reported_tg_id> <текст жалобы...>\n"
-                "Пример: /test_complaint 123456789 Этот пользователь не пришёл на встречу"
-            )
-            return
-
-        try:
-            reported_tg_id = int(args[1])
-        except ValueError:
-            await message.answer("❌ reported_tg_id должен быть числом.")
-            return
-
-        complaint_text = args[2]
-
-        # Проверяем, что reported существует в БД
-        reported_user = (
-            await session.execute(
-                select(User).where(User.telegram_id == reported_tg_id)
-            )
-        ).scalar_one_or_none()
-
-        if not reported_user:
-            await message.answer(f"❌ Пользователь с tg_id {reported_tg_id} не найден в БД.")
-            return
-
-        # Время встречи: текущее время минус 2 часа
-        meeting_start_at = now_msk() - timedelta(hours=2)
-
-        try:
-            complaint = await submit_complaint(
-                session=session,
-                bot=bot,
-                admin_chat_id=settings.admin_chat_id,
-                reporter_user_id=message.from_user.id,
-                reported_user_id=reported_tg_id,
-                complaint_text=complaint_text,
-                meeting_start_at=meeting_start_at,
-            )
-            await message.answer(
-                f"✅ Тестовая жалоба #{complaint.id} создана и отправлена в админ-чат."
-            )
-        except ValueError as e:
-            await message.answer(f"❌ Ошибка: {e}")
-        except Exception as e:
-            await message.answer(f"❌ Не удалось создать жалобу: {e}")
 
 
 # ----------------------------- Callback-обработчики ----------------------------- #

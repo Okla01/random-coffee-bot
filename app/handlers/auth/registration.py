@@ -45,55 +45,6 @@ from app.handlers.fsm import FSMDataKeys
 router = Router()
 
 
-# ---------------------- stage2 debug command -------------------- #
-
-
-@router.message(F.text == "/stage2")
-async def on_stage2_debug(
-    message: Message,
-    state: FSMContext,
-    session_factory: async_sessionmaker[AsyncSession],
-    settings: Settings,
-) -> None:
-    """
-    Отладочная команда для быстрого переход на стадию заполнения профиля (profile_name).
-
-    Пропускает авторизацию, заполняет тестовый email, переводит пользователя на этап
-    ввода имени с готовыми тестовыми данными.
-
-    Args:
-        message (Message): объект сообщения "stage2".
-        state (FSMContext): контекст FSM для управления состоянием.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
-        settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    async with session_factory() as session:
-        user = await get_or_create_user(
-            session, message.from_user.id, message.from_user.username
-        )
-
-        # Заполняем тестовые данные
-        user.email = f"test.user{user.telegram_id}@test.corp"
-        user.stage = "authorized"  # Помечаем как авторизованного
-        user.status = USER_STATUS_NOT_ACTIVE
-
-        await session.commit()
-
-        # Теперь переводим на стадию заполнения имени
-        user.stage = "profile_name"
-        await session.commit()
-
-        # Гасим старую клавиатуру
-        await clear_last_kb(state, message.chat.id, message.bot)
-
-        await message.answer(
-            "✅ Debug mode: перешли на stage2 (profile_name).\nДавайте заполним анкету! Как вас зовут?"
-        )
-
-
 # ------------------------- email / code ------------------------- #
 
 

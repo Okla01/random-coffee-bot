@@ -13,17 +13,9 @@ class AdminSettingsStates(StatesGroup):
     """Состояния FSM для редактирования настроек администратора."""
 
     waiting_min_jaccard = State()
-    waiting_repeat_pair_cooldown_weeks = State()
-    waiting_match_day = State()
     waiting_match_msk_time = State()
     waiting_response_timeout_time = State()
     waiting_reminder_interval_time = State()
-
-
-class AdminUsersStates(StatesGroup):
-    """Состояния FSM для поиска пользователей в админке."""
-    
-    waiting_search_telegram_id = State()
 
 
 class ComplaintStates(StatesGroup):

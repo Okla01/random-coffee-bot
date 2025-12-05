@@ -266,23 +266,6 @@ def try_to_input_min_jaccard(msg: str) -> float | None:
     return None
 
 
-def try_to_input_repeat_pair_cooldown_weeks(msg: str) -> int | None:
-    """
-    Пытается преобразовать введённый текст в числовое значения (типа float).
-
-    Также сразу происходит проверка на вхождение числа в промежуток.
-    """
-    try:
-        value = int(msg.strip())
-    except ValueError:
-        return None
-    
-    if 1 <= value <= 12:
-        return value
-
-    return None
-
-
 def try_to_input_time(msg: str) -> str | None:
     """
     Пытается преобразовать введённый текст во время в формате ЧЧ:ММ.
@@ -313,51 +296,6 @@ def try_to_input_time(msg: str) -> str | None:
         return None
     
     return f"{hour:02d}:{minute:02d}"
-
-
-def parse_time_to_hours_minutes(time_str: str) -> tuple[int, int] | None:
-    """
-    Парсит время в формате ЧЧ:ММ на час и минуты.
-
-    Args:
-        time_str: строка в формате "ЧЧ:ММ"
-
-    Returns:
-        tuple[int, int] | None: кортеж (час, минуты) или None при ошибке
-    """
-    if ":" not in time_str:
-        return None
-    
-    parts = time_str.split(":")
-    if len(parts) != 2:
-        return None
-    
-    try:
-        hour = int(parts[0])
-        minute = int(parts[1])
-        return (hour, minute)
-    except ValueError:
-        return None
-
-
-def parse_time_to_hours(time_str: str) -> float | None:
-    """
-    Парсит время в формате ЧЧ:ММ и конвертирует в часы (десятичное число).
-
-    Например: "8:30" -> 8.5, "1:15" -> 1.25
-
-    Args:
-        time_str: строка в формате "ЧЧ:ММ"
-
-    Returns:
-        float | None: количество часов или None при ошибке
-    """
-    parsed = parse_time_to_hours_minutes(time_str)
-    if parsed is None:
-        return None
-    
-    hour, minute = parsed
-    return hour + (minute / 60.0)
 
 
 def toggle_matching_enabled(current_value: str | bool) -> str:

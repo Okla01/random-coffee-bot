@@ -55,6 +55,28 @@ async def get_blocked_users_count(session: AsyncSession) -> int:
     return result or 0
 
 
+async def get_new_users_count(session: AsyncSession, period: str) -> int:
+    """
+    Получает количество новых пользователей за период.
+
+    Новым считается пользователь, который зарегистрировался в течение
+    указанного периода и имеет статус "Активный".
+
+    Args:
+        session (AsyncSession): сессия БД.
+        period (str): код периода (7_days, 30_days, 6_months, all_time).
+
+    Returns:
+        int: количество новых пользователей.
+    """
+    period_start = _get_period_start(period)
+    query = select(func.count(User.id)).where(User.status == USER_STATUS_ACTIVE)
+    if period_start:
+        query = query.where(User.registered_at >= period_start)
+    result = await session.scalar(query)
+    return result or 0
+
+
 def _get_period_start(period: str):
     """
     Возвращает дату начала периода.
@@ -165,11 +187,13 @@ async def get_period_statistics(
 
     Returns:
         dict[str, int | float | None]: словарь с метриками:
+            - new_users: новых пользователей
             - total_matches: всего мэтчей
             - successful_matches: успешных мэтчей
             - average_jaccard_score: средний Jaccard-коэффициент
     """
     return {
+        "new_users": await get_new_users_count(session, period),
         "total_matches": await get_total_matches_count(session, period),
         "successful_matches": await get_successful_matches_count(session, period),
         "average_jaccard_score": await get_average_jaccard_score(session, period),
@@ -224,6 +248,9 @@ def format_statistics_text(stats: dict[str, int | float | None | str]) -> str:
 
     # Статистика за период
     lines.append(f"<b>Статистика за {period_label}</b>")
+
+    new_users = stats.get("new_users", 0)
+    lines.append(f"🆕 Новых пользователей: <b>{new_users}</b>")
 
     total_matches = stats.get("total_matches", 0)
     lines.append(f"📃 Всего мэтчей: <b>{total_matches}</b>")

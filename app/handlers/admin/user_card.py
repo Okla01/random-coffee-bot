@@ -11,14 +11,15 @@
 from __future__ import annotations
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import User, AdminLog
-from app.database.db import is_user_blocked
-from app.keyboards.kb_admin import kb_admin_user_actions
+from app.database.db import is_user_blocked, get_user_by_id
+from app.handlers.fsm import AdminMessageStates, FSMDataKeys
+from app.keyboards.kb_admin import kb_admin_user_actions, kb_admin_message_cancel
 from app.services.admin import (
     is_admin,
     grant_admin_role,
@@ -56,9 +57,7 @@ async def _get_user_and_check_admin(
         await cq.answer("Нет прав")
         return None
 
-    user = (
-        await session.execute(select(User).where(User.id == user_id))
-    ).scalar_one_or_none()
+    user = await get_user_by_id(session, user_id)
 
     if not user:
         await cq.answer("Пользователь не найден")
@@ -249,3 +248,183 @@ async def cb_admin_role(
 
         # Обновляем клавиатуру
         await _update_keyboard(cq, session, settings, user)
+
+
+# ----------------------------- Отправка сообщения пользователю ----------------------------- #
+
+
+@router.callback_query(F.data.startswith("admin:message:"))
+async def cb_message_start(
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Начинает процесс отправки сообщения пользователю — запрашивает текст.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    data = cq.data or ""
+    _, _, user_id_str = data.split(":")
+    target_id = int(user_id_str)
+
+    async with session_factory() as session:
+        user = await _get_user_and_check_admin(cq, session, settings, target_id)
+        if not user:
+            return
+
+        username_display = (
+            f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        )
+
+        # Сохраняем контекст в FSM
+        await state.update_data(
+            **{
+                FSMDataKeys.ADMIN_MESSAGE_USER_ID: user.id,
+            }
+        )
+        await state.set_state(AdminMessageStates.waiting_message_text)
+
+        # Просим ввести текст сообщения
+        cancel_message = await cq.message.answer(
+            f"📝 Введите текст сообщения для пользователя {username_display}:",
+            reply_markup=kb_admin_message_cancel(),
+        )
+
+        # Сохраняем ID сообщения с кнопкой отмены для последующего удаления
+        await state.update_data(
+            **{
+                FSMDataKeys.ADMIN_MESSAGE_CANCEL_MESSAGE_ID: cancel_message.message_id,
+            }
+        )
+        await cq.answer()
+
+
+@router.callback_query(F.data == "admin:cancel_message")
+async def cb_cancel_message(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """
+    Отменяет ввод текста сообщения.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    await state.clear()
+    await cq.message.delete()
+    await cq.answer("❌ Отменено")
+
+
+@router.message(AdminMessageStates.waiting_message_text)
+async def handle_message_text(
+    message: Message,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Обрабатывает ввод текста сообщения и отправляет его пользователю.
+
+    Args:
+        message (Message): объект сообщения с текстом.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    message_text = message.text
+
+    if not message_text or len(message_text.strip()) == 0:
+        await message.answer(
+            "❌ Текст сообщения не может быть пустым. Попробуйте ещё раз:"
+        )
+        return
+
+    message_text = message_text.strip()
+
+    # Получаем данные из FSM
+    data = await state.get_data()
+    target_user_id = data.get(FSMDataKeys.ADMIN_MESSAGE_USER_ID)
+    cancel_message_id = data.get(FSMDataKeys.ADMIN_MESSAGE_CANCEL_MESSAGE_ID)
+
+    # Удаляем сообщение с кнопкой отмены
+    if cancel_message_id:
+        try:
+            await message.bot.delete_message(
+                chat_id=message.chat.id,
+                message_id=cancel_message_id,
+            )
+        except Exception:
+            pass
+
+    if not target_user_id:
+        await message.answer("❌ Произошла ошибка. Попробуйте начать заново.")
+        await state.clear()
+        return
+
+    async with session_factory() as session:
+        # Проверяем права администратора
+        if not await is_admin(session, settings, message.from_user.id):
+            await message.answer("⛔️ Нет прав.")
+            await state.clear()
+            return
+
+        # Получаем пользователя
+        user = await get_user_by_id(session, target_user_id)
+
+        if not user:
+            await message.answer("❌ Пользователь не найден.")
+            await state.clear()
+            return
+
+        username_display = (
+            f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        )
+
+        # Отправляем сообщение пользователю
+        try:
+            await message.bot.send_message(
+                user.telegram_id,
+                f"📩 <b>Сообщение от администратора:</b>\n\n{message_text}",
+                parse_mode="HTML",
+            )
+
+            # Логируем действие
+            session.add(
+                AdminLog(
+                    admin_id=message.from_user.id,
+                    action="send_message",
+                    payload={
+                        "user_id": user.id,
+                        "message_text": message_text[:500],  # Ограничиваем для лога
+                    },
+                )
+            )
+            await session.commit()
+
+            await message.answer(f"✅ Сообщение отправлено пользователю {username_display}.")
+        except Exception:
+            await message.answer(
+                f"❌ Не удалось отправить сообщение пользователю {username_display}.\n\n"
+                "Возможные причины:\n"
+                "• Пользователь заблокировал бота\n"
+                "• Пользователь удалил аккаунт\n"
+                "• Техническая ошибка"
+            )
+
+        await state.clear()

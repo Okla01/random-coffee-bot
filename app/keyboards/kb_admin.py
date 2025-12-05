@@ -336,13 +336,39 @@ def kb_admin_user_actions(
             callback_data=f"admin:make_admin:{user_id}",
         )
 
+    # 3) Отправить сообщение
+    message_btn = InlineKeyboardButton(
+        text="✉️ Сообщение",
+        callback_data=f"admin:message:{user_id}",
+    )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [block_btn],
             [role_btn],
+            [message_btn],
             [
                 InlineKeyboardButton(
                     text="⬅️ В главное меню", callback_data="admin:back_to_menu"
+                )
+            ],
+        ]
+    )
+
+
+def kb_admin_message_cancel() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для отмены отправки сообщения пользователю.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопкой отмены.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data="admin:cancel_message",
                 )
             ],
         ]

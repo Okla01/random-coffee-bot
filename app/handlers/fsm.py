@@ -24,6 +24,12 @@ class ComplaintStates(StatesGroup):
     waiting_warning_text = State()
 
 
+class AdminMessageStates(StatesGroup):
+    """Состояния FSM для отправки сообщения пользователю из админки."""
+
+    waiting_message_text = State()
+
+
 class MeetingFeedbackStates(StatesGroup):
     """Состояния FSM для оценки встречи."""
 
@@ -48,3 +54,7 @@ class FSMDataKeys(str, Enum):
     MEETING_FEEDBACK_MESSAGE_ID = "meeting_feedback_message_id"
     MEETING_FEEDBACK_MATCH_ID = "meeting_feedback_match_id"
     MEETING_FEEDBACK_PARTNER_ID = "meeting_feedback_partner_id"
+
+    # Ключи для отправки сообщения из админки
+    ADMIN_MESSAGE_USER_ID = "admin_message_user_id"
+    ADMIN_MESSAGE_CANCEL_MESSAGE_ID = "admin_message_cancel_message_id"

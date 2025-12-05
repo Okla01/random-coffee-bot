@@ -38,6 +38,7 @@ from app.services.admin.settings import (
     try_to_input_time_as_hours,
     update_draft_setting,
 )
+from app.services.const import DEFAULT_SETTINGS
 from app.services.matching.scheduler import (
     refresh_matching_round_schedule,
     refresh_timeouts_schedule,
@@ -242,6 +243,31 @@ async def cb_save_admin_settings(
     await cq.message.edit_text(
         "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
         reply_markup=kb_admin_menu(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
+
+
+@router.callback_query(F.data == "admin:clear_selection")
+async def cb_clear_admin_settings(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """Сбрасывает все настройки в черновике до заводских значений."""
+    
+    # Сброс черновика настроек на дефолтные значения
+    default_settings = DEFAULT_SETTINGS.copy()
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: default_settings})
+    
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+    
+    # Уведомление о сбросе
+    await cq.answer("Настройки сброшены до заводских")
+    
+    # Обновление отображения настроек
+    await cq.message.edit_text(
+        format_settings_text(default_settings),
+        reply_markup=kb_admin_settings(),
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 

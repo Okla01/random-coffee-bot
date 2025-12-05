@@ -140,22 +140,22 @@ def format_settings_text(settings: dict) -> str:
     Форматирует настройки в текстовую строку.
 
     Примечание: Данный текст будет отображён над меню с настройками панели администратора.
+    Порядок соответствует порядку кнопок в клавиатуре.
     """
     text = "Настройки для организации встреч.\nВыберете настройку, которую хотите изменить.\n\n"
+    
+    # 1. Мэтчинг включён
     match_enabled = _as_bool(settings.get("matching_enabled", "true"))
     text += f"🔹 Мэтчинг включён: {'Да' if match_enabled else 'Нет'}\n"
-    text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
-    text += (
-        "🔹 Кулдаун повторной пары (недели): "
-        f"{settings.get('repeat_pair_cooldown_weeks', '1')}\n"
-    )
+    
+    # 2. День подбора
     match_day_code = settings.get("match_day", "fri")
     text += (
         "🔹 День подбора: "
         f"{DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
     )
-
-    # Форматирование времени подбора
+    
+    # 3. Время подбора
     match_time = settings.get("match_msk_time", "12:00")
     if ":" not in match_time:
         # Миграция со старого формата
@@ -168,7 +168,16 @@ def format_settings_text(settings: dict) -> str:
     # Время подбора оставляем в формате ЧЧ:ММ (это время суток, не интервал)
     text += f"🔹 Время подбора: {match_time}\n"
     
-    # Форматирование таймаута ответа (поддержка миграции со старого имени)
+    # 4. Минимальный Jaccard
+    text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
+    
+    # 5. Кулдаун повторов
+    text += (
+        "🔹 Кулдаун повторов (недели): "
+        f"{settings.get('repeat_pair_cooldown_weeks', '1')}\n"
+    )
+    
+    # 6. Таймаут ответа
     timeout_value = settings.get("response_timeout_time") or settings.get("response_timeout_hours", "8:00")
     if ":" in timeout_value:
         timeout_display = format_time_readable(timeout_value)
@@ -184,7 +193,7 @@ def format_settings_text(settings: dict) -> str:
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
     
-    # Форматирование интервала напоминаний (поддержка миграции со старого имени)
+    # 7. Интервал напоминаний
     interval_value = settings.get("reminder_interval_time") or settings.get("reminder_interval_hours", "1:00")
     if ":" in interval_value:
         interval_display = format_time_readable(interval_value)

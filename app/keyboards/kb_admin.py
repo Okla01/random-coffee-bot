@@ -90,25 +90,23 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="⚙️ Переключить мэтчинг", callback_data="admin:toggle_matching_enabled"),
             ],
             [
-                InlineKeyboardButton(text="🔄 Минимальный Jaccard", callback_data="admin:update_min_jaccard"),
-            ],
-            [
-                InlineKeyboardButton(
-                    text="🔢 Кулдаун повторной пары",
-                    callback_data="admin:update_repeat_pair_cooldown_weeks",
-                ),
-            ],
-            [
                 InlineKeyboardButton(text="🗓️ День побора", callback_data="admin:update_match_day"),
+                InlineKeyboardButton(text="🕐 Время подбора", callback_data="admin:update_match_msk_time"),
             ],
             [
-                InlineKeyboardButton(text="🕐 Время подбора", callback_data="admin:update_match_msk_time"),
+                InlineKeyboardButton(text="⚖️ Min Jaccard", callback_data="admin:update_min_jaccard"),
+            ],
+            [
+                InlineKeyboardButton(text="🔢 Кулдаун повторов", callback_data="admin:update_repeat_pair_cooldown_weeks"),
             ],
             [
                 InlineKeyboardButton(text="⏱️ Таймаут ответа", callback_data="admin:update_response_timeout_time"),
             ],
             [
                 InlineKeyboardButton(text="🔔 Интервал напоминаний", callback_data="admin:update_reminder_interval_time"),
+            ],
+            [
+                InlineKeyboardButton(text="🧹 Сбросить до заводских настроек", callback_data="admin:clear_selection"),
             ],
             [
                 InlineKeyboardButton(text="❌ Отмена", callback_data="admin:cancel_admin_settings"),

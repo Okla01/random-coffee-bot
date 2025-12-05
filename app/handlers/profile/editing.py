@@ -25,7 +25,7 @@ from app.keyboards.utils import clear_last_kb
 
 from app.services.profile.preview import (
     send_profile_preview,
-    build_profile_preview_text
+    build_profile_preview_text,
 )
 from app.services.profile.editing import (
     process_name_field,
@@ -79,9 +79,11 @@ async def on_profile_text(
     state_data = await state.get_data()
     if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
         raise SkipHandler()
-    
+
     async with session_factory() as session:
-        user = await get_or_create_user(session, message.from_user.id, message.from_user.username)
+        user = await get_or_create_user(
+            session, message.from_user.id, message.from_user.username
+        )
 
         # Если пользователь ожидает одобрения заявки, отвечаем сообщением об ожидании
         if user.stage == "profile_name_pending":
@@ -112,24 +114,28 @@ async def on_profile_text(
 
         # NAME
         if user.stage == "profile_name":
-            result = await process_name_field(session, user, text, settings, editing_field)
-            
+            result = await process_name_field(
+                session, user, text, settings, editing_field
+            )
+
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
                 return
-            
+
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
-            
+
             if result.result_type == "field_updated_continue":
                 # Если перешли на этап ожидания одобрения заявки
                 if result.next_stage == "profile_name_pending":
                     # Отправляем заявку в админский чат
-                    await notify_admin_on_name_request(session, settings, user, message.bot)
+                    await notify_admin_on_name_request(
+                        session, settings, user, message.bot
+                    )
                     await message.answer(
                         "Ваша заявка на доступ к анкетированию отправлена администратору. "
                         "Ожидайте рассмотрения."
@@ -141,19 +147,21 @@ async def on_profile_text(
 
         # BIO
         if user.stage == "profile_bio":
-            result = await process_bio_field(session, user, text, settings, editing_field)
-            
+            result = await process_bio_field(
+                session, user, text, settings, editing_field
+            )
+
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
                 return
-            
+
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
-            
+
             if result.result_type == "field_updated_continue":
                 await message.answer("Введите ваш возраст (16–50):")
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
@@ -161,19 +169,21 @@ async def on_profile_text(
 
         # AGE
         if user.stage == "profile_age":
-            result = await process_age_field(session, user, text, settings, editing_field)
-            
+            result = await process_age_field(
+                session, user, text, settings, editing_field
+            )
+
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
                 return
-            
+
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
-            
+
             if result.result_type == "field_updated_continue":
                 await message.answer(
                     "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
@@ -183,19 +193,21 @@ async def on_profile_text(
 
         # INTERESTS
         if user.stage == "profile_interests":
-            result = await process_interests_field(session, user, text, settings, editing_field)
-            
+            result = await process_interests_field(
+                session, user, text, settings, editing_field
+            )
+
             if result.result_type == "validation_error":
                 await message.answer(result.error_message)
                 return
-            
+
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
                     message.bot, message.chat.id, user, state, kb_profile_review()
                 )
                 return
-            
+
             if result.result_type == "field_updated_continue":
                 # Отправить текстовый предпросмотр
                 await send_profile_preview(
@@ -233,7 +245,7 @@ async def cb_prof_save(
         await process_save_profile(session, user)
         user.status = USER_STATUS_ACTIVE
         await session.commit()
-    
+
     # Сразу вызываем функционал участия в подборе
     await cq.message.edit_reply_markup(reply_markup=None)
     await cq.message.answer(
@@ -267,7 +279,7 @@ async def cb_prof_edit_review(
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         await process_edit_review(session, user)
-        
+
         # Формируем новый текст предпросмотра
         preview_text = build_profile_preview_text(user)
 
@@ -290,11 +302,11 @@ async def cb_prof_edit_review(
 
 
 @router.callback_query(
-    (F.data == "prof:edit:name") |
-    (F.data == "prof:edit:bio") |
-    (F.data == "prof:edit:age") |
-    (F.data == "prof:edit:interests") |
-    (F.data == "prof:edit:timezone")
+    (F.data == "prof:edit:name")
+    | (F.data == "prof:edit:bio")
+    | (F.data == "prof:edit:age")
+    | (F.data == "prof:edit:interests")
+    | (F.data == "prof:edit:timezone")
 )
 async def cb_prof_edit_field(
     cq: CallbackQuery,
@@ -325,16 +337,40 @@ async def cb_prof_edit_field(
         if field in {"bio", "interests"}:
             user.status = USER_STATUS_NOT_ACTIVE
         if field == "name":
-            await update_user_stage(session, user, "profile_name", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
+            await update_user_stage(
+                session,
+                user,
+                "profile_name",
+                state,
+                {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
+            )
             await cq.message.answer("Давайте заполним анкету! Как вас зовут?")
         elif field == "bio":
-            await update_user_stage(session, user, "profile_bio", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
+            await update_user_stage(
+                session,
+                user,
+                "profile_bio",
+                state,
+                {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
+            )
             await cq.message.answer("Расскажите о себе (до 500 символов):")
         elif field == "age":
-            await update_user_stage(session, user, "profile_age", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
+            await update_user_stage(
+                session,
+                user,
+                "profile_age",
+                state,
+                {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
+            )
             await cq.message.answer("Введите ваш возраст (16–50):")
         elif field == "interests":
-            await update_user_stage(session, user, "profile_interests", state, {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None})
+            await update_user_stage(
+                session,
+                user,
+                "profile_interests",
+                state,
+                {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
+            )
             await cq.message.answer("Перечислите интересы через запятую.")
         await session.commit()
         await cq.answer()

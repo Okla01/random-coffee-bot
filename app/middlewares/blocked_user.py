@@ -11,7 +11,13 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Awaitable
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Message, CallbackQuery, Update, ReplyKeyboardRemove
+from aiogram.types import (
+    TelegramObject,
+    Message,
+    CallbackQuery,
+    Update,
+    ReplyKeyboardRemove,
+)
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 from app.database.db import get_user_by_tg_id, is_user_blocked
@@ -23,7 +29,7 @@ from app.services.core import Settings
 class BlockedUserMiddleware(BaseMiddleware):
     """
     Middleware для проверки блокировки пользователя и обновления last_activity.
-    
+
     Проверяет статус пользователя перед обработкой любого обновления.
     Если пользователь заблокирован, отправляет уведомление и прерывает цепочку обработки.
     Также обновляет last_activity для всех действий пользователя.
@@ -32,7 +38,7 @@ class BlockedUserMiddleware(BaseMiddleware):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         """
         Инициализирует middleware с фабрикой сессий.
-        
+
         Args:
             session_factory (async_sessionmaker[AsyncSession]): фабрика асинхронных сессий БД.
         """
@@ -47,15 +53,15 @@ class BlockedUserMiddleware(BaseMiddleware):
     ) -> Any:
         """
         Проверяет блокировку пользователя и обновляет last_activity перед обработкой любого обновления.
-        
+
         Любое действие пользователя приводит к проверке блокировки и обновлению last_activity.
         Если пользователь заблокирован, отправляется сообщение о блокировке и удаляется последняя клавиатура.
-        
+
         Args:
             handler: следующий обработчик в цепи.
             event (TelegramObject): объект события (сообщение, callback и т.д.).
             data (Dict[str, Any]): словарь параметров обработчика.
-        
+
         Returns:
             Any: результат выполнения handler или None если пользователь заблокирован.
         """
@@ -71,29 +77,31 @@ class BlockedUserMiddleware(BaseMiddleware):
             )
         elif isinstance(event, (Message, CallbackQuery)):
             target = event
-        
+
         # Если нет события или нет пользователя - пропускаем
         if not target or not hasattr(target, "from_user") or not target.from_user:
             return await handler(event, data)
-        
+
         # Получаем пользователя из БД и проверяем блокировку
         telegram_id = target.from_user.id
-        
+
         async with self._factory() as session:
             user = await get_user_by_tg_id(session, telegram_id)
-            
+
             # Если пользователь не найден - пропускаем
             if not user:
                 return await handler(event, data)
-            
+
             # Обновляем last_activity для любого действия пользователя
             user.last_activity = now_msk()
             await session.commit()
-            
+
             # Проверяем блокировку
             if is_user_blocked(user):
-                message_text = "Доступ временно заблокирован. Свяжитесь с администратором."
-                
+                message_text = (
+                    "Доступ временно заблокирован. Свяжитесь с администратором."
+                )
+
                 # Получаем settings для проверки админских прав
                 settings = data.get("settings")
                 if settings is None:
@@ -102,14 +110,14 @@ class BlockedUserMiddleware(BaseMiddleware):
                         settings = dispatcher["settings"]
                     else:
                         settings = Settings.load()
-                
+
                 # Проверяем, является ли пользователь админом
                 user_is_admin = await is_admin(session, settings, telegram_id)
-                
+
                 if isinstance(target, CallbackQuery):
                     # Для callback'ов - всплывающее уведомление
                     await target.answer(message_text, show_alert=True)
-                    
+
                     # Для обычных пользователей удаляем клавиатуру
                     if not user_is_admin:
                         try:
@@ -121,11 +129,12 @@ class BlockedUserMiddleware(BaseMiddleware):
                     # Для обычных пользователей удаляем клавиатуру
                     await target.answer(
                         message_text,
-                        reply_markup=ReplyKeyboardRemove() if not user_is_admin else None
+                        reply_markup=ReplyKeyboardRemove()
+                        if not user_is_admin
+                        else None,
                     )
-                
+
                 return  # Прерываем обработку
-        
+
         # Пользователь не заблокирован - продолжаем обработку
         return await handler(event, data)
-

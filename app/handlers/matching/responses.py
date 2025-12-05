@@ -107,8 +107,12 @@ async def on_match_ready(
             match.last_reminder_at = None
         await session.commit()
         if both_ready:
-            await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_a)
-            await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_b)
+            await _start_slots_dialog_for_user(
+                cq.bot, dialog_bg_factory, match, match.user_a
+            )
+            await _start_slots_dialog_for_user(
+                cq.bot, dialog_bg_factory, match, match.user_b
+            )
             await notify_waiting_partner_ready(cq.bot, match)
 
 
@@ -233,7 +237,7 @@ async def on_match_reschedule(
     dialog_bg_factory: BgManagerFactory,
 ) -> None:
     await cq.message.delete_reply_markup()
-    
+
     """
     Обрабатывает callback кнопки «Назначить заново» на этапе waiting_confirm.
 
@@ -359,24 +363,24 @@ async def on_meeting_complaint(
     Редактирует сообщение, запрашивая текст жалобы.
     """
     match_id = int(cq.data.split(":")[1])
-    
+
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_COMPLETED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
-        
+
         user = await _get_user(session, cq.from_user.id)
         if not user:
             await cq.answer("Обновите регистрацию", show_alert=True)
             return
-        
+
         # Определяем партнёра
         partner = match.user_b if user.id == match.user_a_id else match.user_a
         if not partner:
             await cq.answer("Партнёр не найден", show_alert=True)
             return
-    
+
     # Сохраняем данные в FSM
     await state.update_data(
         **{
@@ -385,11 +389,11 @@ async def on_meeting_complaint(
             FSMDataKeys.MEETING_FEEDBACK_PARTNER_ID: partner.telegram_id,
         }
     )
-    
+
     # Редактируем сообщение
     text = "Введите текст жалобы:"
     markup = kb_complaint_cancel(match_id)
-    
+
     try:
         await cq.message.edit_text(text, reply_markup=markup)
         await state.set_state(MeetingFeedbackStates.waiting_complaint_text)
@@ -409,13 +413,13 @@ async def on_complaint_cancel(
     Обрабатывает отмену жалобы, возвращая к исходному сообщению с кнопками оценки.
     """
     match_id = int(cq.data.split(":")[1])
-    
+
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_COMPLETED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
-    
+
     # Возвращаем исходное сообщение
     text = (
         "👋 Время вашей встречи наступило. "
@@ -423,7 +427,7 @@ async def on_complaint_cancel(
         "После встречи вы можете оценить как всё прошло!"
     )
     markup = kb_meeting_feedback(match_id)
-    
+
     try:
         await cq.message.edit_text(text, reply_markup=markup)
         await state.set_state(None)
@@ -447,40 +451,40 @@ async def on_complaint_text_input(
     match_id = data.get(FSMDataKeys.MEETING_FEEDBACK_MATCH_ID)
     message_id = data.get(FSMDataKeys.MEETING_FEEDBACK_MESSAGE_ID)
     partner_telegram_id = data.get(FSMDataKeys.MEETING_FEEDBACK_PARTNER_ID)
-    
+
     if not match_id or not message_id or not partner_telegram_id:
         await msg.answer("Ошибка: данные не найдены. Попробуйте снова.")
         await state.set_state(None)
         return
-    
+
     complaint_text = msg.text.strip()
     if not complaint_text:
         await msg.answer("Пожалуйста, введите текст жалобы.")
         return
-    
+
     if len(complaint_text) > 1000:
         await msg.answer("Текст жалобы слишком длинный. Максимум 1000 символов.")
         return
-    
+
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_COMPLETED:
             await msg.answer("Встреча недоступна")
             await state.set_state(None)
             return
-        
+
         user = await _get_user(session, msg.from_user.id)
         if not user:
             await msg.answer("Обновите регистрацию")
             await state.set_state(None)
             return
-        
+
         if not settings.admin_chat_id:
             logger.error("ADMIN_CHAT_ID not configured")
             await msg.answer("Ошибка конфигурации. Обратитесь к администратору.")
             await state.set_state(None)
             return
-        
+
         try:
             # Отправляем жалобу
             await submit_complaint(
@@ -493,17 +497,16 @@ async def on_complaint_text_input(
                 meeting_start_at=match.meeting_start_at,
                 match_id=match.id,
             )
-            
+
             # Удаляем сообщение пользователя с текстом жалобы
             try:
                 await msg.delete()
             except Exception as e:
                 logger.exception("Failed to delete user message: %s", e)
-            
+
             # Редактируем сообщение с подтверждением и текстом жалобы
             confirmation_text = (
-                "Ваша жалоба отправлена.\n"
-                f"Текст вашей жалобы: {complaint_text}\n"
+                f"Ваша жалоба отправлена.\nТекст вашей жалобы: {complaint_text}\n"
             )
             await msg.answer("Вы автоматически участвуете в следующем подборе пары!")
             try:
@@ -516,9 +519,9 @@ async def on_complaint_text_input(
             except Exception as e:
                 logger.exception("Failed to edit message after complaint: %s", e)
                 await msg.answer(confirmation_text)
-            
+
             await state.set_state(None)
-            
+
         except Exception as e:
             logger.exception("Failed to submit complaint: %s", e)
             await msg.answer("Ошибка при отправке жалобы. Попробуйте позже.")
@@ -533,20 +536,19 @@ async def on_meeting_positive(
     Обрабатывает нажатие кнопки [👍] для положительной оценки встречи.
     """
     match_id = int(cq.data.split(":")[1])
-    
+
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_COMPLETED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
-    
+
     # Редактируем сообщение
     text = "Рады, что встреча прошла успешно! Вы автоматически участвуете в следующем подборе пары!"
-    
+
     try:
         await cq.message.edit_text(text, reply_markup=None)
         await cq.answer()
     except Exception as e:
         logger.exception("Failed to edit message for positive feedback: %s", e)
         await cq.answer("Ошибка при обработке запроса", show_alert=True)
-

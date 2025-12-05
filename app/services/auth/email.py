@@ -120,6 +120,7 @@ def validate_email(
 
 class EmailResultType(str, Enum):
     """Типы результатов обработки email."""
+
     SUCCESS = "success"
     EXISTS = "exists"
     INVALID = "invalid"
@@ -184,11 +185,13 @@ async def process_email_input(
     await log_attempt_func(session, user.id, "email", email)
 
     if await check_email_exists(session, email, user.telegram_id):
-        return EmailResultType.EXISTS, "Этот email уже привязан к другому аккаунту. Если это ошибка — обратитесь к администратору.", None
+        return (
+            EmailResultType.EXISTS,
+            "Этот email уже привязан к другому аккаунту. Если это ошибка — обратитесь к администратору.",
+            None,
+        )
 
-    ok, err = validate_email(
-        email, settings.email_regex, settings.allowed_domains
-    )
+    ok, err = validate_email(email, settings.email_regex, settings.allowed_domains)
     if not ok:
         user.email_attempts += 1
         user.stage = "verifying_email"
@@ -220,4 +223,3 @@ async def process_email_input(
     user.stage = "verifying_code"
     ok, warn = await send_or_resend_otp_func(session, settings, user)
     return EmailResultType.SUCCESS, None, warn
-

@@ -1,8 +1,11 @@
 """
 Обработчики блокировки и разблокировки пользователей.
 
-Обрабатывает callback-запросы для блокировки/разблокировки пользователей
-с уведомлениями и логированием действий (из уведомлений о подозрительной активности).
+Обрабатывает callback-запросы для блокировки/разблокировки пользователей из уведомлений
+о подозрительной активности. Изменяет статус пользователя в базе данных, уведомляет
+пользователя о решении, логирует действие администратора, обновляет исходное сообщение
+с указанием администратора и убирает inline-клавиатуру. При разблокировке возвращает
+пользователя к этапу ввода корпоративного e-mail.
 """
 
 from __future__ import annotations
@@ -21,7 +24,8 @@ router = Router()
 
 
 @router.callback_query(
-    F.data.startswith("admin:notify:block:") | F.data.startswith("admin:notify:unblock:")
+    F.data.startswith("admin:notify:block:")
+    | F.data.startswith("admin:notify:unblock:")
 )
 async def admin_notify_callbacks(
     cq: CallbackQuery,
@@ -32,8 +36,17 @@ async def admin_notify_callbacks(
     Обрабатывает callback-запросы для блокировки/разблокировки из уведомлений.
 
     Интерпретирует callback data формата 'admin:notify:block:ID' или 'admin:notify:unblock:ID'.
-    Изменяет статус пользователя, уведомляет его о решении, логирует действие
-    и обновляет исходное сообщение с указанием администратора.
+    Проверяет права администратора, изменяет статус пользователя в базе данных, уведомляет
+    пользователя о решении, логирует действие администратора и обновляет исходное сообщение
+    с указанием администратора, убирая inline-клавиатуру.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
     """
     data = cq.data or ""
 
@@ -64,7 +77,7 @@ async def admin_notify_callbacks(
             await cq.message.edit_text(
                 cq.message.text
                 + f"\n\nРешение: Пользователь {'@' + user.username if user.username else f'ID:{user.telegram_id}'} заблокирован."
-                  f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
+                f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
                 reply_markup=None,
             )
 
@@ -89,8 +102,8 @@ async def admin_notify_callbacks(
             await cq.message.edit_text(
                 cq.message.text
                 + f"\n\nРешение: Пользователь {'@' + user.username if user.username else f'ID:{user.telegram_id}'} разблокирован "
-                  f"и возвращён к вводу корпоративного e-mail."
-                  f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
+                f"и возвращён к вводу корпоративного e-mail."
+                f"\n👨‍💻Рассмотрел: {'@' + reviewed_by}",
                 reply_markup=None,
             )
 

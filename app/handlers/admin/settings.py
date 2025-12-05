@@ -1,14 +1,11 @@
 """
 Обработчик кнопок с настройками панели администратора.
 
-Обрабатывает callback-запросы для просмотра и изменения настроек системы:
-- включение/выключение мэтчинга
-- минимальный Jaccard коэффициент
-- периодичность встреч (в неделях)
-- день недели для встреч
-- время подбора (МСК) в формате ЧЧ:ММ
-- таймаут ответа (response_timeout_time) в формате ЧЧ:ММ
-- интервал напоминаний (reminder_interval_time) в формате ЧЧ:ММ
+Обрабатывает callback-запросы и текстовые сообщения для просмотра и изменения настроек системы:
+включение/выключение мэтчинга, минимальный Jaccard коэффициент, периодичность встреч (в неделях),
+день недели для встреч, время подбора (МСК), таймаут ответа и интервал напоминаний в формате ЧЧ:ММ.
+Использует черновик настроек в FSM для предварительного просмотра изменений перед сохранением.
+При сохранении обновляет расписание мэтчинга и таймаутов в планировщике.
 """
 
 from __future__ import annotations
@@ -57,7 +54,21 @@ async def cb_admin_settings(
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Обрабатывает callback для открытия меню настроек администратора."""
+    """
+    Обрабатывает callback для открытия меню настроек администратора.
+
+    Получает текущие настройки из базы данных, сохраняет их в FSM как черновик
+    для последующего редактирования, форматирует текст с настройками и отображает
+    меню настроек с возможностью изменения параметров.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     # Получение словаря текущих настроек
     current_settings = await get_current_settings(session_factory)
@@ -87,7 +98,19 @@ async def cb_update_min_jaccard(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новое значение минимального Jaccard коэффициента."""
+    """
+    Запрашивает новое значение минимального Jaccard коэффициента.
+
+    Удаляет предыдущую клавиатуру и переводит в состояние ожидания ввода
+    нового значения минимального Jaccard коэффициента (от 0,1 до 1,0).
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
@@ -105,13 +128,25 @@ async def cb_update_repeat_pair_cooldown_weeks(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новое значение периодичности встреч в неделях."""
+    """
+    Запрашивает новое значение периодичности встреч в неделях.
+
+    Удаляет предыдущую клавиатуру, получает текущее значение кулдауна из черновика
+    и отображает клавиатуру выбора нового значения периодичности встреч (1-4 недели).
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
     data = await state.get_data()
     draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
-    
+
     # Получаем текущее значение кулдауна
     try:
         current_weeks = int(draft.get("repeat_pair_cooldown_weeks", "1"))
@@ -131,7 +166,19 @@ async def cb_update_match_day(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новый день недели для встреч."""
+    """
+    Запрашивает новый день недели для встреч.
+
+    Удаляет предыдущую клавиатуру, получает текущий день недели из черновика
+    и отображает клавиатуру выбора нового дня недели для встреч.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
@@ -151,18 +198,30 @@ async def cb_toggle_matching_enabled(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Переключает включен/выключен мэтчинг."""
+    """
+    Переключает включен/выключен мэтчинг.
+
+    Получает текущее значение из черновика настроек, переключает его (true ↔ false),
+    обновляет черновик и отображает обновлённое меню настроек.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     data = await state.get_data()
     draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
-    
+
     current_value = draft.get("matching_enabled", "true")
     new_value = toggle_matching_enabled(current_value)
-    
+
     draft = await update_draft_setting(state, "matching_enabled", new_value)
-    
+
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    
+
     # Возвращение в меню настроек (редактируем текущее сообщение)
     await cq.message.edit_text(
         format_settings_text(draft),
@@ -176,11 +235,25 @@ async def cb_update_match_msk_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новое время мэтчинга (МСК) в формате ЧЧ:ММ."""
+    """
+    Запрашивает новое время мэтчинга (МСК) в формате ЧЧ:ММ.
+
+    Удаляет предыдущую клавиатуру и переводит в состояние ожидания ввода
+    нового времени подбора в формате ЧЧ:ММ (например, 12:00).
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Введите новое время подбора в формате ЧЧ:ММ (например, 12:00):")
+    await cq.message.answer(
+        "Введите новое время подбора в формате ЧЧ:ММ (например, 12:00):"
+    )
 
     # Переход с состояние ожидания значения
     await state.set_state(AdminSettingsStates.waiting_match_msk_time)
@@ -191,11 +264,25 @@ async def cb_update_response_timeout_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новый таймаут ответа в формате ЧЧ:ММ."""
+    """
+    Запрашивает новый таймаут ответа в формате ЧЧ:ММ.
+
+    Удаляет предыдущую клавиатуру и переводит в состояние ожидания ввода
+    нового таймаута ответа в формате ЧЧ:ММ (например, 8:00).
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Введите новый таймаут ответа в формате ЧЧ:ММ (например, 8:00):")
+    await cq.message.answer(
+        "Введите новый таймаут ответа в формате ЧЧ:ММ (например, 8:00):"
+    )
 
     # Переход с состояние ожидания значения
     await state.set_state(AdminSettingsStates.waiting_response_timeout_time)
@@ -206,11 +293,25 @@ async def cb_update_reminder_interval_time(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Запрашивает новый интервал напоминаний в формате ЧЧ:ММ."""
+    """
+    Запрашивает новый интервал напоминаний в формате ЧЧ:ММ.
+
+    Удаляет предыдущую клавиатуру и переводит в состояние ожидания ввода
+    нового интервала напоминаний в формате ЧЧ:ММ (например, 1:00).
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
-    await cq.message.answer("Введите новый интервал напоминаний в формате ЧЧ:ММ (например, 1:00):")
+    await cq.message.answer(
+        "Введите новый интервал напоминаний в формате ЧЧ:ММ (например, 1:00):"
+    )
 
     # Переход с состояние ожидания значения
     await state.set_state(AdminSettingsStates.waiting_reminder_interval_time)
@@ -223,7 +324,22 @@ async def cb_save_admin_settings(
     session_factory: async_sessionmaker[AsyncSession],
     matching_scheduler: AsyncIOScheduler | None = None,
 ) -> None:
-    """Сохраняет все изменения настроек в базу данных."""
+    """
+    Сохраняет все изменения настроек в базу данных.
+
+    Получает черновик настроек из FSM, сохраняет их в базу данных через сервисную функцию,
+    обновляет расписание мэтчинга и таймаутов в планировщике (если доступен) и возвращает
+    в главное меню администратора.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        matching_scheduler (AsyncIOScheduler | None): планировщик задач (опционально).
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     # Получение черновика настроек
     data = await state.get_data()
@@ -241,6 +357,7 @@ async def cb_save_admin_settings(
         await refresh_timeouts_schedule(matching_scheduler, session_factory)
     else:
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning("Matching scheduler not available when saving settings")
 
@@ -262,18 +379,30 @@ async def cb_clear_admin_settings(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Сбрасывает все настройки в черновике до заводских значений."""
-    
+    """
+    Сбрасывает все настройки в черновике до заводских значений.
+
+    Заменяет черновик настроек в FSM на дефолтные значения из DEFAULT_SETTINGS,
+    обновляет отображение меню настроек и уведомляет администратора о сбросе.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+
     # Сброс черновика настроек на дефолтные значения
     default_settings = DEFAULT_SETTINGS.copy()
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: default_settings})
-    
+
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    
+
     # Уведомление о сбросе
     await cq.answer("Настройки сброшены до заводских")
-    
+
     # Обновление отображения настроек
     await cq.message.edit_text(
         format_settings_text(default_settings),
@@ -288,7 +417,21 @@ async def cb_cancel_admin_settings(
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Отменяет все несохранённые изменения и возвращает в главное меню админа."""
+    """
+    Отменяет все несохранённые изменения и возвращает в главное меню админа.
+
+    Проверяет наличие черновика настроек, удаляет предыдущую клавиатуру, уведомляет
+    администратора об отмене и возвращает в главное меню администратора без сохранения
+    изменений в базу данных.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     # Получение черновика настроек
     data = await state.get_data()
@@ -317,7 +460,20 @@ async def cb_change_day_of_week(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Обрабатывает выбор нового дня недели для встреч."""
+    """
+    Обрабатывает выбор нового дня недели для встреч.
+
+    Извлекает код дня из callback data, обновляет черновик настроек, выходит из состояния
+    ожидания значения, удаляет предыдущую клавиатуру и возвращает в меню настроек
+    с обновлённым значением дня недели.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Получение кода дня из callback_data
     # "admin:change_day_of_week:mon" -> "mon"
     day_code = cq.data.split(":")[-1]
@@ -344,7 +500,20 @@ async def cb_change_cooldown_weeks(
     cq: CallbackQuery,
     state: FSMContext,
 ) -> None:
-    """Обрабатывает выбор нового кулдауна повторной пары в неделях."""
+    """
+    Обрабатывает выбор нового кулдауна повторной пары в неделях.
+
+    Извлекает количество недель из callback data, проверяет диапазон (1-4 недели),
+    обновляет черновик настроек, выходит из состояния ожидания значения, удаляет
+    предыдущую клавиатуру и возвращает в меню настроек с обновлённым значением.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     # Получение количества недель из callback_data
     # "admin:change_cooldown_weeks:3" -> "3"
     try:
@@ -383,7 +552,16 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения минимального Jaccard коэффициента.
 
-    Примечание: Некорректный ввод обрабатывается отдельно.
+    Валидирует введённое значение (должно быть числом от 0,1 до 1,0), обновляет
+    черновик настроек, выходит из состояния ожидания значения и обновляет
+    отображение меню настроек. При некорректном вводе запрашивает повторный ввод.
+
+    Args:
+        msg (Message): объект сообщения с введённым значением.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
     """
     min_jaccard: float | None = try_to_input_min_jaccard(msg.text)
     if min_jaccard is None:
@@ -429,6 +607,17 @@ async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
 async def on_match_msk_time_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения времени подбора в формате ЧЧ:ММ.
+
+    Валидирует введённое время (формат ЧЧ:ММ), обновляет черновик настроек,
+    выходит из состояния ожидания значения и обновляет отображение меню настроек.
+    При некорректном вводе запрашивает повторный ввод.
+
+    Args:
+        msg (Message): объект сообщения с введённым временем.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
     """
     match_time: str | None = try_to_input_time(msg.text)
     if match_time is None:
@@ -474,6 +663,17 @@ async def on_match_msk_time_input(msg: Message, state: FSMContext) -> None:
 async def on_response_timeout_time_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения таймаута ответа в формате ЧЧ:ММ.
+
+    Валидирует введённое время (формат ЧЧ:ММ, интерпретируется как количество часов),
+    обновляет черновик настроек, выходит из состояния ожидания значения и обновляет
+    отображение меню настроек. При некорректном вводе запрашивает повторный ввод.
+
+    Args:
+        msg (Message): объект сообщения с введённым временем.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
     """
     timeout_time: str | None = try_to_input_time_as_hours(msg.text)
     if timeout_time is None:
@@ -519,6 +719,17 @@ async def on_response_timeout_time_input(msg: Message, state: FSMContext) -> Non
 async def on_reminder_interval_time_input(msg: Message, state: FSMContext) -> None:
     """
     Обрабатывает ввод нового значения интервала напоминаний в формате ЧЧ:ММ.
+
+    Валидирует введённое время (формат ЧЧ:ММ, интерпретируется как количество часов),
+    обновляет черновик настроек, выходит из состояния ожидания значения и обновляет
+    отображение меню настроек. При некорректном вводе запрашивает повторный ввод.
+
+    Args:
+        msg (Message): объект сообщения с введённым временем.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
     """
     interval_time: str | None = try_to_input_time_as_hours(msg.text)
     if interval_time is None:

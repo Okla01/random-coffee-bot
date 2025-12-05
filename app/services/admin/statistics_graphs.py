@@ -80,12 +80,14 @@ async def _get_weekly_stats(
         )
         avg_jaccard = float(avg_jaccard) if avg_jaccard is not None else None
 
-        stats.append({
-            "week_end": week_end,
-            "total_matches": total_matches,
-            "successful_matches": successful_matches,
-            "avg_jaccard": avg_jaccard,
-        })
+        stats.append(
+            {
+                "week_end": week_end,
+                "total_matches": total_matches,
+                "successful_matches": successful_matches,
+                "avg_jaccard": avg_jaccard,
+            }
+        )
 
     return stats
 
@@ -106,15 +108,26 @@ def _generate_matches_graph(stats: list[dict]) -> BytesIO:
 
     fig, ax = plt.subplots(figsize=(12, 6))
 
-    ax.plot(dates, total_matches, "b-o", label="Всего мэтчей", linewidth=2, markersize=4)
-    ax.plot(dates, successful_matches, "g-o", label="Успешных мэтчей", linewidth=2, markersize=4)
+    ax.plot(
+        dates, total_matches, "b-o", label="Всего мэтчей", linewidth=2, markersize=4
+    )
+    ax.plot(
+        dates,
+        successful_matches,
+        "g-o",
+        label="Успешных мэтчей",
+        linewidth=2,
+        markersize=4,
+    )
 
     ax.fill_between(dates, total_matches, alpha=0.2, color="blue")
     ax.fill_between(dates, successful_matches, alpha=0.2, color="green")
 
     ax.set_xlabel("Дата", fontsize=12)
     ax.set_ylabel("Количество мэтчей", fontsize=12)
-    ax.set_title("Мэтчи за последние 6 месяцев (по неделям)", fontsize=14, fontweight="bold")
+    ax.set_title(
+        "Мэтчи за последние 6 месяцев (по неделям)", fontsize=14, fontweight="bold"
+    )
 
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
     ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
@@ -155,7 +168,14 @@ def _generate_jaccard_graph(stats: list[dict]) -> BytesIO:
     fig, ax = plt.subplots(figsize=(12, 6))
 
     if dates and jaccard_values:
-        ax.plot(dates, jaccard_values, "r-o", label="Средний Jaccard", linewidth=2, markersize=4)
+        ax.plot(
+            dates,
+            jaccard_values,
+            "r-o",
+            label="Средний Jaccard",
+            linewidth=2,
+            markersize=4,
+        )
         ax.fill_between(dates, jaccard_values, alpha=0.2, color="red")
 
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d.%m"))
@@ -165,13 +185,22 @@ def _generate_jaccard_graph(stats: list[dict]) -> BytesIO:
         ax.set_ylim(0, 1)
     else:
         ax.text(
-            0.5, 0.5, "Нет данных за период",
-            ha="center", va="center", fontsize=14, transform=ax.transAxes
+            0.5,
+            0.5,
+            "Нет данных за период",
+            ha="center",
+            va="center",
+            fontsize=14,
+            transform=ax.transAxes,
         )
 
     ax.set_xlabel("Дата", fontsize=12)
     ax.set_ylabel("Jaccard-коэффициент", fontsize=12)
-    ax.set_title("Средний Jaccard-коэффициент за последние 6 месяцев (по неделям)", fontsize=14, fontweight="bold")
+    ax.set_title(
+        "Средний Jaccard-коэффициент за последние 6 месяцев (по неделям)",
+        fontsize=14,
+        fontweight="bold",
+    )
 
     ax.legend(loc="upper left")
 
@@ -204,4 +233,3 @@ async def generate_statistics_graphs(
     jaccard_graph = _generate_jaccard_graph(stats)
 
     return matches_graph, jaccard_graph
-

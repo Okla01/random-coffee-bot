@@ -1,7 +1,7 @@
 """
 Все FSM-состояния и ключи для данных, сохраняемых в FSMContext приложения.
 
-Централизованное хранение всех состояний FSM и ключей для данных, 
+Централизованное хранение всех состояний FSM и ключей для данных,
 сохраняемых в FSMContext для удобства управления и поддержки.
 """
 
@@ -48,4 +48,3 @@ class FSMDataKeys(str, Enum):
     MEETING_FEEDBACK_MESSAGE_ID = "meeting_feedback_message_id"
     MEETING_FEEDBACK_MATCH_ID = "meeting_feedback_match_id"
     MEETING_FEEDBACK_PARTNER_ID = "meeting_feedback_partner_id"
-

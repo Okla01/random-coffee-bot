@@ -27,9 +27,9 @@ from app.database.models import User, AdminLog
 
 # Типы результатов обработки полей профиля
 FieldResultType = Literal[
-    "validation_error",      # ошибка валидации (нужно показать сообщение об ошибке)
+    "validation_error",  # ошибка валидации (нужно показать сообщение об ошибке)
     "field_updated_continue",  # поле обновлено, переходим к следующему шагу
-    "field_updated_review",    # поле обновлено, возвращаемся в предпросмотр
+    "field_updated_review",  # поле обновлено, возвращаемся в предпросмотр
 ]
 
 
@@ -44,6 +44,7 @@ class FieldResult:
         next_stage (str | None): следующая стадия, если поле обновлено.
         is_editing (bool): флаг, что это редактирование отдельного поля.
     """
+
     result_type: FieldResultType
     error_message: str | None = None
     next_stage: str | None = None
@@ -78,16 +79,18 @@ async def process_name_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Имя должно быть от 2 до 100 символов. Попробуйте ещё раз."
+            error_message="⚠️ Имя должно быть от 2 до 100 символов. Попробуйте ещё раз.",
         )
 
     # Проверка, что имя содержит только буквы и пробелы
     # Разрешаем пробелы для составных имен (например, "Мария Иванова")
-    if not all(c.isalpha() or c.isspace() for c in text) or not any(c.isalpha() for c in text):
+    if not all(c.isalpha() or c.isspace() for c in text) or not any(
+        c.isalpha() for c in text
+    ):
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Имя должно содержать только буквы. Попробуйте ещё раз."
+            error_message="⚠️ Имя должно содержать только буквы. Попробуйте ещё раз.",
         )
 
     # Проверка запрещённых слов
@@ -96,7 +99,7 @@ async def process_name_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message=f"⚠️ Имя содержит запрещённое слово «{word}». Введите другое."
+            error_message=f"⚠️ Имя содержит запрещённое слово «{word}». Введите другое.",
         )
 
     # Обновление поля
@@ -111,7 +114,7 @@ async def process_name_field(
         return FieldResult(
             result_type="field_updated_review",
             next_stage="profile_review",
-            is_editing=True
+            is_editing=True,
         )
 
     # Переход на этап ожидания одобрения заявки на доступ
@@ -120,7 +123,7 @@ async def process_name_field(
     return FieldResult(
         result_type="field_updated_continue",
         next_stage="profile_name_pending",
-        is_editing=False
+        is_editing=False,
     )
 
 
@@ -152,7 +155,7 @@ async def process_bio_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Описание должно быть не длиннее 500 символов."
+            error_message="⚠️ Описание должно быть не длиннее 500 символов.",
         )
 
     # Проверка запрещённых слов
@@ -161,7 +164,7 @@ async def process_bio_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message=f"⚠️ Текст содержит запрещённое слово «{word}». Исправьте, пожалуйста."
+            error_message=f"⚠️ Текст содержит запрещённое слово «{word}». Исправьте, пожалуйста.",
         )
 
     # Обновление поля
@@ -176,16 +179,14 @@ async def process_bio_field(
         return FieldResult(
             result_type="field_updated_review",
             next_stage="profile_review",
-            is_editing=True
+            is_editing=True,
         )
 
     # Переход на следующий шаг
     user.stage = "profile_age"
     await session.commit()
     return FieldResult(
-        result_type="field_updated_continue",
-        next_stage="profile_age",
-        is_editing=False
+        result_type="field_updated_continue", next_stage="profile_age", is_editing=False
     )
 
 
@@ -217,7 +218,7 @@ async def process_age_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):"
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):",
         )
 
     age = int(text)
@@ -227,7 +228,7 @@ async def process_age_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):"
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):",
         )
 
     # Обновление поля
@@ -242,7 +243,7 @@ async def process_age_field(
         return FieldResult(
             result_type="field_updated_review",
             next_stage="profile_review",
-            is_editing=True
+            is_editing=True,
         )
 
     # Переход на следующий шаг
@@ -251,7 +252,7 @@ async def process_age_field(
     return FieldResult(
         result_type="field_updated_continue",
         next_stage="profile_interests",
-        is_editing=False
+        is_editing=False,
     )
 
 
@@ -282,10 +283,7 @@ async def process_interests_field(
     interests, err = normalize_interests(text, settings.banned_words)
     if err:
         await session.commit()
-        return FieldResult(
-            result_type="validation_error",
-            error_message="⚠️ " + err
-        )
+        return FieldResult(result_type="validation_error", error_message="⚠️ " + err)
 
     # Обновление поля
     user.interests_json = {"interests": interests or []}
@@ -299,7 +297,7 @@ async def process_interests_field(
         return FieldResult(
             result_type="field_updated_review",
             next_stage="profile_review",
-            is_editing=True
+            is_editing=True,
         )
 
     # Переход на предпросмотр анкеты
@@ -308,7 +306,7 @@ async def process_interests_field(
     return FieldResult(
         result_type="field_updated_continue",
         next_stage="profile_review",
-        is_editing=False
+        is_editing=False,
     )
 
 
@@ -409,7 +407,7 @@ async def notify_admin_on_name_request(
     """
     if not settings.admin_chat_id:
         return
-    
+
     payload = {
         "user_id": user.id,
         "name": user.name,
@@ -422,7 +420,7 @@ async def notify_admin_on_name_request(
         )
     )
     await session.commit()
-    
+
     # Отправляем сообщение в админ-чат с информацией о пользователе и кнопками для принятия решения
     try:
         text = (
@@ -439,4 +437,3 @@ async def notify_admin_on_name_request(
     except Exception:
         # Не фейлим основную операцию из-за ошибки отправки нотификации
         pass
-

@@ -56,7 +56,7 @@ async def cb_delete_confirm(
     """
     # Удаляем предыдущую клавиатуру
     await cq.message.edit_reply_markup(reply_markup=None)
-    
+
     # Отправляем сообщение с подтверждением
     sent = await cq.message.answer(
         "Точно ли вы хотите удалить свою анкету?",
@@ -91,17 +91,17 @@ async def cb_delete_yes(
     """
     # Удаляем последнюю клавиатуру
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    
+
     async with session_factory() as session:
         # Удаляем пользователя напрямую по telegram_id
         await delete_user_by_telegram_id(session, cq.from_user.id)
-        
+
         # Сбрасываем все стейты в оперативной памяти
         await state.clear()
-        
+
         # Отправляем сообщение об удалении
         await cq.message.answer("Анкета удалена.")
-    
+
     await cq.answer()
 
 
@@ -128,13 +128,13 @@ async def cb_delete_cancel(
     """
     # Удаляем последнюю клавиатуру
     await cq.message.edit_text("Удаление отменено.", reply_markup=None)
-    
+
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
-        
+
         # Возвращаем пользователя к просмотру анкеты с фотографиями
         await send_profile_preview(
             cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
         )
-    
+
     await cq.answer()

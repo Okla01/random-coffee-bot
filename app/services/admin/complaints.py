@@ -30,7 +30,7 @@ from app.services.const import (
 def _format_user_info(user: User) -> str:
     """
     Форматирует информацию о пользователе в новом формате.
-    
+
     Returns:
         str: отформатированная информация о пользователе
     """
@@ -38,16 +38,16 @@ def _format_user_info(user: User) -> str:
     # Имя
     name = user.name if user.name else "Не указано"
     lines.append(f"👤: {name}")
-    
+
     # Username
     if user.username:
         lines.append(f"🔗: @{user.username}")
     else:
         lines.append("🔗: Не указан")
-    
+
     # Telegram ID
     lines.append(f"🆔: {user.telegram_id}")
-    
+
     return "\n".join(lines)
 
 
@@ -124,15 +124,11 @@ async def submit_complaint(
 
     # Получаем пользователей из БД
     reporter = (
-        await session.execute(
-            select(User).where(User.telegram_id == reporter_user_id)
-        )
+        await session.execute(select(User).where(User.telegram_id == reporter_user_id))
     ).scalar_one_or_none()
 
     reported = (
-        await session.execute(
-            select(User).where(User.telegram_id == reported_user_id)
-        )
+        await session.execute(select(User).where(User.telegram_id == reported_user_id))
     ).scalar_one_or_none()
 
     if not reporter or not reported:
@@ -306,9 +302,7 @@ async def block_user_from_complaint(
     """
     # Получаем пользователя, на которого жалоба
     reported = (
-        await session.execute(
-            select(User).where(User.id == complaint.reported_id)
-        )
+        await session.execute(select(User).where(User.id == complaint.reported_id))
     ).scalar_one()
 
     # Блокируем пользователя
@@ -353,11 +347,10 @@ def format_complaint_result(
         str: итоговый текст сообщения
     """
     result = f"\n\nРешение: {decision}"
-    
+
     if warning_text:
         result += f"\nТекст предупреждения: {warning_text}"
-    
+
     result += f"\n👨‍💻Рассмотрел: @{admin_username}"
 
     return original_text + result
-

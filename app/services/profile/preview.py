@@ -11,7 +11,15 @@ from app.database import User
 from app.handlers.fsm import FSMDataKeys
 
 
-async def send_profile_preview(bot, chat_id: int, user: User, state, reply_markup, send_photos: bool = True, send_preview_text: bool = True) -> None:
+async def send_profile_preview(
+    bot,
+    chat_id: int,
+    user: User,
+    state,
+    reply_markup,
+    send_photos: bool = True,
+    send_preview_text: bool = True,
+) -> None:
     """
     Отправляет фото профиля (если есть) и текстовый предпросмотр профиля с клавиатурой.
 
@@ -50,7 +58,9 @@ async def send_profile_preview(bot, chat_id: int, user: User, state, reply_marku
                 # Если не удалось отправить группу, отправляем по одному
                 for idx, photo_data in enumerate(photos_list):
                     caption = f"Добавлено {len(photos_list)} фото" if idx == 0 else None
-                    await bot.send_photo(chat_id, photo_data["file_id"], caption=caption)
+                    await bot.send_photo(
+                        chat_id, photo_data["file_id"], caption=caption
+                    )
 
     # Отправляем текстовый предпросмотр если send_preview_text=True
     if send_preview_text:
@@ -87,4 +97,3 @@ def build_profile_preview_text(user: User) -> str:
     if interests:
         lines.append("• Интересы: " + ", ".join(interests))
     return "\n".join(lines)
-

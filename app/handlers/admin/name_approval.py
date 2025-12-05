@@ -1,8 +1,10 @@
 """
 Обработчики одобрения/отклонения заявок на доступ к анкетированию.
 
-Обрабатывает callback-запросы для одобрения/отклонения заявок пользователей
-на доступ к анкете после ввода имени.
+Обрабатывает callback-запросы для одобрения/отклонения заявок пользователей на доступ
+к анкете после ввода имени. При одобрении переводит пользователя на этап загрузки фото
+и уведомляет его. При отклонении возвращает пользователя на этап ввода имени с сообщением.
+Обновляет исходное сообщение в админ-чате с указанием администратора и убирает inline-клавиатуру.
 """
 
 from __future__ import annotations
@@ -32,9 +34,18 @@ async def admin_name_approval_callbacks(
     Обрабатывает callback-запросы для одобрения/отклонения заявок на доступ к анкете.
 
     Интерпретирует callback data формата 'admin:name:approve:ID' или 'admin:name:reject:ID'.
-    При одобрении переводит пользователя на этап profile_photo и уведомляет его.
-    При отклонении возвращает пользователя на этап profile_name с сообщением.
-    Обновляет исходное сообщение с указанием администратора.
+    Проверяет права администратора, получает пользователя из БД. При одобрении переводит
+    пользователя на этап profile_photo, уведомляет его и запрашивает фото. При отклонении
+    возвращает пользователя на этап profile_name с сообщением. Обновляет исходное сообщение
+    в админ-чате с указанием администратора и убирает inline-клавиатуру.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
     """
     data = cq.data or ""
 
@@ -44,7 +55,9 @@ async def admin_name_approval_callbacks(
             await cq.answer("Нет прав")
             return
 
-        _, _, action, user_id_str = data.split(":")  # admin:name:approve:ID или admin:name:reject:ID
+        _, _, action, user_id_str = data.split(
+            ":"
+        )  # admin:name:approve:ID или admin:name:reject:ID
         target_id = int(user_id_str)
 
         user = (
@@ -63,7 +76,9 @@ async def admin_name_approval_callbacks(
             await session.commit()
 
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
-            username_display = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+            username_display = (
+                f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+            )
             await cq.message.edit_text(
                 cq.message.text
                 + f"\n\nРешение: Пользователю {username_display} одобрен доступ к анкете."
@@ -75,7 +90,7 @@ async def admin_name_approval_callbacks(
             if user.telegram_id:
                 try:
                     from app.keyboards.kb_profile import kb_profile_photo
-                    
+
                     await cq.message.bot.send_message(
                         user.telegram_id,
                         "Заявка на авторизацию одобрена, продолжаем анкетирование.",
@@ -96,7 +111,9 @@ async def admin_name_approval_callbacks(
             await session.commit()
 
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
-            username_display = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+            username_display = (
+                f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+            )
             await cq.message.edit_text(
                 cq.message.text
                 + f"\n\nРешение: Пользователю {username_display} отказано в доступе к анкете, он возвращён к вводу имени."
@@ -116,4 +133,3 @@ async def admin_name_approval_callbacks(
 
         # Закрываем "часы" у колбэка
         await cq.answer()
-

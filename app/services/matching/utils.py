@@ -105,9 +105,7 @@ def extract_interests_list(raw: object) -> list[str]:
         return [item for item in values if item]
 
     if isinstance(raw, (list, tuple)):
-        return [
-            value for value in (_normalize_interest(item) for item in raw) if value
-        ]
+        return [value for value in (_normalize_interest(item) for item in raw) if value]
 
     return []
 
@@ -141,4 +139,3 @@ def _normalize_interest(value: object) -> str:
     if value is None:
         return ""
     return str(value).strip().lower()
-

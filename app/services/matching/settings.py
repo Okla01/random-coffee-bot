@@ -23,9 +23,7 @@ async def _get_setting_value(session: AsyncSession, key: str) -> str | None:
     Returns:
         str | None: значение настройки или None, если настройка не найдена.
     """
-    result = await session.execute(
-        select(Setting.value).where(Setting.key == key)
-    )
+    result = await session.execute(select(Setting.value).where(Setting.key == key))
     return result.scalar_one_or_none()
 
 
@@ -57,7 +55,9 @@ async def get_setting_int(session: AsyncSession, key: str) -> int:
     try:
         return int(str(value).strip())
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"Настройка '{key}' содержит некорректное целое число") from exc
+        raise ValueError(
+            f"Настройка '{key}' содержит некорректное целое число"
+        ) from exc
 
 
 async def get_setting_float(session: AsyncSession, key: str) -> float:
@@ -83,11 +83,11 @@ def parse_time_to_hours_minutes(time_str: str) -> tuple[int, int] | None:
     """
     if ":" not in time_str:
         return None
-    
+
     parts = time_str.split(":")
     if len(parts) != 2:
         return None
-    
+
     try:
         hour = int(parts[0])
         minute = int(parts[1])
@@ -111,7 +111,7 @@ def parse_time_to_hours(time_str: str) -> float:
     parsed = parse_time_to_hours_minutes(time_str)
     if parsed is None:
         raise ValueError(f"Некорректный формат времени: {time_str}")
-    
+
     hour, minute = parsed
     return hour + (minute / 60.0)
 
@@ -131,7 +131,7 @@ def parse_time_to_minutes(time_str: str) -> float:
     parsed = parse_time_to_hours_minutes(time_str)
     if parsed is None:
         raise ValueError(f"Некорректный формат времени: {time_str}")
-    
+
     hour, minute = parsed
     return (hour * 60.0) + minute
 
@@ -169,7 +169,7 @@ def calculate_optimal_scheduler_interval(
 
     # Выбираем минимальное значение
     optimal_interval_minutes = min(reminder_half, timeout_tenth)
-    
+
     # Если интервал меньше 1 минуты, используем секунды для большей точности
     if optimal_interval_minutes < 1.0:
         optimal_interval_seconds = optimal_interval_minutes * 60.0
@@ -224,13 +224,13 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             match_msk_time = f"{hour:02d}:{minute:02d}"
         except ValueError:
             match_msk_time = "12:00"
-    
+
     # Загрузка таймаута ответа с поддержкой миграции
     timeout_value = await _get_setting_value(session, "response_timeout_time")
     if not timeout_value:
         # Пробуем старое имя для миграции
         timeout_value = await _get_setting_value(session, "response_timeout_hours")
-    
+
     if timeout_value and ":" in timeout_value:
         response_timeout_time = timeout_value
     else:
@@ -242,13 +242,13 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             response_timeout_time = f"{hours:02d}:{minutes:02d}"
         except (TypeError, ValueError):
             response_timeout_time = "8:00"
-    
+
     # Загрузка интервала напоминаний с поддержкой миграции
     interval_value = await _get_setting_value(session, "reminder_interval_time")
     if not interval_value:
         # Пробуем старое имя для миграции
         interval_value = await _get_setting_value(session, "reminder_interval_hours")
-    
+
     if interval_value and ":" in interval_value:
         reminder_interval_time = interval_value
     else:
@@ -260,7 +260,7 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             reminder_interval_time = f"{hours:02d}:{minutes:02d}"
         except (TypeError, ValueError):
             reminder_interval_time = "1:00"
-    
+
     return MatchingSettings(
         matching_enabled=await get_setting_bool(session, "matching_enabled"),
         match_day=await _require_setting(session, "match_day"),
@@ -271,8 +271,5 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             session,
             "repeat_pair_cooldown_weeks",
         ),
-        min_jaccard=await get_setting_float(
-            session, "min_jaccard"
-        ),
+        min_jaccard=await get_setting_float(session, "min_jaccard"),
     )
-

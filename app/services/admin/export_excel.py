@@ -34,7 +34,7 @@ HEADERS = [
 ]
 
 COLUMN_WIDTHS = {
-    "A": 8,   # ID
+    "A": 8,  # ID
     "B": 15,  # Username
     "C": 12,  # Статус
     "D": 25,  # Email
@@ -82,7 +82,9 @@ def _write_headers(ws: Worksheet) -> None:
     Args:
         ws (Worksheet): рабочий лист Excel.
     """
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+    header_fill = PatternFill(
+        start_color="366092", end_color="366092", fill_type="solid"
+    )
     header_font = Font(bold=True, color="FFFFFF")
     header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
@@ -139,7 +141,7 @@ def _get_user_row_data(user: User) -> list:
     """
     interests = _extract_interests(user)
     status_name = USER_STATUS_NAMES.get(user.status, user.status)
-    
+
     return [
         user.id,
         user.username,
@@ -166,7 +168,7 @@ def _write_user_data(ws: Worksheet, users: list[User]) -> None:
 
         for col_num, value in enumerate(row_data, start=1):
             cell = ws.cell(row=row_num, column=col_num, value=value)
-            
+
             # Выравнивание для текстовых полей
             if col_num in TEXT_COLUMNS:
                 cell.alignment = Alignment(vertical="top", wrap_text=True)
@@ -236,7 +238,7 @@ async def export_users_to_excel(
 
         # Бинарник Excel
         excel_bytes = _save_to_bytes(wb)
-        excel_bytes.seek(0) # Перенос потока в начало файла
+        excel_bytes.seek(0)  # Перенос потока в начало файла
 
         # Получение сегодняшней даты в формате YYYYMMDD
         today = now_msk().strftime("%Y%m%d")

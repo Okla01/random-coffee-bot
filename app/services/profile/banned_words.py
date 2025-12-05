@@ -14,16 +14,16 @@ import re
 def load_banned_words() -> List[str]:
     """
     Загружает список запрещённых слов из файла.
-    
+
     Читает файл data/banned_words.txt, где каждое слово на отдельной строке.
     Пустые строки и строки, начинающиеся с #, игнорируются.
-    
+
     Returns:
         List[str]: список запрещённых слов.
     """
     banned_words_file = Path("data/banned_words.txt")
     words = []
-    
+
     if banned_words_file.exists():
         try:
             with open(banned_words_file, "r", encoding="utf-8") as f:
@@ -35,8 +35,9 @@ def load_banned_words() -> List[str]:
         except Exception:
             # Если не удалось прочитать файл, возвращаем пустой список
             pass
-    
+
     return words
+
 
 def contains_banned_words(
     text: str, banned_words: Iterable[str]
@@ -61,11 +62,11 @@ def contains_banned_words(
         w = w.strip().lower()
         if not w:
             continue
-        
+
         # Используем регулярное выражение с границами слов (\b)
         # Это гарантирует, что слово ищется как целое, а не как подстрока
-        pattern = r'\b' + re.escape(w) + r'\b'
-        
+        pattern = r"\b" + re.escape(w) + r"\b"
+
         if re.search(pattern, low):
             return True, w
     return False, None

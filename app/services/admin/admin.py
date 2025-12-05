@@ -22,6 +22,7 @@ from app.services.const import USER_STATUS_NEW
 
 class AdminAccessResultType(str, Enum):
     """Типы результатов проверки доступа к админ-панели."""
+
     SUCCESS = "success"
     NO_RIGHTS = "no_rights"
     USER_CREATED = "user_created"
@@ -84,6 +85,9 @@ async def process_admin_command(
     )
     await session.flush()
 
-    result_type = AdminAccessResultType.USER_CREATED if user_created else AdminAccessResultType.SUCCESS
+    result_type = (
+        AdminAccessResultType.USER_CREATED
+        if user_created
+        else AdminAccessResultType.SUCCESS
+    )
     return result_type, user
-

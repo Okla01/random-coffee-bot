@@ -21,24 +21,24 @@ from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
 from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
-from app.services.core.config import Settings          # настройки приложения
-from app.database.models import User              # ORM-модель пользователя
+from app.services.core.config import Settings  # настройки приложения
+from app.database.models import User  # ORM-модель пользователя
 from app.services.profile.preview import send_profile_preview
 
 
 # Перечень возможных действий после обработки /start.
 # Каждое значение — это "сигнал" для хендлера, что именно нужно сделать.
 ActionType = Literal[
-    "ask_email",           # запросить корпоративный e-mail
-    "ask_code",            # запросить код подтверждения
-    "ask_profile_name",    # запросить имя (или показать предзаполненное)
+    "ask_email",  # запросить корпоративный e-mail
+    "ask_code",  # запросить код подтверждения
+    "ask_profile_name",  # запросить имя (или показать предзаполненное)
     "wait_name_approval",  # ожидание одобрения заявки на доступ к анкете
-    "ask_profile_photo",   # запросить/показать фото профиля
-    "ask_profile_bio",     # запросить текст "о себе"
-    "ask_profile_age",     # запросить возраст
+    "ask_profile_photo",  # запросить/показать фото профиля
+    "ask_profile_bio",  # запросить текст "о себе"
+    "ask_profile_age",  # запросить возраст
     "ask_profile_interests",  # запросить интересы
-    "show_profile_review",    # показать предпросмотр анкеты перед подтверждением
-    "show_profile_filled",    # показать уже заполненную анкету
+    "show_profile_review",  # показать предпросмотр анкеты перед подтверждением
+    "show_profile_filled",  # показать уже заполненную анкету
 ]
 
 
@@ -53,6 +53,7 @@ class StartResult:
             например:
             - has_photos: флаг наличия загруженных фото и т.п.
     """
+
     action: ActionType
     payload: dict[str, Any] | None = None  # доп. данные, если нужны
 
@@ -137,7 +138,6 @@ async def process_start(
     if user.stage == "profile_interests":
         await session.commit()
         return StartResult(action="ask_profile_interests")
-
 
     # Предпросмотр анкеты перед подтверждением
     if user.stage == "profile_review":
@@ -232,7 +232,6 @@ async def handle_start_result(
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
-
 
     if result.action == "show_profile_review":
         await send_profile_preview(

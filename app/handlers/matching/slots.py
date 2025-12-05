@@ -208,12 +208,12 @@ async def _on_back_to_calendar(
     """
     date_str = manager.dialog_data.get("current_date")
     slots_map = manager.dialog_data.get("slots_map", {})
-    
+
     # Если для текущей даты нет выбранных интервалов, удаляем дату из slots_map
     if date_str and date_str in slots_map:
         if not slots_map[date_str]:  # список пустой
             slots_map.pop(date_str, None)
-    
+
     manager.dialog_data["current_date"] = None
     await manager.switch_to(MatchSlotsDialogSG.calendar)
     await callback.answer()
@@ -231,7 +231,7 @@ async def _on_clear_all(
     manager.dialog_data["current_date"] = None
     await manager.switch_to(MatchSlotsDialogSG.calendar)
     await callback.answer("Выбор очищен.", show_alert=False)
-    
+
 
 async def _on_clear_date(
     callback: CallbackQuery,
@@ -331,9 +331,7 @@ async def _on_save_slots(
 
 match_slots_dialog = Dialog(
     Window(
-        Const(
-            "Выберите дату из ближайших 14 дней и укажите временные интервалы."
-        ),
+        Const("Выберите дату из ближайших 14 дней и укажите временные интервалы."),
         Format("{slots_summary}"),
         GridSelect(
             Format("{item[label]}"),
@@ -500,4 +498,3 @@ def _make_slot_entries(slots_map: dict[str, list[str]]) -> list[SlotEntry]:
                 SlotEntry(match_date=match_date, time_from=start, time_to=end)
             )
     return entries
-

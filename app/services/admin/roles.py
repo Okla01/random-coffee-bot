@@ -101,7 +101,9 @@ async def grant_admin_role(session: AsyncSession, admin_tg_id: int, user: User) 
     await session.commit()
 
 
-async def revoke_admin_role(session: AsyncSession, admin_tg_id: int, user: User) -> None:
+async def revoke_admin_role(
+    session: AsyncSession, admin_tg_id: int, user: User
+) -> None:
     """
     Лишает пользователя роли администратора.
 
@@ -122,9 +124,7 @@ async def revoke_admin_role(session: AsyncSession, admin_tg_id: int, user: User)
 
     # Удаляем связь пользователь-роль
     await session.execute(
-        delete(UserRole).where(
-            UserRole.user_id == user.id, UserRole.role_id == role.id
-        )
+        delete(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
     )
 
     # Логируем действие
@@ -169,4 +169,3 @@ async def is_admin(session: AsyncSession, settings: Settings, tg_id: int) -> boo
         .where(UserRole.user_id == user.id, Role.name == ROLE_ADMIN)
     )
     return (await session.execute(q)).scalar_one_or_none() is not None
-

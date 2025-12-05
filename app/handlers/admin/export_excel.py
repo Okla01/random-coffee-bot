@@ -1,7 +1,9 @@
 """
 Обработчик для кнопки экспорта Excel панели администратора.
 
-Экспортирует всех пользователей в Excel файл.
+Обрабатывает callback-запросы для экспорта всех пользователей в Excel файл и возврата
+в главное меню администратора. Удаляет предыдущую клавиатуру, генерирует Excel документ
+с данными пользователей через сервисную функцию и отправляет его администратору.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ router = Router()
 
 # ----------------- Экспорт Excel -----------------
 
+
 @router.callback_query(F.data == "admin:export")
 async def cb_admin_export_excel(
     cq: CallbackQuery,
@@ -31,6 +34,17 @@ async def cb_admin_export_excel(
 ) -> None:
     """
     Обрабатывает callback для экспорта Excel панели администратора.
+
+    Удаляет предыдущую клавиатуру, генерирует Excel документ с данными всех пользователей
+    через сервисную функцию и отправляет его администратору с кнопкой возврата в меню.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
     """
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
@@ -49,6 +63,7 @@ async def cb_admin_export_excel(
 
 # ----------------- Возврат в меню администратора -----------------
 
+
 @router.callback_query(F.data == "admin:back_to_menu")
 async def cb_admin_back_to_menu(
     cq: CallbackQuery,
@@ -56,9 +71,19 @@ async def cb_admin_back_to_menu(
 ) -> None:
     """
     Обрабатывает callback для возврата в главное меню администратора.
+
+    Удаляет предыдущую клавиатуру и восстанавливает главное меню администратора.
+    Если текущее сообщение содержит текст, редактирует его, иначе создаёт новое сообщение.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
     """
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-    
+
     # Проверяем, есть ли текст в сообщении (если это документ, текста не будет)
     if cq.message.text or cq.message.caption:
         # Редактируем текущее сообщение

@@ -126,7 +126,9 @@ class Settings:
                 pass
 
         admin_chat_id: int | None = None
-        chat_id = os.getenv("ADMIN_CHAT_ID", os.getenv("ADMIN_CHAT_ID_NOTIFICATION", ""))
+        chat_id = os.getenv(
+            "ADMIN_CHAT_ID", os.getenv("ADMIN_CHAT_ID_NOTIFICATION", "")
+        )
         if chat_id:
             try:
                 admin_chat_id = int(chat_id)
@@ -171,4 +173,3 @@ class Settings:
             log_level=log_level,
             banned_words=banned_words,
         )
-

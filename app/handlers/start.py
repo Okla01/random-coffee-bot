@@ -23,6 +23,7 @@ from app.handlers.fsm import FSMDataKeys
 # Роутер для регистрации хендлеров текущего модуля
 router = Router()
 
+
 @router.message(Command("start", "profile"))
 async def cmd_start(
     message: Message,
@@ -68,9 +69,4 @@ async def cmd_start(
         # Вызываем бизнес-логику онбординга, которая решит, что делать дальше
         result = await process_start(session, user, settings)
 
-        await handle_start_result(
-            message,
-            state,
-            user,
-            result
-        )
+        await handle_start_result(message, state, user, result)

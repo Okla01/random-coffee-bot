@@ -34,7 +34,6 @@ from app.services.auth.registration import (
 )
 
 from app.services.core import Settings
-from app.services.const import USER_STATUS_NOT_ACTIVE
 from app.services.auth.email import (
     process_email_input,
     EmailResultType,
@@ -68,7 +67,7 @@ async def on_email_or_code(
     state_data = await state.get_data()
     if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
         raise SkipHandler()
-    
+
     async with session_factory() as session:
         user = await get_or_create_user(
             session, message.from_user.id, message.from_user.username
@@ -119,9 +118,7 @@ async def on_email_or_code(
                 return
 
             if result_type == EmailResultType.SUCCESS:
-                msg = (
-                    "Отправили 6-значный код на вашу почту. Введите его в течение 2 минут."
-                )
+                msg = "Отправили 6-значный код на вашу почту. Введите его в течение 2 минут."
                 if warn:
                     msg += f"\n⚠️ {warn}"
                 sent = await message.answer(msg, reply_markup=kb_auth_code_wait())
@@ -176,7 +173,8 @@ async def on_email_or_code(
 
             if result_type == OtpResultType.WRONG_CODE:
                 sent = await message.answer(
-                    error_msg or "Неверный код. Попробуйте ещё раз или запросите новый.",
+                    error_msg
+                    or "Неверный код. Попробуйте ещё раз или запросите новый.",
                     reply_markup=kb_auth_code_wait(),
                 )
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
@@ -184,7 +182,8 @@ async def on_email_or_code(
 
             if result_type == OtpResultType.BLOCKED:
                 await message.answer(
-                    error_msg or "Слишком много неверных попыток. Доступ заблокирован, администратор уведомлён, ожидайте решения."
+                    error_msg
+                    or "Слишком много неверных попыток. Доступ заблокирован, администратор уведомлён, ожидайте решения."
                 )
                 return
 
@@ -227,9 +226,7 @@ async def cb_otp_resend(
     await cq.message.edit_reply_markup(reply_markup=None)
 
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
 
         if user.stage not in {"verifying_code", "verifying_code_error"}:
             await session.commit()
@@ -274,9 +271,7 @@ async def cb_change_email(
     await cq.message.edit_reply_markup(reply_markup=None)
 
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
 
         allowed, time_remaining = await check_email_change_allowed(
             session, user.id, cooldown_seconds=120
@@ -297,4 +292,3 @@ async def cb_change_email(
         await cq.message.answer("Отправьте новый корпоративный e-mail:")
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         await cq.answer()
-

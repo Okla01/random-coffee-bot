@@ -1,11 +1,12 @@
 """
 Inline-обработчик для поиска пользователей.
 
-Администраторы могут искать пользователей через inline-режим бота
-с единым префиксом user: — тип поиска определяется автоматически:
-- @username — поиск по username
-- 123456789 (только цифры) — поиск по Telegram ID
-- Имя — поиск по имени в анкете
+Реализует универсальный inline-поиск пользователей для администраторов с префиксом user:.
+Тип поиска определяется автоматически по формату запроса: @username — поиск по username,
+только цифры — поиск по Telegram ID, иначе — поиск по имени в анкете. Формирует результаты
+в виде InlineQueryResultArticle с данными профиля пользователя. При выборе результата
+отправляет медиа-группу с фотографиями (если есть) и текстом профиля, а также клавиатуру
+с действиями для управления пользователем.
 """
 
 from __future__ import annotations
@@ -55,9 +56,14 @@ def _detect_search_type(search_query: str) -> tuple[str, str]:
     """
     Определяет тип поиска по строке запроса.
 
+    Анализирует формат запроса и определяет тип поиска: если начинается с @ — поиск по username,
+    если только цифры — поиск по Telegram ID, иначе — поиск по имени в анкете.
+
+    Args:
+        search_query (str): строка поискового запроса.
+
     Returns:
-        tuple[str, str]: (тип поиска, очищенный запрос)
-        Типы: "username", "id", "name"
+        tuple[str, str]: кортеж из типа поиска ("username", "id", "name") и очищенного запроса.
     """
     if search_query.startswith("@"):
         # Поиск по username (убираем @)
@@ -78,13 +84,16 @@ async def _get_search_results(
     """
     Выполняет поиск пользователей в зависимости от типа.
 
+    Вызывает соответствующую функцию поиска из модуля database.db в зависимости от типа.
+    Ограничивает количество результатов до 50 (лимит Telegram API для inline-запросов).
+
     Args:
-        session: сессия БД.
-        search_query: строка поиска.
-        search_type: тип поиска ("username", "id", "name").
+        session (AsyncSession): сессия БД.
+        search_query (str): строка поиска.
+        search_type (str): тип поиска ("username", "id", "name").
 
     Returns:
-        list[User]: список найденных пользователей.
+        list[User]: список найденных пользователей (до 50).
     """
     # Telegram API ограничивает количество результатов до 50
     if search_type == "username":
@@ -105,12 +114,19 @@ async def inline_search_users(
     settings: Settings,
 ) -> None:
     """
-    Универсальный поиск пользователей.
-    
-    Формат: user:<запрос>
-    - @username — поиск по username
-    - 123456789 — поиск по Telegram ID  
-    - Имя — поиск по имени в анкете
+    Универсальный поиск пользователей через inline-режим.
+
+    Обрабатывает inline-запросы с префиксом user: для поиска пользователей. Проверяет права
+    администратора, определяет тип поиска по формату запроса, выполняет поиск и формирует
+    результаты в виде InlineQueryResultArticle с данными профиля.
+
+    Args:
+        query (InlineQuery): объект inline-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает (результаты отправляются через query.answer).
     """
     async with session_factory() as session:
         # Проверка прав администратора
@@ -148,7 +164,9 @@ async def inline_search_users(
 
         await query.answer(results=results, cache_time=1, is_personal=True)
 
+
 # ----------------------------- Обработчик выбора результата inline-поиска ----------------------------- #
+
 
 @router.chosen_inline_result()
 async def chosen_inline_result_handler(
@@ -159,9 +177,20 @@ async def chosen_inline_result_handler(
 ) -> None:
     """
     Обрабатывает выбор результата inline-поиска.
-    
-    Отправляет медиа-группу с фотографиями пользователя и текстом профиля,
-    если у пользователя есть фотографии.
+
+    Получает пользователя по ID из результата, проверяет права администратора, формирует
+    данные профиля (текст и фотографии). Если есть фотографии — отправляет медиа-группу
+    и отдельное сообщение с клавиатурой действий. Если нет фотографий — отправляет
+    полный текст профиля с клавиатурой действий.
+
+    Args:
+        chosen_result (ChosenInlineResult): объект выбранного результата inline-поиска.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
     """
 
     await clear_last_kb(state, chosen_result.from_user.id, chosen_result.bot)
@@ -170,34 +199,34 @@ async def chosen_inline_result_handler(
     async with session_factory() as session:
         if not await is_admin(session, settings, chosen_result.from_user.id):
             return
-        
+
         # Получаем ID пользователя из результата
         try:
             user_id = int(chosen_result.result_id)
         except ValueError:
             return
-        
+
         # Получаем пользователя из БД по ID
         user = await get_user_by_id(session, user_id)
         if not user:
             return
-        
+
         # Подготавливаем данные профиля пользователя
         profile_data = await prepare_user_profile_data(session, user)
         profile_text = profile_data[UPD_KEY_PROFILE_TEXT]
         photos_list = profile_data[UPD_KEY_PHOTOS_LIST]
-        
+
         # Проверяем статус пользователя для формирования клавиатуры
         user_is_blocked = is_user_blocked(user)
         user_is_admin = await is_admin(session, settings, user.telegram_id)
-        
+
         # Формируем клавиатуру действий
         keyboard = kb_admin_user_actions(
             user_id=user.id,
             is_blocked=user_is_blocked,
             is_admin=user_is_admin,
         )
-        
+
         if not profile_data[UPD_KEY_HAS_PHOTOS]:
             # Если нет фотографий, отправляем полный текст профиля с клавиатурой
             try:
@@ -212,10 +241,10 @@ async def chosen_inline_result_handler(
             except Exception:
                 pass
             return
-        
+
         # Формируем и отправляем медиа-группу с фотографиями
         media_group = build_media_group(photos_list, profile_text)
-        
+
         # Отправляем медиа-группу
         try:
             await chosen_result.bot.send_media_group(
@@ -224,7 +253,7 @@ async def chosen_inline_result_handler(
             )
         except Exception:
             pass
-        
+
         # Отправляем отдельное сообщение с клавиатурой действий
         # (Telegram API не позволяет редактировать клавиатуру в медиа-группах)
         try:

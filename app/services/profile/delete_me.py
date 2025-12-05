@@ -34,4 +34,3 @@ async def delete_user_by_telegram_id(
     stmt = delete(User).where(User.telegram_id == telegram_id)
     await session.execute(stmt)
     await session.commit()
-

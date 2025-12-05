@@ -21,7 +21,11 @@ from aiogram_dialog import setup_dialogs
 from .config import Settings
 from .logger import setup_logging
 from app.database import lifespan_db
-from app.middlewares import DbSessionMiddleware, BlockedUserMiddleware, SchedulerMiddleware
+from app.middlewares import (
+    DbSessionMiddleware,
+    BlockedUserMiddleware,
+    SchedulerMiddleware,
+)
 
 # импортируем роутеры в нужном порядке
 from app.handlers import matching_router, start_router
@@ -81,7 +85,7 @@ async def run_bot() -> None:
         RuntimeError: если не удаётся загрузить конфигурацию (например, нет BOT_TOKEN).
     """
     settings = Settings.load()
-    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode='HTML'))
+    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
     dp = await create_dispatcher(settings)
 
     # Регистрируем middleware/контекст БД
@@ -130,4 +134,3 @@ async def run_bot() -> None:
             await dp.start_polling(bot, settings=settings, handle_signals=False)
         finally:
             scheduler.shutdown(wait=False)
-

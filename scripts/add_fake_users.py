@@ -80,18 +80,28 @@ async def seed_fake_users_and_matches(
                 )[0]
 
                 # ответы пользователей
-                user_a_response = random.choices(responses, weights=[55, 35, 10], k=1)[0]
-                user_b_response = random.choices(responses, weights=[55, 35, 10], k=1)[0]
+                user_a_response = random.choices(responses, weights=[55, 35, 10], k=1)[
+                    0
+                ]
+                user_b_response = random.choices(responses, weights=[55, 35, 10], k=1)[
+                    0
+                ]
 
                 meeting_start_at = None
                 meeting_end_at = None
                 if status in {"scheduled", "completed"}:
-                    meeting_start_at = updated_at + timedelta(days=random.randint(0, 10), hours=random.randint(0, 6))
-                    meeting_end_at = meeting_start_at + timedelta(minutes=random.choice([30, 45, 60]))
+                    meeting_start_at = updated_at + timedelta(
+                        days=random.randint(0, 10), hours=random.randint(0, 6)
+                    )
+                    meeting_end_at = meeting_start_at + timedelta(
+                        minutes=random.choice([30, 45, 60])
+                    )
 
                 last_reminder_at = None
                 if status == "pending_response" and random.random() < 0.6:
-                    last_reminder_at = updated_at - timedelta(hours=random.randint(1, 72))
+                    last_reminder_at = updated_at - timedelta(
+                        hours=random.randint(1, 72)
+                    )
 
                 match = Match(
                     user_a_id=a,

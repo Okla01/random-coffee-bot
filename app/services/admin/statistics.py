@@ -153,7 +153,9 @@ async def get_general_statistics(session: AsyncSession) -> dict[str, int]:
     }
 
 
-async def get_period_statistics(session: AsyncSession, period: str) -> dict[str, int | float | None]:
+async def get_period_statistics(
+    session: AsyncSession, period: str
+) -> dict[str, int | float | None]:
     """
     Получает статистику за указанный период.
 
@@ -174,7 +176,9 @@ async def get_period_statistics(session: AsyncSession, period: str) -> dict[str,
     }
 
 
-async def get_all_statistics(session: AsyncSession, period: str = "7_days") -> dict[str, int | float | None | str]:
+async def get_all_statistics(
+    session: AsyncSession, period: str = "7_days"
+) -> dict[str, int | float | None | str]:
     """
     Получает все метрики статистики.
 

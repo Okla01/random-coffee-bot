@@ -46,7 +46,7 @@ async def save_settings(
             if setting is None:
                 # Нет настройки - пропуск
                 continue
-            
+
             setting.value = value
 
         await session.commit()
@@ -63,7 +63,7 @@ def _as_bool(value: str | int | float | None) -> bool:
 def format_time_readable(time_str: str) -> str:
     """
     Форматирует время в формате ЧЧ:ММ в читаемый формат.
-    
+
     Примеры:
     - "00:01" -> "1 минута"
     - "00:02" -> "2 минуты"
@@ -73,23 +73,23 @@ def format_time_readable(time_str: str) -> str:
     - "5:00" -> "5 часов"
     - "1:30" -> "1 час 30 минут"
     - "2:15" -> "2 часа 15 минут"
-    
+
     Args:
         time_str: строка в формате "ЧЧ:ММ"
-    
+
     Returns:
         str: отформатированная строка с правильными склонениями
     """
     if ":" not in time_str:
         return time_str
-    
+
     try:
         parts = time_str.split(":")
         hours = int(parts[0])
         minutes = int(parts[1])
     except (ValueError, IndexError):
         return time_str
-    
+
     # Функция для склонения минут
     def format_minutes(m: int) -> str:
         if m == 0:
@@ -106,7 +106,7 @@ def format_time_readable(time_str: str) -> str:
             return f"{m} минуты"
         else:
             return f"{m} минут"
-    
+
     # Функция для склонения часов
     def format_hours(h: int) -> str:
         if h == 0:
@@ -123,7 +123,7 @@ def format_time_readable(time_str: str) -> str:
             return f"{h} часа"
         else:
             return f"{h} часов"
-    
+
     # Формируем результат
     if hours == 0 and minutes == 0:
         return "0 минут"
@@ -143,18 +143,15 @@ def format_settings_text(settings: dict) -> str:
     Порядок соответствует порядку кнопок в клавиатуре.
     """
     text = "Настройки для организации встреч.\nВыберете настройку, которую хотите изменить.\n\n"
-    
+
     # 1. Мэтчинг включён
     match_enabled = _as_bool(settings.get("matching_enabled", "true"))
     text += f"🔹 Мэтчинг включён: {'Да' if match_enabled else 'Нет'}\n"
-    
+
     # 2. День подбора
     match_day_code = settings.get("match_day", "fri")
-    text += (
-        "🔹 День подбора: "
-        f"{DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
-    )
-    
+    text += f"🔹 День подбора: {DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
+
     # 3. Время подбора
     match_time = settings.get("match_msk_time", "12:00")
     if ":" not in match_time:
@@ -167,13 +164,13 @@ def format_settings_text(settings: dict) -> str:
             match_time = "12:00"
     # Время подбора оставляем в формате ЧЧ:ММ (это время суток, не интервал)
     text += f"🔹 Время подбора: {match_time}\n"
-    
+
     # 4. Минимальный Jaccard
     text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
-    
+
     # 5. Кулдаун повторов
     try:
-        cooldown_weeks = int(settings.get('repeat_pair_cooldown_weeks', '1'))
+        cooldown_weeks = int(settings.get("repeat_pair_cooldown_weeks", "1"))
         # Формируем правильное склонение для "неделя/недели/недель"
         if cooldown_weeks == 1:
             cooldown_display = "1 неделя"
@@ -182,11 +179,13 @@ def format_settings_text(settings: dict) -> str:
         else:
             cooldown_display = f"{cooldown_weeks} недель"
     except (ValueError, TypeError):
-        cooldown_display = settings.get('repeat_pair_cooldown_weeks', '1')
+        cooldown_display = settings.get("repeat_pair_cooldown_weeks", "1")
     text += f"🔹 Кулдаун повторов: {cooldown_display}\n"
-    
+
     # 6. Таймаут ответа
-    timeout_value = settings.get("response_timeout_time") or settings.get("response_timeout_hours", "8:00")
+    timeout_value = settings.get("response_timeout_time") or settings.get(
+        "response_timeout_hours", "8:00"
+    )
     if ":" in timeout_value:
         timeout_display = format_time_readable(timeout_value)
     else:
@@ -200,9 +199,11 @@ def format_settings_text(settings: dict) -> str:
         except (TypeError, ValueError):
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
-    
+
     # 7. Интервал напоминаний
-    interval_value = settings.get("reminder_interval_time") or settings.get("reminder_interval_hours", "1:00")
+    interval_value = settings.get("reminder_interval_time") or settings.get(
+        "reminder_interval_hours", "1:00"
+    )
     if ":" in interval_value:
         interval_display = format_time_readable(interval_value)
     else:
@@ -220,11 +221,7 @@ def format_settings_text(settings: dict) -> str:
     return text
 
 
-async def update_draft_setting(
-    state: FSMContext,
-    key: str,
-    value: any
-) -> dict:
+async def update_draft_setting(state: FSMContext, key: str, value: any) -> dict:
     """
     Обновляет черновик настроек и возвращает его.
 
@@ -243,7 +240,7 @@ async def update_draft_setting(
     draft[key] = value
     # Сохранение черновика
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
-    
+
     return draft
 
 
@@ -274,27 +271,27 @@ def try_to_input_time(msg: str) -> str | None:
     Возвращает строку в формате "ЧЧ:ММ" или None при некорректном вводе.
     """
     text = msg.strip()
-    
+
     # Проверка формата ЧЧ:ММ
     if ":" not in text:
         return None
-    
+
     parts = text.split(":")
     if len(parts) != 2:
         return None
-    
+
     try:
         hour = int(parts[0])
         minute = int(parts[1])
     except ValueError:
         return None
-    
+
     # Проверка диапазонов
     if not (0 <= hour <= 23):
         return None
     if not (0 <= minute <= 59):
         return None
-    
+
     return f"{hour:02d}:{minute:02d}"
 
 

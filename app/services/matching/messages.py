@@ -35,8 +35,7 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
         return
     await bot.send_message(
         actor.telegram_id,
-        "Мы зафиксировали, что вы готовы познакомиться. "
-        "Ждём ответа вашей пары.",
+        "Мы зафиксировали, что вы готовы познакомиться. Ждём ответа вашей пары.",
     )
 
 
@@ -108,14 +107,14 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
     partner = _get_partner(match, skipper)
     if not partner or not partner.telegram_id:
         return
-    
+
     # Удаляем клавиатуру из сообщения с приглашением у партнёра
     partner_message_id = None
     if partner.id == match.user_a_id and match.last_message_id_a:
         partner_message_id = match.last_message_id_a
     elif partner.id == match.user_b_id and match.last_message_id_b:
         partner_message_id = match.last_message_id_b
-    
+
     if partner_message_id:
         try:
             await bot.edit_message_reply_markup(
@@ -126,7 +125,7 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
         except Exception:
             # Игнорируем ошибки (сообщение могло быть удалено или изменено)
             pass
-    
+
     await bot.send_message(
         partner.telegram_id,
         "К сожалению, ваша пара решила пропустить участие на этой неделе. "
@@ -170,8 +169,7 @@ async def notify_match_slots_saved(bot: Bot, user: User) -> None:
         return
     await bot.send_message(
         user.telegram_id,
-        "Ваши варианты времени сохранены. "
-        "Ждём выбор времени от вашей пары.",
+        "Ваши варианты времени сохранены. Ждём выбор времени от вашей пары.",
     )
 
 
@@ -266,15 +264,17 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
     """
     if not match.meeting_start_at:
         return
-    
+
     # Отправляем персонализированное сообщение каждому участнику
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
-        
+
         partner = _get_partner(match, user)
-        partner_username = f"@{partner.username}" if partner and partner.username else "вашей парой"
-        
+        partner_username = (
+            f"@{partner.username}" if partner and partner.username else "вашей парой"
+        )
+
         text = (
             f"⏰ Встреча назначена с {partner_username}!\n"
             f"Дата и время: {match.meeting_start_at:%d.%m %H:%M}.\n"
@@ -325,6 +325,7 @@ async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
         if not user or not user.telegram_id:
             continue
 
+
 async def notify_meeting_started(bot: Bot, match: Match) -> None:
     """
     Уведомляет обоих участников о наступлении времени встречи.
@@ -345,7 +346,7 @@ async def notify_meeting_started(bot: Bot, match: Match) -> None:
         "После встречи вы можете оценить как всё прошло!"
     )
     markup = kb_meeting_feedback(match.id)
-    
+
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
@@ -356,7 +357,9 @@ async def notify_meeting_started(bot: Bot, match: Match) -> None:
                 reply_markup=markup,
             )
         except Exception as e:
-            logger.exception("Failed to send meeting started notification to user %s: %s", user.id, e)
+            logger.exception(
+                "Failed to send meeting started notification to user %s: %s", user.id, e
+            )
 
 
 async def notify_match_timeout(bot: Bot, match: Match) -> None:
@@ -375,7 +378,7 @@ async def notify_match_timeout(bot: Bot, match: Match) -> None:
     """
     # Удаляем клавиатуры из старых сообщений перед отправкой уведомления
     await remove_match_keyboards(bot, match)
-    
+
     text = (
         "Время на согласование встречи истекло. "
         "Вы сможете участвовать в следующих раундах."
@@ -407,15 +410,13 @@ async def notify_match_reminder(
             "Нажмите «Готов познакомиться» или «Пропустить на этой неделе»."
         )
     elif stage == "waiting_slots":
-        text = (
-            "Напоминаем, что нужно выбрать удобные дни и время для встречи."
-        )
+        text = "Напоминаем, что нужно выбрать удобные дни и время для встречи."
     else:  # waiting_confirm
         text = (
             "Напоминаем, что нужно подтвердить предложенное время "
             "или выбрать «Назначить заново»."
         )
-    
+
     if users_to_remind is None:
         # Обратная совместимость: отправляем обоим участникам
         await _broadcast(bot, match, text)
@@ -536,4 +537,3 @@ async def remove_match_keyboards(bot: Bot, match: Match) -> None:
                 getattr(user, "id", None),
                 message_id,
             )
-

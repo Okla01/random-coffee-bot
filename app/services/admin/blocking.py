@@ -14,9 +14,7 @@ from app.database import User, AdminLog
 from app.services.const import USER_STATUS_BLOCKED, USER_STATUS_NEW
 
 
-async def block_user(
-    session: AsyncSession, admin_tg_id: int, user: User
-) -> None:
+async def block_user(session: AsyncSession, admin_tg_id: int, user: User) -> None:
     """
     Блокирует пользователя и логирует действие.
 
@@ -39,9 +37,7 @@ async def block_user(
     await session.commit()
 
 
-async def unblock_user(
-    session: AsyncSession, admin_tg_id: int, user: User
-) -> None:
+async def unblock_user(session: AsyncSession, admin_tg_id: int, user: User) -> None:
     """
     Разблокирует пользователя, сбрасывает счётчики и логирует действие.
 
@@ -66,4 +62,3 @@ async def unblock_user(
         )
     )
     await session.commit()
-

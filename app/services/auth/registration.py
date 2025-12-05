@@ -27,6 +27,7 @@ from app.keyboards.kb_admin import kb_admin_decision
 
 class OtpResultType(str, Enum):
     """Типы результатов обработки OTP."""
+
     SUCCESS = "success"
     INVALID_FORMAT = "invalid_format"
     NOT_FOUND = "not_found"
@@ -241,9 +242,7 @@ async def notify_admin_on_block(
         pass
 
 
-async def get_latest_otp(
-    session: AsyncSession, user_id: int
-) -> Otp | None:
+async def get_latest_otp(session: AsyncSession, user_id: int) -> Otp | None:
     """
     Получает последний OTP для пользователя.
 
@@ -257,17 +256,13 @@ async def get_latest_otp(
     otp_row = (
         (
             await session.execute(
-                select(Otp)
-                .where(Otp.user_id == user_id)
-                .order_by(desc(Otp.created_at))
+                select(Otp).where(Otp.user_id == user_id).order_by(desc(Otp.created_at))
             )
         )
         .scalars()
         .first()
     )
     return otp_row
-
-
 
 
 async def process_otp_input(
@@ -304,7 +299,10 @@ async def process_otp_input(
     otp_row = await get_latest_otp(session, user.id)
 
     if not otp_row:
-        return OtpResultType.NOT_FOUND, f"Код не найден. Отправить новый код на {user.email}?"
+        return (
+            OtpResultType.NOT_FOUND,
+            f"Код не найден. Отправить новый код на {user.email}?",
+        )
 
     exp = ensure_aware_msk(otp_row.expires_at)
     used_at = ensure_aware_msk(otp_row.used_at)
@@ -375,4 +373,3 @@ async def check_email_change_allowed(
         return False, time_remaining
 
     return True, None
-

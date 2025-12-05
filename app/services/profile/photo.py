@@ -45,7 +45,7 @@ async def send_photo_request(
 ) -> None:
     """
     Отправляет стандартный запрос на загрузку фото с клавиатурой.
-    
+
     Args:
         message_or_cq: Message или CallbackQuery объект
         state (FSMContext): контекст FSM
@@ -53,12 +53,12 @@ async def send_photo_request(
     """
     # Импортируем здесь, чтобы избежать циклических импортов
     from app.keyboards.kb_profile import kb_profile_photo as default_kb
-    
+
     if kb is None:
         kb = default_kb()
-    
+
     # Для CallbackQuery используем message.answer(), для Message просто answer()
-    if hasattr(message_or_cq, 'message'):
+    if hasattr(message_or_cq, "message"):
         # Это CallbackQuery
         sent = await message_or_cq.message.answer(
             "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
@@ -72,8 +72,8 @@ async def send_photo_request(
             "либо используйте текущее фото вашего профиля.",
             reply_markup=kb,
         )
-    
-    if sent and hasattr(sent, 'message_id'):
+
+    if sent and hasattr(sent, "message_id"):
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
@@ -84,7 +84,7 @@ async def send_photos(
 ) -> None:
     """
     Отправляет список фото (одиночное или альбом).
-    
+
     Автоматически выбирает способ отправки в зависимости от количества фото.
     """
     if not photos_list:
@@ -96,8 +96,7 @@ async def send_photos(
         await bot.send_photo(chat_id, photos_list[0]["file_id"])
     else:
         media_group = [
-            InputMediaPhoto(media=photo_data["file_id"])
-            for photo_data in photos_list
+            InputMediaPhoto(media=photo_data["file_id"]) for photo_data in photos_list
         ]
         try:
             await bot.send_media_group(chat_id, media=media_group)
@@ -199,10 +198,12 @@ async def add_photos_to_profile(
 
     # Добавляем столько фото, сколько помещается
     for photo in photos[:free_slots]:
-        photos_list.append({
-            "file_id": photo.file_id,
-            "ts": now_msk().isoformat(),
-        })
+        photos_list.append(
+            {
+                "file_id": photo.file_id,
+                "ts": now_msk().isoformat(),
+            }
+        )
 
     set_photos_list(user, photos_list)
     await session.commit()
@@ -232,10 +233,12 @@ async def add_single_photo_to_profile(
     if len(photos_list) >= MAX_PHOTOS:
         return False, photos_list
 
-    photos_list.append({
-        "file_id": photo.file_id,
-        "ts": now_msk().isoformat(),
-    })
+    photos_list.append(
+        {
+            "file_id": photo.file_id,
+            "ts": now_msk().isoformat(),
+        }
+    )
 
     set_photos_list(user, photos_list)
     await session.commit()
@@ -286,10 +289,12 @@ async def add_telegram_profile_photo(
     if len(photos_list) >= MAX_PHOTOS:
         return False, photos_list
 
-    photos_list.append({
-        "file_id": photo.file_id,
-        "ts": now_msk().isoformat(),
-    })
+    photos_list.append(
+        {
+            "file_id": photo.file_id,
+            "ts": now_msk().isoformat(),
+        }
+    )
 
     set_photos_list(user, photos_list)
     await session.commit()
@@ -338,6 +343,7 @@ def get_photo_count(user: User) -> int:
     """
     photos_list = get_photos_list(user)
     return len(photos_list)
+
 
 def get_photos_list(user: User) -> list:
     """Получает список фото пользователя из БД."""

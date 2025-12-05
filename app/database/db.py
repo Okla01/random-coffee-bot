@@ -1,7 +1,11 @@
 """
-Инициализация асинхронной БД (SQLAlchemy 2.x, async).
-В dev по умолчанию — SQLite (aiosqlite), URL берётся из .env.
-Создание таблиц происходит автоматически при старте (для prod — миграции).
+Инициализация и управление асинхронной базой данных.
+
+Реализует создание асинхронного движка SQLAlchemy 2.x, фабрику сессий, функции для работы
+с пользователями (поиск, создание, обновление стадий), управление жизненным циклом БД
+через контекстный менеджер и автоматическое создание таблиц при старте приложения.
+В dev-режиме по умолчанию используется SQLite (aiosqlite), URL берётся из .env.
+Поддерживает регистрацию пользовательских функций SQLite (например, casefold для работы с кириллицей).
 """
 
 from __future__ import annotations
@@ -47,7 +51,7 @@ def make_session_factory(engine) -> async_sessionmaker[AsyncSession]:
     что объекты не истекают при коммите и используется AsyncSession.
 
     Args:
-        engine: AsyncEngine для создания сессий.
+        engine (AsyncEngine): движок для создания сессий.
 
     Returns:
         async_sessionmaker[AsyncSession]: фабрика асинхронных сессий.
@@ -58,6 +62,8 @@ def make_session_factory(engine) -> async_sessionmaker[AsyncSession]:
 async def get_user_by_id(session: AsyncSession, user_id: int) -> User | None:
     """
     Получает пользователя из БД по ID.
+
+    Выполняет поиск пользователя по первичному ключу в базе данных.
 
     Args:
         session (AsyncSession): сессия БД.
@@ -79,6 +85,7 @@ async def get_user_by_tg_id(
     """
     Получает пользователя по Telegram ID.
 
+    Выполняет поиск пользователя по уникальному Telegram ID в базе данных.
     Возвращает объект пользователя, если существует. Иначе — None.
 
     Args:
@@ -89,9 +96,7 @@ async def get_user_by_tg_id(
         Optional[User]: объект пользователя или None.
     """
     return (
-        await session.execute(
-            select(User).where(User.telegram_id == telegram_id)
-        )
+        await session.execute(select(User).where(User.telegram_id == telegram_id))
     ).scalar_one_or_none()
 
 
@@ -103,13 +108,16 @@ async def search_users_by_username(
     """
     Ищет пользователей по username (частичное совпадение).
 
+    Выполняет поиск пользователей по username с использованием case-insensitive
+    частичного совпадения. Автоматически убирает символ @ из начала запроса.
+
     Args:
         session (AsyncSession): сессия БД.
         query (str): строка поиска (без @).
         limit (int): максимальное количество результатов.
 
     Returns:
-        list[User]: список найденных пользователей.
+        list[User]: список найденных пользователей, отсортированный по username.
     """
     # Убираем @ если есть
     query = query.lstrip("@").strip().lower()
@@ -133,13 +141,16 @@ async def search_users_by_telegram_id(
     """
     Ищет пользователей по Telegram ID (частичное совпадение).
 
+    Выполняет поиск пользователей по частичному совпадению Telegram ID.
+    Преобразует числовой ID в строку для поиска подстроки.
+
     Args:
         session (AsyncSession): сессия БД.
         query (str): строка поиска (часть Telegram ID).
         limit (int): максимальное количество результатов.
 
     Returns:
-        list[User]: список найденных пользователей.
+        list[User]: список найденных пользователей, отсортированный по Telegram ID.
     """
     query = query.strip()
     if not query:
@@ -147,6 +158,7 @@ async def search_users_by_telegram_id(
 
     # Поиск по частичному совпадению telegram_id (приведённого к строке)
     from sqlalchemy import cast, String
+
     result = await session.execute(
         select(User)
         .where(cast(User.telegram_id, String).like(f"%{query}%"))
@@ -164,13 +176,16 @@ async def search_users_by_name(
     """
     Ищет пользователей по имени в анкете (частичное совпадение).
 
+    Выполняет поиск пользователей по имени с использованием case-insensitive
+    частичного совпадения через функцию casefold для корректной работы с кириллицей.
+
     Args:
         session (AsyncSession): сессия БД.
         query (str): строка поиска (часть имени).
         limit (int): максимальное количество результатов.
 
     Returns:
-        list[User]: список найденных пользователей.
+        list[User]: список найденных пользователей, отсортированный по имени.
     """
     query = query.strip()
     if not query:
@@ -197,7 +212,7 @@ async def get_or_create_user(
 
     Если пользователь существует — возвращает его и обновляет username при изменении.
     Если нет — создаёт новую запись с переданными параметрами и возвращает объект.
-    Не коммитит изменения.
+    Не коммитит изменения (требуется явный commit в вызывающем коде).
 
     Args:
         session (AsyncSession): сессия БД.
@@ -207,9 +222,7 @@ async def get_or_create_user(
     Returns:
         User: объект пользователя (новый или существующий).
     """
-    result = await session.execute(
-        select(User).where(User.telegram_id == telegram_id)
-    )
+    result = await session.execute(select(User).where(User.telegram_id == telegram_id))
     user = result.scalar_one_or_none()
 
     if user:
@@ -238,6 +251,9 @@ def is_user_blocked(user: User) -> bool:
     """
     Проверяет, заблокирован ли пользователь.
 
+    Сравнивает статус пользователя с константой USER_STATUS_BLOCKED.
+    Возвращает False, если пользователь не передан или статус отсутствует.
+
     Args:
         user (User): объект пользователя для проверки.
 
@@ -259,9 +275,9 @@ async def update_user_stage(
     """
     Обновляет стадию пользователя и обновляет FSM-состояние.
 
-    Изменяет поле stage пользователя, опционально
-    обновляет данные в FSM-состоянии и коммитит изменения.
-    Примечание: last_activity обновляется автоматически в BlockedUserMiddleware.
+    Изменяет поле stage пользователя, опционально обновляет данные в FSM-состоянии
+    и коммитит изменения в базе данных. Примечание: last_activity обновляется
+    автоматически в BlockedUserMiddleware.
 
     Args:
         session (AsyncSession): сессия БД.
@@ -279,6 +295,7 @@ async def update_user_stage(
     if state_data:
         await state.update_data(**state_data)
 
+
 @asynccontextmanager
 async def lifespan_db(
     settings: Settings,
@@ -286,15 +303,17 @@ async def lifespan_db(
     """
     Управляет жизненным циклом подключения к базе данных.
 
-    Асинхронный контекстный менеджер, который создаёт движок БД,
-    инициализирует таблицы на основе моделей SQLAlchemy, предоставляет
-    фабрику сессий для использования, и корректно освобождает ресурсы при завершении.
+    Асинхронный контекстный менеджер, который создаёт движок БД, регистрирует
+    пользовательские функции SQLite (например, casefold для работы с кириллицей),
+    инициализирует таблицы на основе моделей SQLAlchemy, инициализирует дефолтные
+    настройки, предоставляет фабрику сессий для использования и корректно
+    освобождает ресурсы при завершении.
 
     Args:
         settings (Settings): объект конфигурации.
 
-    Returns:
-        AsyncIterator[async_sessionmaker[AsyncSession]]: итератор фабрики сессий.
+    Yields:
+        async_sessionmaker[AsyncSession]: фабрика асинхронных сессий.
 
     Raises:
         Exception: если не удаётся подключиться к БД или создать таблицы.
@@ -327,6 +346,7 @@ async def lifespan_db(
     # Инициализируем дефолтные настройки
     async with session_factory() as session:
         from .init_settings import init_default_settings
+
         await init_default_settings(session)
         await session.commit()
 

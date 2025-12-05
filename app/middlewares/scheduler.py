@@ -51,4 +51,3 @@ class SchedulerMiddleware(BaseMiddleware):
         """
         data["matching_scheduler"] = self._scheduler
         return await handler(event, data)
-

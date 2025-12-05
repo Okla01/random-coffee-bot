@@ -58,7 +58,7 @@ async def setup_matching_scheduler(
         match_hour, match_minute = 12, 0
     else:
         match_hour, match_minute = time_parts
-    
+
     # Cron-триггер для раунда матчинга
     scheduler.add_job(
         _matching_round_job,
@@ -93,7 +93,7 @@ async def setup_matching_scheduler(
     else:
         trigger = IntervalTrigger(minutes=timeout_interval, timezone=MOSCOW_TZ)
         interval_display = f"{timeout_interval:.1f} minutes"
-    
+
     scheduler.add_job(
         _timeouts_job,
         trigger,
@@ -181,7 +181,7 @@ async def refresh_timeouts_schedule(
         settings.reminder_interval_time,
         settings.response_timeout_time,
     )
-    
+
     if interval_unit == "seconds":
         trigger = IntervalTrigger(seconds=timeout_interval, timezone=MOSCOW_TZ)
         interval_display = f"{timeout_interval:.0f} seconds"
@@ -290,4 +290,3 @@ async def _timeouts_job(
     except Exception as e:
         logger.exception("Timeouts and reminders job failed with error: %s", e)
         raise
-

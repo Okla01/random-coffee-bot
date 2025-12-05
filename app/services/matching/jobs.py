@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from app.database import Match, User
 from app.database.utils import ensure_aware_msk, now_msk
 from app.services.matching.constants import (
-    MATCH_ACTIVE_STATUSES,
     MATCH_STATUS_COMPLETED,
     MATCH_STATUS_EXPIRED_TIMEOUT,
     MATCH_STATUS_PENDING_RESPONSE,
@@ -98,28 +97,32 @@ async def _get_users_to_remind(
         list: список пользователей (User), которым нужно отправить напоминание.
     """
     users_to_remind = []
-    
+
     if stage == "pending_response":
         # Напоминаем только тем, кто еще не ответил (response == "none")
         if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_NONE:
             users_to_remind.append(match.user_a)
         if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_NONE:
             users_to_remind.append(match.user_b)
-    
+
     elif stage == "waiting_slots":
         # Напоминаем только тем, кто еще не выбрал слоты
-        if match.user_a and not await user_has_match_slots(session, match.id, match.user_a_id):
+        if match.user_a and not await user_has_match_slots(
+            session, match.id, match.user_a_id
+        ):
             users_to_remind.append(match.user_a)
-        if match.user_b and not await user_has_match_slots(session, match.id, match.user_b_id):
+        if match.user_b and not await user_has_match_slots(
+            session, match.id, match.user_b_id
+        ):
             users_to_remind.append(match.user_b)
-    
+
     elif stage == "waiting_confirm":
         # Напоминаем только тем, кто еще не подтвердил (response != "confirm")
         if match.user_a and match.user_a_response != MATCH_USER_RESPONSE_CONFIRM:
             users_to_remind.append(match.user_a)
         if match.user_b and match.user_b_response != MATCH_USER_RESPONSE_CONFIRM:
             users_to_remind.append(match.user_b)
-    
+
     return users_to_remind
 
 
@@ -170,7 +173,7 @@ async def process_match_timeouts_and_reminders(
 
     for match in matches:
         stage = stage_map[match.status]
-        
+
         # Определяем момент начала стадии согласно ТЗ:
         # - для pending_response: created_at (момент нахождения пары)
         # - для waiting_slots и waiting_confirm: updated_at (момент перехода в стадию)
@@ -178,10 +181,10 @@ async def process_match_timeouts_and_reminders(
             stage_start = match.created_at
         else:
             stage_start = match.updated_at
-        
+
         if not stage_start:
             stage_start = match.created_at or now
-        
+
         # Приводим к aware формату для корректного вычитания
         stage_start = ensure_aware_msk(stage_start) or now
 
@@ -292,16 +295,16 @@ async def process_match_timeouts_only(
         stage = stage_map.get(match.status)
         if not stage:
             continue
-        
+
         # Определяем момент начала стадии
         if stage == "pending_response":
             stage_start = match.created_at
         else:
             stage_start = match.updated_at
-        
+
         if not stage_start:
             stage_start = match.created_at or now
-        
+
         # Приводим к aware формату для корректного вычитания
         stage_start = ensure_aware_msk(stage_start) or now
 
@@ -390,16 +393,16 @@ async def process_match_reminders_only(
         stage = stage_map.get(match.status)
         if not stage:
             continue
-        
+
         # Определяем момент начала стадии
         if stage == "pending_response":
             stage_start = match.created_at
         else:
             stage_start = match.updated_at
-        
+
         if not stage_start:
             stage_start = match.created_at or now
-        
+
         # Приводим к aware формату для корректного вычитания
         stage_start = ensure_aware_msk(stage_start) or now
 
@@ -429,4 +432,3 @@ async def process_match_reminders_only(
     await session.commit()
 
     return reminded_count
-

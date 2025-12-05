@@ -29,7 +29,7 @@ class SlotEntry:
 
     match_date: date
     time_from: str  # формат HH:MM
-    time_to: str    # формат HH:MM
+    time_to: str  # формат HH:MM
 
 
 async def get_match_with_relations(
@@ -282,6 +282,6 @@ async def cleanup_inactive_match(
     # Обнуляем ID последних сообщений
     match.last_message_id_a = None
     match.last_message_id_b = None
-    
+
     # Удаляем все временные слоты для данного матча
     await clear_match_slots(session, match.id)

@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import Match, User, MatchSlot
 from app.database.utils import now_msk
-from app.handlers.fsm import FSMDataKeys
 from app.keyboards.utils import clear_last_kb
 from app.services.admin import is_admin
 from app.services.admin.complaints import submit_complaint
@@ -83,7 +82,9 @@ async def cmd_test_complaint(
         ).scalar_one_or_none()
 
         if not reported_user:
-            await message.answer(f"❌ Пользователь с tg_id {reported_tg_id} не найден в БД.")
+            await message.answer(
+                f"❌ Пользователь с tg_id {reported_tg_id} не найден в БД."
+            )
             return
 
         # Время встречи: текущее время минус 2 часа
@@ -153,11 +154,15 @@ async def cmd_reset_matching(
         await session.execute(delete(Match))
         await session.execute(delete(MatchSlot))
         # Очищаем last_pairing_at и last_match_at у всех пользователей
-        await session.execute(update(User).values(last_pairing_at=None, last_match_at=None))
-        
+        await session.execute(
+            update(User).values(last_pairing_at=None, last_match_at=None)
+        )
+
         await session.commit()
 
-    await message.answer("✅ Все матчи удалены, last_pairing_at сброшен у всех пользователей.")
+    await message.answer(
+        "✅ Все матчи удалены, last_pairing_at сброшен у всех пользователей."
+    )
 
 
 @router.message(Command("test_scheduler"))
@@ -279,4 +284,3 @@ async def cmd_stage2_debug(
         await message.answer(
             "✅ Debug mode: перешли на stage2 (profile_name).\nДавайте заполним анкету! Как вас зовут?"
         )
-

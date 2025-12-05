@@ -12,4 +12,3 @@ router.include_router(responses_router)
 router.include_router(slots_router)
 
 __all__ = ["router"]
-

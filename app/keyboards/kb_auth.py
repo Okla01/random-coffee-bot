@@ -17,10 +17,13 @@ def kb_auth_code_wait() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Отправить код повторно 🔁", callback_data="otp:change_email")
+                InlineKeyboardButton(
+                    text="Отправить код повторно 🔁", callback_data="otp:change_email"
+                )
             ],
         ]
     )
+
 
 def kb_auth_code_expired() -> InlineKeyboardMarkup:
     """
@@ -32,7 +35,9 @@ def kb_auth_code_expired() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="Отправить 📩", callback_data="otp:resend"),
             ],
             [
-                InlineKeyboardButton(text="Изменить email ✏️", callback_data="otp:change_email"),
+                InlineKeyboardButton(
+                    text="Изменить email ✏️", callback_data="otp:change_email"
+                ),
             ],
         ]
     )

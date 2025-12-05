@@ -31,4 +31,3 @@ async def clear_last_kb(state: FSMContext, chat_id: int, bot) -> None:
         except Exception:
             pass
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
-

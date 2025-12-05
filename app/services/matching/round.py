@@ -85,7 +85,9 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
     created_matches = await _persist_matches(session, selected_pairs, now)
     await session.flush()  # Сохраняем match в БД для получения ID
     await _notify_new_matches(session, bot, created_matches)
-    await session.commit()  # Коммитим после отправки всех уведомлений и сохранения message_id
+    await (
+        session.commit()
+    )  # Коммитим после отправки всех уведомлений и сохранения message_id
 
     matched_user_ids = {
         user_id
@@ -397,9 +399,7 @@ async def _send_match_invite(
         if photos_list:
             media_group = []
             for photo_data in photos_list:
-                media_group.append(
-                    InputMediaPhoto(media=photo_data["file_id"])
-                )
+                media_group.append(InputMediaPhoto(media=photo_data["file_id"]))
             try:
                 await bot.send_media_group(user.telegram_id, media=media_group)
             except Exception:
@@ -484,4 +484,3 @@ async def _notify_no_pairs(bot: Bot, users: list[User]) -> None:
             await bot.send_message(user.telegram_id, text)
         except Exception:
             logger.exception("Failed to notify user %s about missing pair", user.id)
-

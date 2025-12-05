@@ -96,8 +96,12 @@ async def _write_general_stats_data(ws: Worksheet, session: AsyncSession) -> Non
     ]
 
     for row_num, (metric_name, value) in enumerate(metrics, start=2):
-        ws.cell(row=row_num, column=1, value=metric_name).alignment = Alignment(vertical="center")
-        ws.cell(row=row_num, column=2, value=value).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=row_num, column=1, value=metric_name).alignment = Alignment(
+            vertical="center"
+        )
+        ws.cell(row=row_num, column=2, value=value).alignment = Alignment(
+            horizontal="center", vertical="center"
+        )
 
 
 def _apply_general_stats_formatting(ws: Worksheet) -> None:
@@ -156,7 +160,8 @@ async def export_statistics_to_excel(
 
         # Формирование имени файла
         today = now_msk().strftime("%Y%m%d")
-        document = BufferedInputFile(excel_bytes.read(), filename=f"statistics-{today}.xlsx")
+        document = BufferedInputFile(
+            excel_bytes.read(), filename=f"statistics-{today}.xlsx"
+        )
 
         return document
-

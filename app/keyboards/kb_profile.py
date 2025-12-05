@@ -10,7 +10,6 @@ from __future__ import annotations
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 
-
 def kb_profile_review() -> InlineKeyboardMarkup:
     """
     Кратко: клавиатура предпросмотра анкеты с действиями для редактирования.
@@ -18,10 +17,26 @@ def kb_profile_review() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:save")],
-            [InlineKeyboardButton(text="Изменить описание", callback_data="prof:edit:bio"),],
-            [InlineKeyboardButton(text="Изменить интересы", callback_data="prof:edit:interests")],
-            [InlineKeyboardButton(text="Изменить фото", callback_data="prof:edit:photo")],
-            [InlineKeyboardButton(text="Удалить профиль 🗑", callback_data="prof:delete:confirm")],
+            [
+                InlineKeyboardButton(
+                    text="Изменить описание", callback_data="prof:edit:bio"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Изменить интересы", callback_data="prof:edit:interests"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Изменить фото", callback_data="prof:edit:photo"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Удалить профиль 🗑", callback_data="prof:delete:confirm"
+                )
+            ],
         ]
     )
 
@@ -33,8 +48,12 @@ def kb_profile_photo_clear_save() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="Очистить 🗑️", callback_data="prof:photo:clear"),
-                InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:photo:save"),
+                InlineKeyboardButton(
+                    text="Очистить 🗑️", callback_data="prof:photo:clear"
+                ),
+                InlineKeyboardButton(
+                    text="Сохранить ✅", callback_data="prof:photo:save"
+                ),
             ],
         ]
     )
@@ -46,7 +65,11 @@ def kb_profile_photo() -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Взять фото из профиля 👤", callback_data="prof:photo:from_tg")],
+            [
+                InlineKeyboardButton(
+                    text="Взять фото из профиля 👤", callback_data="prof:photo:from_tg"
+                )
+            ],
         ]
     )
 
@@ -57,12 +80,24 @@ def kb_profile_photo_with_photos() -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Взять фото из профиля 👤", callback_data="prof:photo:from_tg")],
             [
-                InlineKeyboardButton(text="Добавить ➕", callback_data="prof:photo:add"),
-                InlineKeyboardButton(text="Очистить 🗑️", callback_data="prof:photo:clear"),
+                InlineKeyboardButton(
+                    text="Взять фото из профиля 👤", callback_data="prof:photo:from_tg"
+                )
             ],
-            [InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:photo:save")],
+            [
+                InlineKeyboardButton(
+                    text="Добавить ➕", callback_data="prof:photo:add"
+                ),
+                InlineKeyboardButton(
+                    text="Очистить 🗑️", callback_data="prof:photo:clear"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Сохранить ✅", callback_data="prof:photo:save"
+                )
+            ],
         ]
     )
 
@@ -75,9 +110,9 @@ def kb_profile_delete_confirm() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(text="Удалить 🗑", callback_data="prof:delete:yes"),
-                InlineKeyboardButton(text="Отмена ❌", callback_data="prof:delete:cancel"),
+                InlineKeyboardButton(
+                    text="Отмена ❌", callback_data="prof:delete:cancel"
+                ),
             ],
         ]
     )
-
-

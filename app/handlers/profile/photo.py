@@ -28,7 +28,7 @@ from app.keyboards.kb_profile import (
 
 from app.services.core import Settings
 from app.services.const import USER_STATUS_NOT_ACTIVE
-from app.services.profile.utils import(
+from app.services.profile.utils import (
     is_profile_complete,
 )
 from app.services.profile.preview import send_profile_preview
@@ -235,9 +235,7 @@ async def send_photos_with_actions(
     )
 
     # Сообщение с кнопками (без текста "Добавлено N фото")
-    keyboard = (
-        kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
-    )
+    keyboard = kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
     sent = await bot.send_message(
         chat_id,
         "Выберите действие",
@@ -264,9 +262,7 @@ async def cb_photo_from_tg(
     и добавить его в список фото анкеты. Если фото нет, уведомляет об этом.
     """
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
 
         # Проверяем лимит
         if not can_add_photo(user):
@@ -289,9 +285,7 @@ async def cb_photo_from_tg(
             return
 
         # Добавляем фото через бизнес-логику
-        success, photos_list = await add_telegram_profile_photo(
-            session, user, photo
-        )
+        success, photos_list = await add_telegram_profile_photo(session, user, photo)
 
         if not success:
             await session.commit()
@@ -320,9 +314,7 @@ async def cb_photo_add(
     Обрабатывает нажатие кнопки «Добавить ➕» — запрашивает ещё фото.
     """
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
 
         if not can_add_photo(user):
             await session.commit()
@@ -351,9 +343,7 @@ async def cb_photo_clear(
     Обрабатывает нажатие кнопки «Очистить 🗑️» — удаляет все фото.
     """
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
         await clear_user_photos(session, user)
 
     try:
@@ -382,9 +372,7 @@ async def cb_photo_save(
     """
     await cq.message.delete()
     async with session_factory() as session:
-        user = await get_or_create_user(
-            session, cq.from_user.id, cq.from_user.username
-        )
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
 
         if not user.photos_json or not user.photos_json.get("photos"):
             await session.commit()
@@ -396,7 +384,7 @@ async def cb_photo_save(
         # Проверяем, был ли режим редактирования
         data = await state.get_data()
         editing = data.get(FSMDataKeys.EDITING_FIELD)
-        
+
         # Проверяем, заполнен ли профиль полностью (для работы после перезапуска бота)
         editing_profile_complete = is_profile_complete(user)
         if editing == "photo" or editing_profile_complete:
@@ -448,9 +436,7 @@ async def cb_edit_photo(
 
             # Превращаем сообщение в клавиатуру без текста
             keyboard = (
-                kb_profile_photo_with_photos()
-                if photos_list
-                else kb_profile_photo()
+                kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
             )
             await cq.message.edit_text("Изменение фото", reply_markup=keyboard)
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
@@ -464,4 +450,3 @@ async def cb_edit_photo(
             )
         except:
             pass
-

@@ -108,7 +108,9 @@ async def prepare_inline_search_result(
     """
     # Получение ролей пользователя
     roles = await get_user_roles(session, user.id)
-    roles_str = ", ".join(ROLE_NAMES.get(r.name, r.name) for r in roles) if roles else "нет"
+    roles_str = (
+        ", ".join(ROLE_NAMES.get(r.name, r.name) for r in roles) if roles else "нет"
+    )
     status_str = USER_STATUS_NAMES.get(user.status, user.status)
 
     # Получение фотографий пользователя
@@ -116,7 +118,9 @@ async def prepare_inline_search_result(
     photos_count = len(photos_list)
 
     # Формирование описания
-    description = build_user_search_description(user, roles_str, status_str, photos_count)
+    description = build_user_search_description(
+        user, roles_str, status_str, photos_count
+    )
 
     # Формирование заголовка в зависимости от типа поиска
     if search_type == "username":
@@ -140,6 +144,7 @@ async def prepare_inline_search_result(
 
 # ----------------------------- Подготовка данных анкеты пользователя ----------------------------- #
 
+
 async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
     """
     Подготавливает данные анкеты пользователя для отображения.
@@ -156,7 +161,9 @@ async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
     """
     # Получение ролей пользователя
     roles = await get_user_roles(session, user.id)
-    roles_str = ", ".join(ROLE_NAMES.get(r.name, r.name) for r in roles) if roles else "нет"
+    roles_str = (
+        ", ".join(ROLE_NAMES.get(r.name, r.name) for r in roles) if roles else "нет"
+    )
     status_str = USER_STATUS_NAMES.get(user.status, user.status)
 
     # Формирование текста профиля
@@ -172,7 +179,9 @@ async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
     }
 
 
-def build_media_group(photos_list: list[dict], profile_text: str) -> list["InputMediaPhoto"]:
+def build_media_group(
+    photos_list: list[dict], profile_text: str
+) -> list["InputMediaPhoto"]:
     """
     Формирует медиа-группу с фотографиями пользователя.
 
@@ -197,4 +206,3 @@ def build_media_group(photos_list: list[dict], profile_text: str) -> list["Input
             )
         )
     return media_group
-

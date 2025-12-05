@@ -1,9 +1,11 @@
 """
 Обработчики колбэков для карточки пользователя из inline-поиска.
 
-Обрабатывает:
-- блокировку/разблокировку пользователей
-- назначение/лишение прав администратора
+Обрабатывает callback-запросы для управления пользователями из карточки, отображаемой
+после выбора результата inline-поиска: блокировку/разблокировку пользователей и назначение/
+лишение прав администратора. Проверяет права администратора, предотвращает блокировку
+и лишение прав самого себя, уведомляет пользователей о действиях и обновляет клавиатуру
+действий в соответствии с текущим состоянием пользователя.
 """
 
 from __future__ import annotations
@@ -38,6 +40,16 @@ async def _get_user_and_check_admin(
     """
     Проверяет права администратора и получает пользователя из БД.
 
+    Проверяет права администратора у пользователя, выполняющего действие, получает
+    пользователя по ID из базы данных. Если проверка не пройдена или пользователь
+    не найден, уведомляет администратора и возвращает None.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session (AsyncSession): сессия БД.
+        settings (Settings): конфигурация приложения.
+        user_id (int): ID пользователя в БД.
+
     Returns:
         User | None: объект пользователя или None, если проверка не пройдена.
     """
@@ -62,7 +74,22 @@ async def _update_keyboard(
     settings: Settings,
     user: User,
 ) -> None:
-    """Обновляет клавиатуру действий после изменения состояния пользователя."""
+    """
+    Обновляет клавиатуру действий после изменения состояния пользователя.
+
+    Определяет текущее состояние пользователя (заблокирован ли, является ли администратором),
+    формирует новую клавиатуру действий с соответствующими кнопками и обновляет
+    reply_markup сообщения с карточкой пользователя.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session (AsyncSession): сессия БД.
+        settings (Settings): конфигурация приложения.
+        user (User): объект пользователя.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     user_is_blocked = is_user_blocked(user)
     user_is_admin = await is_admin(session, settings, user.telegram_id)
 
@@ -89,7 +116,22 @@ async def cb_block_unblock(
     session_factory: async_sessionmaker[AsyncSession],
     settings: Settings,
 ) -> None:
-    """Обрабатывает блокировку/разблокировку пользователей."""
+    """
+    Обрабатывает блокировку/разблокировку пользователей.
+
+    Извлекает действие (block/unblock) и ID пользователя из callback data, проверяет
+    права администратора, предотвращает блокировку самого себя, выполняет блокировку
+    или разблокировку через сервисную функцию, уведомляет пользователя о действии
+    и обновляет клавиатуру действий.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     data = cq.data or ""
     _, action, user_id_str = data.split(":")
     target_id = int(user_id_str)
@@ -104,7 +146,9 @@ async def cb_block_unblock(
             await cq.answer("❌ Нельзя заблокировать самого себя")
             return
 
-        username_display = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        username_display = (
+            f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        )
 
         if action == "block":
             await block_user(session, cq.from_user.id, user)
@@ -146,7 +190,22 @@ async def cb_admin_role(
     session_factory: async_sessionmaker[AsyncSession],
     settings: Settings,
 ) -> None:
-    """Обрабатывает назначение/лишение прав администратора."""
+    """
+    Обрабатывает назначение/лишение прав администратора.
+
+    Извлекает действие (make_admin/remove_admin) и ID пользователя из callback data,
+    проверяет права администратора, предотвращает лишение прав самого себя, выполняет
+    назначение или лишение роли администратора через сервисную функцию и обновляет
+    клавиатуру действий.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     data = cq.data or ""
     parts = data.split(":")
     action = parts[1]  # "make_admin" или "remove_admin"
@@ -162,7 +221,9 @@ async def cb_admin_role(
             await cq.answer("❌ Нельзя лишить себя прав администратора")
             return
 
-        username_display = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        username_display = (
+            f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        )
 
         if action == "make_admin":
             await grant_admin_role(session, cq.from_user.id, user)
@@ -173,4 +234,3 @@ async def cb_admin_role(
 
         # Обновляем клавиатуру
         await _update_keyboard(cq, session, settings, user)
-

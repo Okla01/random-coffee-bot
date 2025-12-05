@@ -1,7 +1,10 @@
 """
 Обработчики статистики в административной панели.
 
-Обрабатывает callback-запросы для просмотра статистики.
+Обрабатывает callback-запросы для просмотра статистики за различные периоды (7 дней,
+30 дней, 6 месяцев, всё время), экспорта статистики в Excel файл и генерации графиков
+статистики за 6 месяцев. Форматирует и отображает статистику по пользователям, матчам,
+жалобам и другим метрикам системы.
 """
 
 from __future__ import annotations
@@ -30,7 +33,20 @@ async def cb_admin_statistics(
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Обрабатывает callback для просмотра статистики (по умолчанию 7 дней)."""
+    """
+    Обрабатывает callback для просмотра статистики (по умолчанию 7 дней).
+
+    Удаляет предыдущую клавиатуру, получает статистику за 7 дней из базы данных,
+    форматирует текст и отображает меню статистики с возможностью выбора периода.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
@@ -63,7 +79,20 @@ async def cb_statistics_period(
     cq: CallbackQuery,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Обрабатывает callback для выбора периода статистики."""
+    """
+    Обрабатывает callback для выбора периода статистики.
+
+    Извлекает период из callback data (7_days, 30_days, 6_months, all_time),
+    получает статистику за выбранный период, форматирует текст и обновляет
+    отображение меню статистики.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
     await cq.answer()
 
     # Извлекаем период из callback data
@@ -89,7 +118,20 @@ async def cb_statistics_export_excel(
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Обрабатывает callback для экспорта статистики в Excel."""
+    """
+    Обрабатывает callback для экспорта статистики в Excel.
+
+    Удаляет предыдущую клавиатуру, генерирует Excel документ со статистикой
+    через сервисную функцию и отправляет его администратору с кнопкой возврата в меню.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
 
@@ -111,7 +153,22 @@ async def cb_statistics_graphs(
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Обрабатывает callback для генерации графиков статистики."""
+    """
+    Обрабатывает callback для генерации графиков статистики.
+
+    Уведомляет администратора о начале генерации, удаляет предыдущую клавиатуру,
+    генерирует графики статистики за 6 месяцев (матчи и средний Jaccard-коэффициент)
+    через сервисную функцию, отправляет их в виде медиа-группы и добавляет кнопку
+    возврата в меню.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+
+    Returns:
+        None: ничего не возвращает.
+    """
 
     await cq.answer("Генерирую графики...")
 
@@ -134,5 +191,7 @@ async def cb_statistics_graphs(
     await cq.message.answer_media_group(media_group)
 
     # Отправляем кнопку "Назад" отдельным сообщением
-    sent = await cq.message.answer("Графики статистики", reply_markup=kb_admin_back_to_menu())
+    sent = await cq.message.answer(
+        "Графики статистики", reply_markup=kb_admin_back_to_menu()
+    )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

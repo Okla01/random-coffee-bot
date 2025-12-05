@@ -63,3 +63,51 @@ def kb_match_confirm_prompt(match_id: int) -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def kb_meeting_feedback(match_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для оценки встречи после её завершения.
+
+    Args:
+        match_id (int): ID матча для формирования callback_data.
+
+    Returns:
+        InlineKeyboardMarkup: inline-клавиатура с кнопками [⚠️] и [👍].
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⚠️",
+                    callback_data=f"meeting_complaint:{match_id}",
+                ),
+                InlineKeyboardButton(
+                    text="👍",
+                    callback_data=f"meeting_positive:{match_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def kb_complaint_cancel(match_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для отмены жалобы.
+
+    Args:
+        match_id (int): ID матча для формирования callback_data.
+
+    Returns:
+        InlineKeyboardMarkup: inline-клавиатура с кнопкой «Отменить жалобу».
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Отменить жалобу",
+                    callback_data=f"complaint_cancel:{match_id}",
+                ),
+            ],
+        ]
+    )

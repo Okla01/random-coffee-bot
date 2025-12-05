@@ -32,6 +32,12 @@ class ComplaintStates(StatesGroup):
     waiting_warning_text = State()
 
 
+class MeetingFeedbackStates(StatesGroup):
+    """Состояния FSM для оценки встречи."""
+
+    waiting_complaint_text = State()
+
+
 class FSMDataKeys(str, Enum):
     """Ключи для данных, сохраняемых в FSMContext."""
 
@@ -45,4 +51,9 @@ class FSMDataKeys(str, Enum):
     COMPLAINT_ADMIN_MESSAGE_ID = "complaint_admin_message_id"
     COMPLAINT_REPORTED_USER_ID = "complaint_reported_user_id"
     COMPLAINT_CANCEL_MESSAGE_ID = "complaint_cancel_message_id"
+
+    # Ключи для оценки встречи
+    MEETING_FEEDBACK_MESSAGE_ID = "meeting_feedback_message_id"
+    MEETING_FEEDBACK_MATCH_ID = "meeting_feedback_match_id"
+    MEETING_FEEDBACK_PARTNER_ID = "meeting_feedback_partner_id"
 

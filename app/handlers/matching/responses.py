@@ -7,7 +7,9 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, Router, F
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
 from aiogram_dialog import StartMode
 from aiogram_dialog.api.protocols import BgManagerFactory
@@ -15,7 +17,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import Match, User
 from app.database.db import get_user_by_tg_id
+from app.services.core.config import Settings
 from app.services.matching.constants import (
+    MATCH_STATUS_COMPLETED,
     MATCH_STATUS_PENDING_RESPONSE,
     MATCH_STATUS_SCHEDULED,
     MATCH_STATUS_SKIPPED,
@@ -42,6 +46,9 @@ from app.services.matching.storage import (
     set_match_response,
 )
 from app.handlers.matching.slots import MatchSlotsDialogSG
+from app.handlers.fsm import MeetingFeedbackStates, FSMDataKeys
+from app.keyboards.kb_matching import kb_meeting_feedback, kb_complaint_cancel
+from app.services.admin.complaints import submit_complaint
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -344,4 +351,208 @@ async def _start_slots_dialog_for_user(
         data={"match_id": match.id, "user_id": user.id},
         mode=StartMode.RESET_STACK,
     )
+
+
+@router.callback_query(F.data.startswith("meeting_complaint:"))
+async def on_meeting_complaint(
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Обрабатывает нажатие кнопки [⚠️] для подачи жалобы на встречу.
+
+    Редактирует сообщение, запрашивая текст жалобы.
+    """
+    match_id = int(cq.data.split(":")[1])
+    
+    async with session_factory() as session:
+        match = await get_match_with_relations(session, match_id)
+        if not match or match.status != MATCH_STATUS_COMPLETED:
+            await cq.answer("Встреча недоступна", show_alert=True)
+            return
+        
+        user = await _get_user(session, cq.from_user.id)
+        if not user:
+            await cq.answer("Обновите регистрацию", show_alert=True)
+            return
+        
+        # Определяем партнёра
+        partner = match.user_b if user.id == match.user_a_id else match.user_a
+        if not partner:
+            await cq.answer("Партнёр не найден", show_alert=True)
+            return
+    
+    # Сохраняем данные в FSM
+    await state.update_data(
+        **{
+            FSMDataKeys.MEETING_FEEDBACK_MESSAGE_ID: cq.message.message_id,
+            FSMDataKeys.MEETING_FEEDBACK_MATCH_ID: match_id,
+            FSMDataKeys.MEETING_FEEDBACK_PARTNER_ID: partner.telegram_id,
+        }
+    )
+    
+    # Редактируем сообщение
+    text = "Введите текст жалобы:"
+    markup = kb_complaint_cancel(match_id)
+    
+    try:
+        await cq.message.edit_text(text, reply_markup=markup)
+        await state.set_state(MeetingFeedbackStates.waiting_complaint_text)
+        await cq.answer()
+    except Exception as e:
+        logger.exception("Failed to edit message for complaint: %s", e)
+        await cq.answer("Ошибка при обработке запроса", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("complaint_cancel:"))
+async def on_complaint_cancel(
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Обрабатывает отмену жалобы, возвращая к исходному сообщению с кнопками оценки.
+    """
+    match_id = int(cq.data.split(":")[1])
+    
+    async with session_factory() as session:
+        match = await get_match_with_relations(session, match_id)
+        if not match or match.status != MATCH_STATUS_COMPLETED:
+            await cq.answer("Встреча недоступна", show_alert=True)
+            return
+    
+    # Возвращаем исходное сообщение
+    text = (
+        "👋 Время вашей встречи наступило. "
+        "Хорошего общения!\n"
+        "После встречи вы можете оценить как всё прошло!"
+    )
+    markup = kb_meeting_feedback(match_id)
+    
+    try:
+        await cq.message.edit_text(text, reply_markup=markup)
+        await state.set_state(None)
+        await cq.answer()
+    except Exception as e:
+        logger.exception("Failed to edit message for cancel complaint: %s", e)
+        await cq.answer("Ошибка при обработке запроса", show_alert=True)
+
+
+@router.message(StateFilter(MeetingFeedbackStates.waiting_complaint_text))
+async def on_complaint_text_input(
+    msg: Message,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Обрабатывает ввод текста жалобы и отправляет её в админ-чат.
+    """
+    data = await state.get_data()
+    match_id = data.get(FSMDataKeys.MEETING_FEEDBACK_MATCH_ID)
+    message_id = data.get(FSMDataKeys.MEETING_FEEDBACK_MESSAGE_ID)
+    partner_telegram_id = data.get(FSMDataKeys.MEETING_FEEDBACK_PARTNER_ID)
+    
+    if not match_id or not message_id or not partner_telegram_id:
+        await msg.answer("Ошибка: данные не найдены. Попробуйте снова.")
+        await state.set_state(None)
+        return
+    
+    complaint_text = msg.text.strip()
+    if not complaint_text:
+        await msg.answer("Пожалуйста, введите текст жалобы.")
+        return
+    
+    if len(complaint_text) > 1000:
+        await msg.answer("Текст жалобы слишком длинный. Максимум 1000 символов.")
+        return
+    
+    async with session_factory() as session:
+        match = await get_match_with_relations(session, match_id)
+        if not match or match.status != MATCH_STATUS_COMPLETED:
+            await msg.answer("Встреча недоступна")
+            await state.set_state(None)
+            return
+        
+        user = await _get_user(session, msg.from_user.id)
+        if not user:
+            await msg.answer("Обновите регистрацию")
+            await state.set_state(None)
+            return
+        
+        if not settings.admin_chat_id:
+            logger.error("ADMIN_CHAT_ID not configured")
+            await msg.answer("Ошибка конфигурации. Обратитесь к администратору.")
+            await state.set_state(None)
+            return
+        
+        try:
+            # Отправляем жалобу
+            await submit_complaint(
+                session=session,
+                bot=msg.bot,
+                admin_chat_id=settings.admin_chat_id,
+                reporter_user_id=user.telegram_id,
+                reported_user_id=partner_telegram_id,
+                complaint_text=complaint_text,
+                meeting_start_at=match.meeting_start_at,
+                match_id=match.id,
+            )
+            
+            # Удаляем сообщение пользователя с текстом жалобы
+            try:
+                await msg.delete()
+            except Exception as e:
+                logger.exception("Failed to delete user message: %s", e)
+            
+            # Редактируем сообщение с подтверждением и текстом жалобы
+            confirmation_text = (
+                "Ваша жалоба отправлена.\n"
+                f"Текст вашей жалобы: {complaint_text}\n"
+            )
+            await msg.answer("Вы автоматически участвуете в следующем подборе пары!")
+            try:
+                await msg.bot.edit_message_text(
+                    chat_id=msg.chat.id,
+                    message_id=message_id,
+                    text=confirmation_text,
+                    reply_markup=None,
+                )
+            except Exception as e:
+                logger.exception("Failed to edit message after complaint: %s", e)
+                await msg.answer(confirmation_text)
+            
+            await state.set_state(None)
+            
+        except Exception as e:
+            logger.exception("Failed to submit complaint: %s", e)
+            await msg.answer("Ошибка при отправке жалобы. Попробуйте позже.")
+
+
+@router.callback_query(F.data.startswith("meeting_positive:"))
+async def on_meeting_positive(
+    cq: CallbackQuery,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Обрабатывает нажатие кнопки [👍] для положительной оценки встречи.
+    """
+    match_id = int(cq.data.split(":")[1])
+    
+    async with session_factory() as session:
+        match = await get_match_with_relations(session, match_id)
+        if not match or match.status != MATCH_STATUS_COMPLETED:
+            await cq.answer("Встреча недоступна", show_alert=True)
+            return
+    
+    # Редактируем сообщение
+    text = "Рады, что встреча прошла успешно! Вы автоматически участвуете в следующем подборе пары!"
+    
+    try:
+        await cq.message.edit_text(text, reply_markup=None)
+        await cq.answer()
+    except Exception as e:
+        logger.exception("Failed to edit message for positive feedback: %s", e)
+        await cq.answer("Ошибка при обработке запроса", show_alert=True)
 

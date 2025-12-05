@@ -237,7 +237,7 @@ async def cb_prof_save(
     # Сразу вызываем функционал участия в подборе
     await cq.message.edit_reply_markup(reply_markup=None)
     await cq.message.answer(
-        "Отлично! Вы будете участвовать в подборе, когда это станет доступно."
+        "Отлично! Вы автоматически участвуете в следующем подборе пары!"
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
     await cq.answer()

@@ -81,14 +81,14 @@ def format_complaint_message(
         str: отформатированный текст сообщения
     """
     return (
-        f"⚠️ <b>Новая жалоба</b>\n\n"
-        f"<b>На кого:</b>\n"
+        f"⚠️ Новая жалоба\n\n"
+        f"На кого:\n"
         f"{_format_user_info(reported)}\n\n"
-        f"<b>От кого:</b>\n"
+        f"От кого:\n"
         f"{_format_user_info(reporter)}\n\n"
-        f"<b>Текст жалобы:</b> {complaint_text}\n"
-        f"<b>Предупреждений:</b> {warnings_count}\n"
-        f"<b>Время встречи:</b> {_format_meeting_time(meeting_start_at)}"
+        f"Текст жалобы: {complaint_text}\n"
+        f"Предупреждений: {warnings_count}\n"
+        f"Время встречи: {_format_meeting_time(meeting_start_at)}"
     )
 
 
@@ -254,7 +254,7 @@ async def warn_user(
     try:
         await bot.send_message(
             reported_user.telegram_id,
-            f"⚠️ <b>Вам выдано предупреждение</b>\n\n{warning_text}",
+            f"⚠️ Вам выдано предупреждение: {warning_text}",
         )
     except Exception as e:
         # Если не удалось отправить (пользователь заблокировал бота и т.д.),
@@ -352,12 +352,12 @@ def format_complaint_result(
     Returns:
         str: итоговый текст сообщения
     """
-    result = f"\n\n<b>Решение:</b> {decision}"
+    result = f"\n\nРешение: {decision}"
     
     if warning_text:
-        result += f"\n<b>Текст предупреждения:</b> {warning_text}"
+        result += f"\nТекст предупреждения: {warning_text}"
     
-    result += f"\n👨‍💻<b>Рассмотрел:</b> @{admin_username}"
+    result += f"\n👨‍💻Рассмотрел: @{admin_username}"
 
     return original_text + result
 

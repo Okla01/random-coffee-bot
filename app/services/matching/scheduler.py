@@ -76,7 +76,7 @@ async def setup_matching_scheduler(
     # Джоба завершения встреч — каждые 5 минут
     scheduler.add_job(
         _complete_meetings_job,
-        IntervalTrigger(minutes=5, timezone=MOSCOW_TZ),
+        IntervalTrigger(minutes=0.25, timezone=MOSCOW_TZ),
         args=[session_factory, bot],
         id="complete_meetings",
         replace_existing=True,

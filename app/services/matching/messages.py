@@ -11,9 +11,9 @@ from aiogram.exceptions import TelegramBadRequest
 import logging
 
 from app.database import Match, User
-from app.database.utils import now_msk
 from app.keyboards.kb_matching import (
     kb_match_confirm_prompt,
+    kb_meeting_feedback,
 )
 
 logger = logging.getLogger(__name__)
@@ -321,6 +321,7 @@ async def notify_meeting_started(bot: Bot, match: Match) -> None:
     Уведомляет обоих участников о наступлении времени встречи.
 
     Вызывается автоматической джобой, когда meeting_start_at <= текущее время.
+    Отправляет сообщение с кнопками для оценки встречи.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
@@ -331,9 +332,22 @@ async def notify_meeting_started(bot: Bot, match: Match) -> None:
     """
     text = (
         "👋 Время вашей встречи наступило. "
-        "Хорошего общения!"
+        "Хорошего общения!\n"
+        "После встречи вы можете оценить как всё прошло!"
     )
-    await _broadcast(bot, match, text)
+    markup = kb_meeting_feedback(match.id)
+    
+    for user in (match.user_a, match.user_b):
+        if not user or not user.telegram_id:
+            continue
+        try:
+            await bot.send_message(
+                user.telegram_id,
+                text,
+                reply_markup=markup,
+            )
+        except Exception as e:
+            logger.exception("Failed to send meeting started notification to user %s: %s", user.id, e)
 
 
 async def notify_match_timeout(bot: Bot, match: Match) -> None:

@@ -381,6 +381,30 @@ def kb_complaint_actions(complaint_id: int) -> InlineKeyboardMarkup:
     )
 
 
+def kb_complaint_unblock(complaint_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру с кнопкой разблокировки для жалобы.
+
+    Используется после блокировки пользователя по жалобе.
+
+    Args:
+        complaint_id: ID жалобы для формирования callback data.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопкой разблокировки.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔓 Разблокировать",
+                    callback_data=f"complaint:unblock:{complaint_id}",
+                ),
+            ],
+        ]
+    )
+
+
 def kb_complaint_cancel_warning() -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру для отмены ввода текста предупреждения.

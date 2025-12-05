@@ -16,17 +16,16 @@ from aiogram.types import CallbackQuery
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database import User
+from app.database import User, AdminLog
 from app.database.db import is_user_blocked
 from app.keyboards.kb_admin import kb_admin_user_actions
 from app.services.admin import (
     is_admin,
-    block_user,
-    unblock_user,
     grant_admin_role,
     revoke_admin_role,
 )
 from app.services.core import Settings
+from app.services.const import USER_STATUS_BLOCKED, USER_STATUS_NEW
 
 router = Router()
 
@@ -151,26 +150,42 @@ async def cb_block_unblock(
         )
 
         if action == "block":
-            await block_user(session, cq.from_user.id, user)
+            # Блокируем пользователя
+            user.status = USER_STATUS_BLOCKED
+            
+            # Логируем действие
+            session.add(
+                AdminLog(
+                    admin_id=cq.from_user.id,
+                    action="block",
+                    payload={"user_id": user.id},
+                )
+            )
+            await session.commit()
+            
             await cq.answer(f"✅ {username_display} заблокирован")
 
-            # Уведомляем пользователя
-            try:
-                await cq.bot.send_message(
-                    user.telegram_id,
-                    "Доступ временно заблокирован. Свяжитесь с администратором.",
-                )
-            except Exception:
-                pass
         else:
-            await unblock_user(session, cq.from_user.id, user)
+            # Разблокируем пользователя
+            user.status = USER_STATUS_NEW
+            
+            # Логируем действие
+            session.add(
+                AdminLog(
+                    admin_id=cq.from_user.id,
+                    action="unblock",
+                    payload={"user_id": user.id},
+                )
+            )
+            await session.commit()
+            
             await cq.answer(f"✅ {username_display} разблокирован")
 
             # Уведомляем пользователя
             try:
                 await cq.bot.send_message(
                     user.telegram_id,
-                    "Вас разблокировали. Пожалуйста, пройдите регистрацию заново.",
+                    "Вас разблокировали.",
                 )
             except Exception:
                 pass

@@ -24,7 +24,10 @@ from app.services.const import (
     COMPLAINT_STATUS_WARNED,
     COMPLAINT_STATUS_BLOCKED,
     USER_STATUS_BLOCKED,
+    USER_STATUS_ACTIVE,
+    USER_STATUS_NOT_ACTIVE,
 )
+from app.services.profile.utils import is_profile_complete
 
 
 def _format_user_info(user: User) -> str:
@@ -320,6 +323,56 @@ async def block_user_from_complaint(
             payload={
                 "complaint_id": complaint.id,
                 "reported_user_id": reported.id,
+            },
+        )
+    )
+    await session.commit()
+
+    return reported
+
+
+async def unblock_user_from_complaint(
+    session: AsyncSession,
+    complaint: Complaint,
+    admin_tg_id: int,
+) -> User:
+    """
+    Разблокирует пользователя по жалобе.
+
+    В отличие от обычной разблокировки, не сбрасывает stage на verifying_email
+    и не сбрасывает счётчики попыток. Устанавливает статус "Активный" или
+    "Не активен" в зависимости от заполненности анкеты.
+
+    Args:
+        session: сессия БД
+        complaint: объект жалобы
+        admin_tg_id: telegram_id админа
+
+    Returns:
+        User: разблокированный пользователь
+    """
+    # Получаем пользователя, на которого жалоба
+    reported = (
+        await session.execute(select(User).where(User.id == complaint.reported_id))
+    ).scalar_one()
+
+    # Проверяем заполненность анкеты и устанавливаем соответствующий статус
+    if is_profile_complete(reported):
+        reported.status = USER_STATUS_ACTIVE
+    else:
+        reported.status = USER_STATUS_NOT_ACTIVE
+
+    # НЕ сбрасываем stage, email_attempts и otp_attempts (в отличие от обычной разблокировки)
+
+    # Логируем действие
+    session.add(
+        AdminLog(
+            admin_id=admin_tg_id,
+            action="complaint_unblock",
+            payload={
+                "complaint_id": complaint.id,
+                "reported_user_id": reported.id,
+                "new_status": reported.status,
             },
         )
     )

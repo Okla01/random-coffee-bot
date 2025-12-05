@@ -479,8 +479,10 @@ async def on_complaint_text_input(
             await state.set_state(None)
             return
 
-        if not settings.admin_chat_id:
-            logger.error("ADMIN_CHAT_ID not configured")
+        # Используем admin_chat_id_complaints, если задан, иначе fallback на admin_chat_id
+        complaints_chat_id = settings.admin_chat_id_complaints or settings.admin_chat_id
+        if not complaints_chat_id:
+            logger.error("ADMIN_CHAT_ID_COMPLAINTS or ADMIN_CHAT_ID not configured")
             await msg.answer("Ошибка конфигурации. Обратитесь к администратору.")
             await state.set_state(None)
             return
@@ -490,7 +492,7 @@ async def on_complaint_text_input(
             await submit_complaint(
                 session=session,
                 bot=msg.bot,
-                admin_chat_id=settings.admin_chat_id,
+                admin_chat_id=complaints_chat_id,
                 reporter_user_id=user.telegram_id,
                 reported_user_id=partner_telegram_id,
                 complaint_text=complaint_text,

@@ -456,7 +456,9 @@ async def handle_warning_text(
         # Редактируем исходное сообщение с жалобой в админ-чате
         admin_display = _get_admin_display(message.from_user)
 
-        if settings.admin_chat_id and admin_message_id:
+        # Используем admin_chat_id_complaints, если задан, иначе fallback на admin_chat_id
+        complaints_chat_id = settings.admin_chat_id_complaints or settings.admin_chat_id
+        if complaints_chat_id and admin_message_id:
             try:
                 # Получаем исходное сообщение — нам нужен его текст
                 # К сожалению, мы не можем получить текст старого сообщения напрямую,
@@ -487,7 +489,7 @@ async def handle_warning_text(
                 )
 
                 await message.bot.edit_message_text(
-                    chat_id=settings.admin_chat_id,
+                    chat_id=complaints_chat_id,
                     message_id=admin_message_id,
                     text=new_text,
                     reply_markup=None,

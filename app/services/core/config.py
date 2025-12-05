@@ -59,6 +59,7 @@ class Settings:
     bot_token: str
     admin_ids: Set[int]
     admin_chat_id: int | None
+    admin_chat_id_complaints: int | None
 
     # Email checks
     # Проверка email
@@ -135,6 +136,14 @@ class Settings:
             except (ValueError, TypeError):
                 pass
 
+        admin_chat_id_complaints: int | None = None
+        complaints_chat_id = os.getenv("ADMIN_CHAT_ID_COMPLAINTS", "")
+        if complaints_chat_id:
+            try:
+                admin_chat_id_complaints = int(complaints_chat_id)
+            except (ValueError, TypeError):
+                pass
+
         smtp_host = os.getenv("SMTP_HOST", "").strip()
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_user = os.getenv("SMTP_USER", "").strip()
@@ -156,6 +165,7 @@ class Settings:
             bot_token=bot_token,
             admin_ids=admin_ids,
             admin_chat_id=admin_chat_id,
+            admin_chat_id_complaints=admin_chat_id_complaints,
             email_regex_str=email_regex_str,
             email_regex=email_regex,
             allowed_domains=allowed_domains,

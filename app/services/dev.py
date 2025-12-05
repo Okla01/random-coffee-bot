@@ -53,8 +53,10 @@ async def cmd_test_complaint(
             await message.answer("⛔️ Нет прав.")
             return
 
-        if not settings.admin_chat_id:
-            await message.answer("❌ ADMIN_CHAT_ID не настроен.")
+        # Используем admin_chat_id_complaints, если задан, иначе fallback на admin_chat_id
+        complaints_chat_id = settings.admin_chat_id_complaints or settings.admin_chat_id
+        if not complaints_chat_id:
+            await message.answer("❌ ADMIN_CHAT_ID_COMPLAINTS или ADMIN_CHAT_ID не настроен.")
             return
 
         # Парсим аргументы команды
@@ -94,7 +96,7 @@ async def cmd_test_complaint(
             complaint = await submit_complaint(
                 session=session,
                 bot=bot,
-                admin_chat_id=settings.admin_chat_id,
+                admin_chat_id=complaints_chat_id,
                 reporter_user_id=message.from_user.id,
                 reported_user_id=reported_tg_id,
                 complaint_text=complaint_text,

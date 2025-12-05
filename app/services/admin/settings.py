@@ -172,10 +172,18 @@ def format_settings_text(settings: dict) -> str:
     text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
     
     # 5. Кулдаун повторов
-    text += (
-        "🔹 Кулдаун повторов (недели): "
-        f"{settings.get('repeat_pair_cooldown_weeks', '1')}\n"
-    )
+    try:
+        cooldown_weeks = int(settings.get('repeat_pair_cooldown_weeks', '1'))
+        # Формируем правильное склонение для "неделя/недели/недель"
+        if cooldown_weeks == 1:
+            cooldown_display = "1 неделя"
+        elif 2 <= cooldown_weeks <= 4:
+            cooldown_display = f"{cooldown_weeks} недели"
+        else:
+            cooldown_display = f"{cooldown_weeks} недель"
+    except (ValueError, TypeError):
+        cooldown_display = settings.get('repeat_pair_cooldown_weeks', '1')
+    text += f"🔹 Кулдаун повторов: {cooldown_display}\n"
     
     # 6. Таймаут ответа
     timeout_value = settings.get("response_timeout_time") or settings.get("response_timeout_hours", "8:00")

@@ -24,6 +24,8 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "match_msk_time": "12:00",
     "response_timeout_time": "8:00",
     "reminder_interval_time": "1:00",
+    "feedback_day": "sun",
+    "feedback_msk_time": "18:00",
 }
 
 # Названия ролей в БД (ключи)

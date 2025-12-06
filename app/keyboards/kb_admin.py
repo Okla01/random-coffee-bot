@@ -143,6 +143,12 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="📝 День/время отправки отзывов",
+                    callback_data="admin:update_feedback_schedule",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text="🧹 Сбросить до заводских настроек",
                     callback_data="admin:clear_selection",
                 ),
@@ -217,6 +223,36 @@ def kb_admin_settings_change_cooldown_weeks(current_weeks: int) -> InlineKeyboar
             InlineKeyboardButton(
                 text=f"{mark} {week_label}",
                 callback_data=f"admin:change_cooldown_weeks:{week}",
+            )
+        )
+
+    keyboard.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def kb_admin_settings_change_feedback_day(
+    current_day_of_week: str,
+) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для выбора дня недели отправки отзывов.
+
+    Args:
+        current_day_of_week (str): код текущего дня недели (mon, tue, wed...).
+    """
+    keyboard = []
+    row = []
+
+    for day_code, label in DAYS_OF_WEEK.items():
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+
+        mark = "✅" if day_code == current_day_of_week else "❌"
+        row.append(
+            InlineKeyboardButton(
+                text=f"{mark} {label}",
+                callback_data=f"admin:change_feedback_day:{day_code}",
             )
         )
 

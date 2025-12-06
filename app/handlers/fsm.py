@@ -16,6 +16,7 @@ class AdminSettingsStates(StatesGroup):
     waiting_match_msk_time = State()
     waiting_response_timeout_time = State()
     waiting_reminder_interval_time = State()
+    waiting_feedback_msk_time = State()
 
 
 class ComplaintStates(StatesGroup):

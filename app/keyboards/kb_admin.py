@@ -112,6 +112,12 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="📧 Переключить email авторизацию",
+                    callback_data="admin:toggle_email_auth_enabled",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text="🗓️ День побора", callback_data="admin:update_match_day"
                 ),
                 InlineKeyboardButton(

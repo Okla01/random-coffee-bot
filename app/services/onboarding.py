@@ -24,6 +24,7 @@ from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
 from app.services.core.config import Settings  # настройки приложения
 from app.database.models import User  # ORM-модель пользователя
 from app.services.profile.preview import send_profile_preview
+from app.services.matching.settings import get_setting_bool
 
 
 # Перечень возможных действий после обработки /start.
@@ -78,6 +79,21 @@ async def process_start(
     Returns:
         StartResult: объект с действием (action) и опциональными данными (payload).
     """
+    # Проверяем, включена ли авторизация по email
+    try:
+        email_auth_enabled = await get_setting_bool(session, "email_auth_enabled")
+    except ValueError:
+        # Если настройка отсутствует в БД, используем значение по умолчанию (True)
+        email_auth_enabled = True
+
+    # Если авторизация по email отключена, пропускаем её для новых пользователей
+    if not email_auth_enabled:
+        # Для новых пользователей или тех, кто на стадии авторизации по email
+        if user.stage in {"new", "verifying_email", "verifying_email_error", "verifying_code", "verifying_code_error"}:
+            user.stage = "profile_name"
+            await session.commit()
+            return StartResult(action="ask_profile_name")
+
     # 1. Регистрация по почте:
     #    - "new"                 — только что созданный пользователь
     #    - "verifying_email"     — вводит/подтверждает почту

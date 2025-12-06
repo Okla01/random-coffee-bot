@@ -148,11 +148,15 @@ def format_settings_text(settings: dict) -> str:
     match_enabled = _as_bool(settings.get("matching_enabled", "true"))
     text += f"🔹 Мэтчинг включён: {'Да' if match_enabled else 'Нет'}\n"
 
-    # 2. День подбора
+    # 2. Авторизация по email
+    email_auth_enabled = _as_bool(settings.get("email_auth_enabled", "true"))
+    text += f"🔹 Авторизация по email: {'Включена' if email_auth_enabled else 'Отключена'}\n"
+
+    # 3. День подбора
     match_day_code = settings.get("match_day", "fri")
     text += f"🔹 День подбора: {DAYS_OF_WEEK.get(match_day_code, match_day_code)}\n"
 
-    # 3. Время подбора
+    # 4. Время подбора
     match_time = settings.get("match_msk_time", "12:00")
     if ":" not in match_time:
         # Миграция со старого формата
@@ -165,10 +169,10 @@ def format_settings_text(settings: dict) -> str:
     # Время подбора оставляем в формате ЧЧ:ММ (это время суток, не интервал)
     text += f"🔹 Время подбора: {match_time}\n"
 
-    # 4. Минимальный Jaccard
+    # 5. Минимальный Jaccard
     text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
 
-    # 5. Кулдаун повторов
+    # 6. Кулдаун повторов
     try:
         cooldown_weeks = int(settings.get("repeat_pair_cooldown_weeks", "1"))
         # Формируем правильное склонение для "неделя/недели/недель"
@@ -182,7 +186,7 @@ def format_settings_text(settings: dict) -> str:
         cooldown_display = settings.get("repeat_pair_cooldown_weeks", "1")
     text += f"🔹 Кулдаун повторов: {cooldown_display}\n"
 
-    # 6. Таймаут ответа
+    # 7. Таймаут ответа
     timeout_value = settings.get("response_timeout_time") or settings.get(
         "response_timeout_hours", "8:00"
     )
@@ -200,7 +204,7 @@ def format_settings_text(settings: dict) -> str:
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
 
-    # 7. Интервал напоминаний
+    # 8. Интервал напоминаний
     interval_value = settings.get("reminder_interval_time") or settings.get(
         "reminder_interval_hours", "1:00"
     )
@@ -218,7 +222,7 @@ def format_settings_text(settings: dict) -> str:
             interval_display = interval_value
     text += f"🔹 Интервал напоминаний: {interval_display}\n"
 
-    # 8. День и время отправки отзывов
+    # 9. День и время отправки отзывов
     feedback_day_code = settings.get("feedback_day", "sun")
     feedback_time = settings.get("feedback_msk_time", "18:00")
     text += f"🔹 День/время отправки отзывов: {DAYS_OF_WEEK.get(feedback_day_code, feedback_day_code)}, {feedback_time}\n"
@@ -303,6 +307,20 @@ def try_to_input_time(msg: str) -> str | None:
 def toggle_matching_enabled(current_value: str | bool) -> str:
     """
     Переключает значение matching_enabled (true/false).
+
+    Args:
+        current_value: текущее значение (строка или bool)
+
+    Returns:
+        str: "true" или "false"
+    """
+    current_bool = _as_bool(current_value)
+    return "false" if current_bool else "true"
+
+
+def toggle_email_auth_enabled(current_value: str | bool) -> str:
+    """
+    Переключает значение email_auth_enabled (true/false).
 
     Args:
         current_value: текущее значение (строка или bool)

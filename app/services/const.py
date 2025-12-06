@@ -26,6 +26,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "reminder_interval_time": "1:00",
     "feedback_day": "sun",
     "feedback_msk_time": "18:00",
+    "email_auth_enabled": "true",
 }
 
 # Названия ролей в БД (ключи)

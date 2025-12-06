@@ -31,6 +31,7 @@ from app.services.admin.settings import (
     get_current_settings,
     save_settings,
     toggle_matching_enabled,
+    toggle_email_auth_enabled,
     try_to_input_min_jaccard,
     try_to_input_time,
     try_to_input_time_as_hours,
@@ -219,6 +220,43 @@ async def cb_toggle_matching_enabled(
     new_value = toggle_matching_enabled(current_value)
 
     draft = await update_draft_setting(state, "matching_enabled", new_value)
+
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    # Возвращение в меню настроек (редактируем текущее сообщение)
+    await cq.message.edit_text(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
+
+
+@router.callback_query(F.data == "admin:toggle_email_auth_enabled")
+async def cb_toggle_email_auth_enabled(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """
+    Переключает авторизацию по email (включена/отключена).
+
+    Получает текущее значение из черновика настроек, переключает его (true ↔ false),
+    обновляет черновик и отображает обновлённое меню настроек.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    data = await state.get_data()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
+
+    current_value = draft.get("email_auth_enabled", "true")
+    new_value = toggle_email_auth_enabled(current_value)
+
+    draft = await update_draft_setting(state, "email_auth_enabled", new_value)
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)

@@ -238,7 +238,7 @@ async def send_photos_with_actions(
     keyboard = kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
     sent = await bot.send_message(
         chat_id,
-        "Выберите действие",
+        "Что хочешь сделать?",
         reply_markup=keyboard,
     )
 
@@ -404,7 +404,7 @@ async def cb_photo_save(
             # Переходим на следующий этап (биография)
             user.stage = "profile_bio"
             await session.commit()
-            await cq.message.answer("Расскажите о себе (до 500 символов):")
+            await cq.message.answer("А теперь кратко расскажи о себе самое интересное🔥\n(не более 500 символов)")
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
 
         await cq.answer()
@@ -438,7 +438,7 @@ async def cb_edit_photo(
             keyboard = (
                 kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
             )
-            await cq.message.edit_text("Изменение фото", reply_markup=keyboard)
+            await cq.message.edit_text("Что хочешь сделать?", reply_markup=keyboard)
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
             await cq.answer()
     except Exception as e:

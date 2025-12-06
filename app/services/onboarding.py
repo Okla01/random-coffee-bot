@@ -210,15 +210,15 @@ async def handle_start_result(
             "Здравствуй! 👋\n\n"
             "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
             "Так что давай заполним анкету!\n\n"
-            "Напиши свое ФИО 🙌"
+            "Напиши свое ФИО🙌"
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 
     if result.action == "wait_name_approval":
         await answer(
-            "Ваша заявка на доступ к анкетированию отправлена администратору. "
-            "Ожидайте рассмотрения."
+            "Отлично!💪\n\n"
+            "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
@@ -230,26 +230,26 @@ async def handle_start_result(
             await send_photos_with_actions(bot, chat_id, user, state, photos_list)
         else:
             sent = await answer(
-                "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
-                "либо используйте текущее фото вашего профиля.",
+                "Добавь несколько своих фото(1-5шт)",
                 reply_markup=kb_profile_photo(),
             )
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
         return
 
     if result.action == "ask_profile_bio":
-        await answer("Расскажите о себе (до 500 символов):")
+        await answer("А теперь кратко расскажи о себе самое интересное🔥\n(не более 500 символов)")
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 
     if result.action == "ask_profile_age":
-        await answer("Введите ваш возраст (16–50):")
+        await answer("Укажи свой возраст (16–50):")
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 
     if result.action == "ask_profile_interests":
         await answer(
-            "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
+            "А теперь перечисли свои главные увлечения через запятую✍️\n"
+            "(☝️Например: Python, музыка, дизайн)"
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return

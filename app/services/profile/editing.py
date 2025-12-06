@@ -218,7 +218,7 @@ async def process_age_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):",
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nУкажи свой возраст (16–50):",
         )
 
     age = int(text)
@@ -228,7 +228,7 @@ async def process_age_field(
         await session.commit()
         return FieldResult(
             result_type="validation_error",
-            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nВведите ваш возраст (16–50):",
+            error_message="⚠️ Возраст должен быть числом от 16 до 50.\nУкажи свой возраст (16–50):",
         )
 
     # Обновление поля

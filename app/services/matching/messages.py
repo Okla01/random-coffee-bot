@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
     """
-    Отправляет подтверждение участнику, нажавшему «Готов познакомиться».
+    Отправляет подтверждение участнику, нажавшему «Готов выпить кофе».
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
@@ -35,7 +35,7 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
         return
     await bot.send_message(
         actor.telegram_id,
-        "Мы зафиксировали, что вы готовы познакомиться. Ждём ответа вашей пары.",
+        "Мы сообщили твоему коллеге, что ты готов/ва пойти с ним на кофе и теперь ждем его ответа!🙃",
     )
 
 
@@ -43,7 +43,7 @@ async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
     """
     Сообщает обоим участникам о взаимном согласии и отправляет календарь выбора времени.
 
-    Вызывается когда оба участника нажали «Готов познакомиться» и матч перешёл
+    Вызывается когда оба участника нажали «Готов выпить кофе» и матч перешёл
     в статус waiting_slots.
 
     Args:
@@ -61,8 +61,7 @@ async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
         text = (
             "🎉 Отличные новости!\n"
             f"Вы совпали с {partner_hint}.\n"
-            "Мы открыли для вас календарь выбора времени. "
-            "Отметьте несколько удобных дней и интервалов на ближайшие две недели."
+            "Теперь вы можете списаться и договориться о времени встречи!"
         )
         await bot.send_message(
             user.telegram_id,
@@ -148,9 +147,8 @@ async def notify_match_not_found(bot: Bot, user: User) -> None:
         return
     await bot.send_message(
         user.telegram_id,
-        "Сегодня состоялся раунд Random Coffee, "
-        "но не удалось найти подходящую пару. "
-        "Мы попробуем снова в следующем раунде.",
+        "Сегодня состоялся круг “Random Coffee”, но, к сожалению, по твоим интересам не удалось найти «мэтч» 😔\n"
+        "Однако ты автоматически участвуешь в следующих раундах🤜🏽🤛🏻"
     )
 
 
@@ -407,7 +405,7 @@ async def notify_match_reminder(
     if stage == "pending_response":
         text = (
             "Напоминаем, что у вас есть пара для Random Coffee. "
-            "Нажмите «Готов познакомиться» или «Пропустить на этой неделе»."
+            "Нажмите «Готов выпить кофе» или «Пропустить на этой неделе»."
         )
     elif stage == "waiting_slots":
         text = "Напоминаем, что нужно выбрать удобные дни и время для встречи."
@@ -488,18 +486,18 @@ def _format_partner_hint(partner: User | None) -> str:
         partner (User | None): объект партнёра или None.
 
     Returns:
-        str: строка с именем и username партнёра, или "вашей парой" если партнёр не указан.
+        str: строка с username партнёра (если есть), иначе имя или "вашей парой" если партнёр не указан.
     """
     if not partner:
         return "вашей парой"
-    parts = []
-    if partner.name:
-        parts.append(partner.name)
+    # Приоритет: username > name > telegram_id
     if partner.username:
-        parts.append(f"@{partner.username}")
-    if not parts and partner.telegram_id:
-        parts.append(f"tg://user?id={partner.telegram_id}")
-    return " ".join(parts)
+        return f"@{partner.username}"
+    if partner.name:
+        return partner.name
+    if partner.telegram_id:
+        return f"tg://user?id={partner.telegram_id}"
+    return "вашей парой"
 
 
 async def remove_match_keyboards(bot: Bot, match: Match) -> None:

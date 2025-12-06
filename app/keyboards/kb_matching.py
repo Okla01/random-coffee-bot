@@ -9,7 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 def kb_match_invitation(match_id: int) -> InlineKeyboardMarkup:
     """
-    Генерирует клавиатуру с кнопками «Готов познакомиться» / «Пропустить».
+    Генерирует клавиатуру с кнопками «Готов выпить кофе» / «Пропустить».
 
     Используется при отправке приглашения на встречу после создания матча.
 
@@ -23,7 +23,7 @@ def kb_match_invitation(match_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Готов познакомиться ☕️",
+                    text="Готов выпить кофе ☕️",
                     callback_data=f"match_ready:{match_id}",
                 )
             ],

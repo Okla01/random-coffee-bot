@@ -411,10 +411,9 @@ async def _send_match_invite(
     partner_caption = _build_partner_caption(partner)
     text = (
         "☕️ Random Coffee\n\n"
-        "Вам подобрали новую пару! Ознакомьтесь с анкетой:\n\n"
+        "Тебе подобрана новая пара! Ознакомься с анкетой:\n\n"
         f"{partner_caption}\n\n"
-        "Если готовы познакомиться — нажмите кнопку ниже.\n"
-        "Можно также пропустить участие на этой неделе."
+        "Если готов/ва пойти с ним на кофе — нажми кнопку ниже. ☺️\n"
     )
     sent_message = await bot.send_message(
         chat_id=user.telegram_id,
@@ -473,10 +472,9 @@ async def _notify_no_pairs(bot: Bot, users: list[User]) -> None:
     if not users:
         return
     text = (
-        "Сегодня состоялся круг Random Coffee, "
-        "но по интересам не удалось подобрать пару. "
-        "Вы автоматически участвуете в следующих раундах."
-    )
+        "Сегодня состоялся круг “Random Coffee”, но, к сожалению, по твоим интересам не удалось найти «мэтч» 😔\n"
+        "Однако ты автоматически участвуешь в следующих раундах🤜🏽🤛🏻"
+    )   
     for user in users:
         if not user.telegram_id:
             continue

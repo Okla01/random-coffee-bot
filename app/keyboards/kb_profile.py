@@ -49,7 +49,7 @@ def kb_profile_photo_clear_save() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Очистить 🗑️", callback_data="prof:photo:clear"
+                    text="Очистить🗑️", callback_data="prof:photo:clear"
                 ),
                 InlineKeyboardButton(
                     text="Сохранить ✅", callback_data="prof:photo:save"

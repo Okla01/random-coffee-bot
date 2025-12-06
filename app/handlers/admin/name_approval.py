@@ -93,13 +93,13 @@ async def admin_name_approval_callbacks(
 
                     await cq.message.bot.send_message(
                         user.telegram_id,
-                        "Заявка на авторизацию одобрена, продолжаем анкетирование.",
+                        "Ура! Заявка на авторизацию была одобрена✅\n"
+                        "Продолжим анкетирование?",
                     )
                     # Запрашиваем фото
                     await cq.message.bot.send_message(
                         user.telegram_id,
-                        "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
-                        "либо используйте текущее фото вашего профиля.",
+                        "Выбери несколько своих фото(1-5шт)",
                         reply_markup=kb_profile_photo(),
                     )
                 except Exception:

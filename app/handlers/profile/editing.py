@@ -89,7 +89,8 @@ async def on_profile_text(
         if user.stage == "profile_name_pending":
             await session.commit()
             await message.answer(
-                "Ваша заявка на доступ к анкетированию отправлена администратору. Ожидайте рассмотрения."
+                "Отлично!💪\n\n"
+                "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
             )
             return
 
@@ -137,8 +138,8 @@ async def on_profile_text(
                         session, settings, user, message.bot
                     )
                     await message.answer(
-                        "Ваша заявка на доступ к анкетированию отправлена администратору. "
-                        "Ожидайте рассмотрения."
+                        "Отлично!💪\n\n"
+                        "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
                     )
                 else:
                     # Переход на этап загрузки фото (старая логика для редактирования)
@@ -163,7 +164,7 @@ async def on_profile_text(
                 return
 
             if result.result_type == "field_updated_continue":
-                await message.answer("Введите ваш возраст (16–50):")
+                await message.answer("Укажи свой возраст (16–50):")
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
                 return
 
@@ -186,7 +187,8 @@ async def on_profile_text(
 
             if result.result_type == "field_updated_continue":
                 await message.answer(
-                    "Перечислите интересы через запятую (например: Python, музыка, дизайн)."
+                    "А теперь перечисли свои главные увлечения через запятую✍️\n"
+                    "(☝️Например: Python, музыка, дизайн)"
                 )
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
                 return
@@ -249,7 +251,8 @@ async def cb_prof_save(
     # Сразу вызываем функционал участия в подборе
     await cq.message.edit_reply_markup(reply_markup=None)
     await cq.message.answer(
-        "Отлично! Вы автоматически участвуете в следующем подборе пары!"
+        "✨Вуаля✨\n"
+        "Теперь ты автоматически участвуешь в следующем подборе друллеги!🤗"
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
     await cq.answer()
@@ -348,7 +351,7 @@ async def cb_prof_edit_field(
                 "Здравствуй! 👋\n\n"
                 "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
                 "Так что давай заполним анкету!\n\n"
-                "Напиши свое ФИО 🙌"
+                "Напиши свое ФИО🙌"
             )
         elif field == "bio":
             await update_user_stage(
@@ -358,7 +361,7 @@ async def cb_prof_edit_field(
                 state,
                 {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
             )
-            await cq.message.answer("Расскажите о себе (до 500 символов):")
+            await cq.message.answer("Коротко расскажи о себе самое интересное🔥\n(не более 500 символов)")
         elif field == "age":
             await update_user_stage(
                 session,
@@ -367,7 +370,7 @@ async def cb_prof_edit_field(
                 state,
                 {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
             )
-            await cq.message.answer("Введите ваш возраст (16–50):")
+            await cq.message.answer("Укажи свой возраст (16–50):")
         elif field == "interests":
             await update_user_stage(
                 session,
@@ -376,6 +379,7 @@ async def cb_prof_edit_field(
                 state,
                 {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
             )
-            await cq.message.answer("Перечислите интересы через запятую.")
+            await cq.message.answer("Перечисли свои главные увлечения через запятую✍️\n"
+                                    "(☝️Например: Python, музыка, дизайн)")
         await session.commit()
         await cq.answer()

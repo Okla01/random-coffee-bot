@@ -28,7 +28,7 @@ from app.handlers.fsm import FSMDataKeys
 
 
 # Максимальное количество фото в профиле
-MAX_PHOTOS = 3
+MAX_PHOTOS = 5
 
 # ----------------- Буфер медиа-групп (альбомов) ------------------ #
 
@@ -61,15 +61,13 @@ async def send_photo_request(
     if hasattr(message_or_cq, "message"):
         # Это CallbackQuery
         sent = await message_or_cq.message.answer(
-            "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
-            "либо используйте текущее фото вашего профиля.",
+            "Добавь несколько своих фото(1-5шт)",
             reply_markup=kb,
         )
     else:
         # Это Message
         sent = await message_or_cq.answer(
-            "Пришлите пожалуйста фото для анкеты (от 1 до 3 фото), "
-            "либо используйте текущее фото вашего профиля.",
+            "Добавь несколько своих фото(1-5шт)",
             reply_markup=kb,
         )
 

@@ -6,41 +6,36 @@ from __future__ import annotations
 
 import logging
 
-from aiogram import Bot, Router, F
+from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database import Match, User
+from app.database import User
 from app.database.db import get_user_by_tg_id
+from app.database.utils import now_msk
 from app.services.core.config import Settings
 from app.services.matching.constants import (
-    MATCH_STATUS_COMPLETED,
     MATCH_STATUS_PENDING_RESPONSE,
-    MATCH_STATUS_SCHEDULED,
+    MATCH_STATUS_MATCHED,
     MATCH_STATUS_SKIPPED,
-    MATCH_STATUS_WAITING_CONFIRM,
     MATCH_USER_RESPONSE_CONFIRM,
-    MATCH_USER_RESPONSE_NONE,
-    MATCH_USER_RESPONSE_READY,
     MATCH_USER_RESPONSE_SKIP,
 )
 from app.services.matching.messages import (
-    notify_match_confirm_waiting,
     notify_match_ready,
-    notify_match_reschedule_partner,
-    notify_match_reschedule_prompt,
     notify_match_scheduled,
     notify_match_skip_partner,
     notify_match_skip_self,
-    notify_waiting_partner_ready,
 )
 from app.services.matching.storage import (
     cleanup_inactive_match,
     get_match_with_relations,
     set_match_response,
+    set_match_feedback,
+    check_and_complete_match,
 )
 from app.handlers.fsm import MeetingFeedbackStates, FSMDataKeys
 from app.keyboards.kb_matching import kb_meeting_feedback, kb_complaint_cancel
@@ -58,8 +53,8 @@ async def on_match_ready(
     """
     Обрабатывает callback кнопки «Готов выпить кофе».
 
-    Обновляет ответ пользователя на "ready" и, если оба участника готовы,
-    переводит матч в статус waiting_confirm.
+    Обновляет ответ пользователя на "confirm" и, если оба участника готовы,
+    переводит матч в статус matched.
 
     Args:
         cq (CallbackQuery): объект callback-запроса от Telegram.
@@ -85,24 +80,29 @@ async def on_match_ready(
             session,
             match,
             user,
-            MATCH_USER_RESPONSE_READY,
+            MATCH_USER_RESPONSE_CONFIRM,
         )
         if not updated:
             await cq.answer("Эта кнопка недоступна для вас", show_alert=True)
             return
 
-        both_ready = (
-            match.user_a_response == MATCH_USER_RESPONSE_READY
-            and match.user_b_response == MATCH_USER_RESPONSE_READY
+        both_confirm = (
+            match.user_a_response == MATCH_USER_RESPONSE_CONFIRM
+            and match.user_b_response == MATCH_USER_RESPONSE_CONFIRM
         )
-        if not both_ready:
+        if not both_confirm:
             await notify_match_ready(cq.bot, match, user)
-        if both_ready:
-            match.status = MATCH_STATUS_WAITING_CONFIRM
+        if both_confirm:
+            match.status = MATCH_STATUS_MATCHED
             match.last_reminder_at = None
+            now = now_msk()
+            if match.user_a:
+                match.user_a.last_match_at = now
+            if match.user_b:
+                match.user_b.last_match_at = now
         await session.commit()
-        if both_ready:
-            await notify_waiting_partner_ready(cq.bot, match)
+        if both_confirm:
+            await notify_match_scheduled(cq.bot, match)
 
 
 @router.callback_query(F.data.startswith("match_skip:"))
@@ -154,115 +154,6 @@ async def on_match_skip(
 
         await notify_match_skip_self(cq.bot, user)
         await notify_match_skip_partner(cq.bot, match, user)
-
-
-@router.callback_query(F.data.startswith("match_confirm:"))
-async def on_match_confirm(
-    cq: CallbackQuery,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """
-    Обрабатывает callback кнопки «Подтвердить» на этапе waiting_confirm.
-
-    Обновляет ответ пользователя на "confirm" и, если оба участника подтвердили,
-    переводит матч в статус scheduled и уведомляет обоих участников.
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    await cq.message.delete_reply_markup()
-
-    match_id = int(cq.data.split(":")[1])
-    async with session_factory() as session:
-        match = await get_match_with_relations(session, match_id)
-        if (
-            not match
-            or match.status != MATCH_STATUS_WAITING_CONFIRM
-            or not match.meeting_start_at
-        ):
-            await cq.answer("Матч уже недоступен", show_alert=True)
-            return
-        user = await _get_user(session, cq.from_user.id)
-        if not user:
-            await cq.answer("Обновите регистрацию", show_alert=True)
-            return
-
-        updated = await set_match_response(
-            session,
-            match,
-            user,
-            MATCH_USER_RESPONSE_CONFIRM,
-        )
-        if not updated:
-            await cq.answer("Эта кнопка недоступна для вас", show_alert=True)
-            return
-
-        both_confirmed = (
-            match.user_a_response == MATCH_USER_RESPONSE_CONFIRM
-            and match.user_b_response == MATCH_USER_RESPONSE_CONFIRM
-        )
-        if both_confirmed:
-            match.status = MATCH_STATUS_SCHEDULED
-            match.last_reminder_at = None
-            # Очищаем слоты и message_id после подтверждения встречи
-            await cleanup_inactive_match(session, match)
-
-        await session.commit()
-
-    if both_confirmed:
-        await notify_match_scheduled(cq.bot, match)
-    else:
-        await notify_match_confirm_waiting(cq.bot, user)
-
-
-@router.callback_query(F.data.startswith("match_reschedule:"))
-async def on_match_reschedule(
-    cq: CallbackQuery,
-    session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    await cq.message.delete_reply_markup()
-
-    """
-    Обрабатывает callback кнопки «Назначить заново» на этапе waiting_confirm.
-
-    Сбрасывает выбранное время встречи и переводит матч обратно в pending_response.
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса от Telegram.
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    match_id = int(cq.data.split(":")[1])
-    async with session_factory() as session:
-        match = await get_match_with_relations(session, match_id)
-        if not match or match.status != MATCH_STATUS_WAITING_CONFIRM:
-            await cq.answer("Матч уже недоступен", show_alert=True)
-            return
-        user = await _get_user(session, cq.from_user.id)
-        if not user:
-            await cq.answer("Обновите регистрацию", show_alert=True)
-            return
-
-        match.status = MATCH_STATUS_PENDING_RESPONSE
-        match.meeting_start_at = None
-        match.meeting_end_at = None
-        match.user_a_response = MATCH_USER_RESPONSE_NONE
-        match.user_b_response = MATCH_USER_RESPONSE_NONE
-        match.last_reminder_at = None
-        await _remove_last_message_keyboards(cq.bot, match)
-        # Очищаем данные при переназначении встречи
-        await cleanup_inactive_match(session, match)
-        await session.commit()
-
-    await notify_match_reschedule_partner(cq.bot, match, user)
-    await notify_match_reschedule_prompt(cq.bot, match)
-    await cq.answer("Встреча сброшена.", show_alert=False)
 
 
 async def _get_user(session: AsyncSession, telegram_id: int) -> User | None:
@@ -327,13 +218,19 @@ async def on_meeting_complaint(
 
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
-        if not match or match.status != MATCH_STATUS_COMPLETED:
+        if not match or match.status != MATCH_STATUS_MATCHED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
 
         user = await _get_user(session, cq.from_user.id)
         if not user:
             await cq.answer("Обновите регистрацию", show_alert=True)
+            return
+
+        # Проверяем, что пользователь еще не дал обратную связь
+        user_feedback = match.user_a_feedback if user.id == match.user_a_id else match.user_b_feedback
+        if user_feedback:
+            await cq.answer("Вы уже дали обратную связь по этой встрече", show_alert=True)
             return
 
         # Определяем партнёра
@@ -377,16 +274,12 @@ async def on_complaint_cancel(
 
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
-        if not match or match.status != MATCH_STATUS_COMPLETED:
+        if not match or match.status != MATCH_STATUS_MATCHED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
 
     # Возвращаем исходное сообщение
-    text = (
-        "👋 Время вашей встречи наступило. "
-        "Хорошего общения!\n"
-        "После встречи вы можете оценить как всё прошло!"
-    )
+    text = "Оцените пожалуйста как прошла ваша встреча. Это очень важно для нас!"
     markup = kb_meeting_feedback(match_id)
 
     try:
@@ -429,7 +322,7 @@ async def on_complaint_text_input(
 
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
-        if not match or match.status != MATCH_STATUS_COMPLETED:
+        if not match or match.status != MATCH_STATUS_MATCHED:
             await msg.answer("Встреча недоступна")
             await state.set_state(None)
             return
@@ -437,6 +330,13 @@ async def on_complaint_text_input(
         user = await _get_user(session, msg.from_user.id)
         if not user:
             await msg.answer("Обновите регистрацию")
+            await state.set_state(None)
+            return
+
+        # Проверяем, что пользователь еще не дал обратную связь
+        user_feedback = match.user_a_feedback if user.id == match.user_a_id else match.user_b_feedback
+        if user_feedback:
+            await msg.answer("Вы уже дали обратную связь по этой встрече")
             await state.set_state(None)
             return
 
@@ -457,7 +357,6 @@ async def on_complaint_text_input(
                 reporter_user_id=user.telegram_id,
                 reported_user_id=partner_telegram_id,
                 complaint_text=complaint_text,
-                meeting_start_at=match.meeting_start_at,
                 match_id=match.id,
             )
 
@@ -466,6 +365,17 @@ async def on_complaint_text_input(
                 await msg.delete()
             except Exception as e:
                 logger.exception("Failed to delete user message: %s", e)
+
+            # Устанавливаем обратную связь от пользователя
+            updated = await set_match_feedback(session, match, user, "complaint")
+            if not updated:
+                await msg.answer("Ошибка: вы не являетесь участником этой встречи")
+                await state.set_state(None)
+                return
+
+            # Проверяем, дали ли оба пользователя обратную связь
+            await check_and_complete_match(session, match)
+            await session.commit()
 
             # Редактируем сообщение с подтверждением и текстом жалобы
             confirmation_text = (
@@ -502,9 +412,30 @@ async def on_meeting_positive(
 
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
-        if not match or match.status != MATCH_STATUS_COMPLETED:
+        if not match or match.status != MATCH_STATUS_MATCHED:
             await cq.answer("Встреча недоступна", show_alert=True)
             return
+
+        user = await _get_user(session, cq.from_user.id)
+        if not user:
+            await cq.answer("Обновите регистрацию", show_alert=True)
+            return
+
+        # Проверяем, что пользователь еще не дал обратную связь
+        user_feedback = match.user_a_feedback if user.id == match.user_a_id else match.user_b_feedback
+        if user_feedback:
+            await cq.answer("Вы уже дали обратную связь по этой встрече", show_alert=True)
+            return
+
+        # Устанавливаем обратную связь от пользователя
+        updated = await set_match_feedback(session, match, user, "positive")
+        if not updated:
+            await cq.answer("Эта кнопка недоступна для вас", show_alert=True)
+            return
+
+        # Проверяем, дали ли оба пользователя обратную связь
+        await check_and_complete_match(session, match)
+        await session.commit()
 
     # Редактируем сообщение
     text = "Рады, что встреча прошла успешно! Вы автоматически участвуете в следующем подборе пары!"

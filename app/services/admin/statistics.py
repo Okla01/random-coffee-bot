@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import Match, User
 from app.database.utils import now_msk
 from app.services.const import USER_STATUS_ACTIVE, USER_STATUS_BLOCKED
+from app.services.matching.constants import MATCH_STATUS_COMPLETED
 
 
 # Названия периодов для отображения
@@ -120,8 +121,8 @@ async def get_successful_matches_count(session: AsyncSession, period: str) -> in
     """
     Получает количество успешных мэтчей за период.
 
-    Успешным считается мэтч, у которого заполнено поле meeting_start_at.
-    Период считается по дате начала встречи (meeting_start_at), а не по дате создания мэтча.
+    Успешным считается мэтч со статусом completed.
+    Период считается по дате создания мэтча (created_at).
 
     Args:
         session (AsyncSession): сессия БД.
@@ -131,9 +132,9 @@ async def get_successful_matches_count(session: AsyncSession, period: str) -> in
         int: количество успешных мэтчей.
     """
     period_start = _get_period_start(period)
-    query = select(func.count(Match.id)).where(Match.meeting_start_at.isnot(None))
+    query = select(func.count(Match.id)).where(Match.status == MATCH_STATUS_COMPLETED)
     if period_start:
-        query = query.where(Match.meeting_start_at >= period_start)
+        query = query.where(Match.created_at >= period_start)
     result = await session.scalar(query)
     return result or 0
 

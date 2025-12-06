@@ -66,6 +66,60 @@ async def set_match_response(
     return True
 
 
+async def set_match_feedback(
+    session: AsyncSession,
+    match: Match,
+    user: User,
+    feedback: str,
+) -> bool:
+    """
+    Устанавливает обратную связь от пользователя и проверяет, нужно ли переводить матч в completed.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        match (Match): объект матча.
+        user (User): пользователь, который дал обратную связь.
+        feedback (str): тип обратной связи ("positive" или "complaint").
+
+    Returns:
+        bool: True если пользователь является участником матча и обратная связь установлена,
+            False если пользователь не участвует в матче.
+    """
+    if user.id == match.user_a_id:
+        match.user_a_feedback = feedback
+    elif user.id == match.user_b_id:
+        match.user_b_feedback = feedback
+    else:
+        return False
+    await session.flush()
+    return True
+
+
+async def check_and_complete_match(
+    session: AsyncSession,
+    match: Match,
+) -> bool:
+    """
+    Проверяет, дали ли оба пользователя обратную связь, и переводит матч в completed если да.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        match (Match): объект матча.
+
+    Returns:
+        bool: True если матч был переведён в completed, False если ещё не все дали обратную связь.
+    """
+    from app.services.matching.constants import MATCH_STATUS_COMPLETED
+    
+    # Проверяем, что оба пользователя дали обратную связь
+    if match.user_a_feedback and match.user_b_feedback:
+        match.status = MATCH_STATUS_COMPLETED
+        await cleanup_inactive_match(session, match)
+        await session.flush()
+        return True
+    return False
+
+
 async def cleanup_inactive_match(
     session: AsyncSession,
     match: Match,

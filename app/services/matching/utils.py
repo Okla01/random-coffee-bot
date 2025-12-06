@@ -17,7 +17,7 @@ async def user_has_active_match(session: AsyncSession, user_id: int) -> bool:
     """
     Проверяет, есть ли у пользователя активный матч.
 
-    Активными считаются матчи со статусами: pending_response, waiting_confirm, scheduled.
+    Активными считаются матчи со статусами: pending_response, matched.
 
     Args:
         session (AsyncSession): активная сессия БД.

@@ -37,34 +37,6 @@ def kb_match_invitation(match_id: int) -> InlineKeyboardMarkup:
     )
 
 
-def kb_match_confirm_prompt(match_id: int) -> InlineKeyboardMarkup:
-    """
-    Генерирует клавиатуру подтверждения встречи или повторного выбора времени.
-
-    Используется на этапе waiting_confirm, когда найдено пересечение слотов.
-
-    Args:
-        match_id (int): ID матча для формирования callback_data.
-
-    Returns:
-        InlineKeyboardMarkup: inline-клавиатура с кнопками «Подтвердить» и «Назначить заново».
-    """
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text="✅ Подтвердить",
-                    callback_data=f"match_confirm:{match_id}",
-                ),
-                InlineKeyboardButton(
-                    text="🔁 Назначить заново",
-                    callback_data=f"match_reschedule:{match_id}",
-                ),
-            ],
-        ]
-    )
-
-
 def kb_meeting_feedback(match_id: int) -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру для оценки встречи после её завершения.

@@ -60,7 +60,7 @@ async def seed_fake_users_and_matches(
             used_pairs: set[tuple[int, int]] = set()
             matches: list[Match] = []
 
-            statuses = ["pending_response", "scheduled", "completed", "canceled"]
+            statuses = ["pending_response", "matched", "completed", "canceled"]
             responses = ["none", "accepted", "declined"]
 
             while len(matches) < matches_n:
@@ -87,16 +87,6 @@ async def seed_fake_users_and_matches(
                     0
                 ]
 
-                meeting_start_at = None
-                meeting_end_at = None
-                if status in {"scheduled", "completed"}:
-                    meeting_start_at = updated_at + timedelta(
-                        days=random.randint(0, 10), hours=random.randint(0, 6)
-                    )
-                    meeting_end_at = meeting_start_at + timedelta(
-                        minutes=random.choice([30, 45, 60])
-                    )
-
                 last_reminder_at = None
                 if status == "pending_response" and random.random() < 0.6:
                     last_reminder_at = updated_at - timedelta(
@@ -112,8 +102,6 @@ async def seed_fake_users_and_matches(
                     jaccard_score=round(random.random(), 3),
                     user_a_response=user_a_response,
                     user_b_response=user_b_response,
-                    meeting_start_at=meeting_start_at,
-                    meeting_end_at=meeting_end_at,
                     last_reminder_at=last_reminder_at,
                     last_message_id_a=None,
                     last_message_id_b=None,

@@ -58,12 +58,14 @@ async def _get_weekly_stats(
         )
         total_matches = total_matches or 0
 
-        # Успешных мэтчей за неделю (по meeting_start_at)
+        # Успешных мэтчей за неделю (по created_at и статусу completed)
+        from app.services.matching.constants import MATCH_STATUS_COMPLETED
         successful_matches = await session.scalar(
             select(func.count(Match.id)).where(
                 and_(
-                    Match.meeting_start_at >= week_start,
-                    Match.meeting_start_at < week_end,
+                    Match.status == MATCH_STATUS_COMPLETED,
+                    Match.created_at >= week_start,
+                    Match.created_at < week_end,
                 )
             )
         )

@@ -23,6 +23,7 @@ from app.services.admin.complaints import submit_complaint
 from app.services.const import USER_STATUS_NOT_ACTIVE
 from app.services.core import Settings
 from app.services.matching import run_matching_round
+from app.services.matching.feedback import send_feedback_to_users
 from app.services.matching.jobs import (
     process_match_timeouts_only,
     process_match_reminders_only,
@@ -89,9 +90,6 @@ async def cmd_test_complaint(
             )
             return
 
-        # Время встречи: текущее время минус 2 часа
-        meeting_start_at = now_msk() - timedelta(hours=2)
-
         try:
             complaint = await submit_complaint(
                 session=session,
@@ -100,7 +98,6 @@ async def cmd_test_complaint(
                 reporter_user_id=message.from_user.id,
                 reported_user_id=reported_tg_id,
                 complaint_text=complaint_text,
-                meeting_start_at=meeting_start_at,
             )
             await message.answer(
                 f"✅ Тестовая жалоба #{complaint.id} создана и отправлена в админ-чат."
@@ -289,3 +286,28 @@ async def cmd_stage2_debug(
             "Так что давай заполним анкету!\n\n"
             "Напиши свое ФИО🙌"
         )
+
+
+@router.message(Command("test_feedback"))
+async def cmd_test_feedback(
+    message: Message,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+    bot: Bot,
+) -> None:
+    """
+    Принудительно отправляет запрос обратной связи всем пользователям с активными встречами (доступно только администраторам).
+    """
+    async with session_factory() as session:
+        if not await is_admin(session, settings, message.from_user.id):
+            await message.answer("Команда доступна только администраторам.")
+            return
+
+    await message.answer("Отправляю запрос обратной связи...")
+
+    async with session_factory() as session:
+        sent_count = await send_feedback_to_users(session, bot)
+
+    await message.answer(
+        f"✅ Запрос обратной связи отправлен. Получили сообщение: {sent_count} пользователей"
+    )

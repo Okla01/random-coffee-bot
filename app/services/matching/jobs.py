@@ -14,71 +14,20 @@ from sqlalchemy.orm import selectinload
 from app.database import Match, User
 from app.database.utils import ensure_aware_msk, now_msk
 from app.services.matching.constants import (
-    MATCH_STATUS_COMPLETED,
     MATCH_STATUS_EXPIRED_TIMEOUT,
     MATCH_STATUS_PENDING_RESPONSE,
-    MATCH_STATUS_SCHEDULED,
-    MATCH_STATUS_WAITING_CONFIRM,
-    MATCH_USER_RESPONSE_NONE,
     MATCH_USER_RESPONSE_CONFIRM,
+    MATCH_USER_RESPONSE_SKIP,
 )
 from app.services.matching.messages import (
     notify_match_reminder,
     notify_match_timeout,
-    notify_meeting_started,
     remove_match_keyboards,
 )
 from app.services.matching.settings import MatchingSettings, parse_time_to_hours
 from app.services.matching.storage import cleanup_inactive_match
 
 
-async def complete_due_meetings(
-    session: AsyncSession,
-    bot: Bot | None = None,
-) -> int:
-    """
-    Переводит матчи со статусом scheduled в completed, если время встречи наступило.
-
-    Args:
-        session: активная сессия БД.
-        bot: экземпляр бота для отправки уведомлений (опционально).
-
-    Returns:
-        int: количество обработанных матчей.
-    """
-    now = now_msk()
-    stmt = (
-        select(Match)
-        .options(
-            selectinload(Match.user_a),
-            selectinload(Match.user_b),
-        )
-        .where(
-            Match.status == MATCH_STATUS_SCHEDULED,
-            Match.meeting_start_at <= now,
-        )
-    )
-    result = await session.execute(stmt)
-    matches = list(result.scalars().all())
-    if not matches:
-        return 0
-
-    for match in matches:
-        match.status = MATCH_STATUS_COMPLETED
-        if match.user_a:
-            match.user_a.last_match_at = now
-        if match.user_b:
-            match.user_b.last_match_at = now
-        # Очищаем данные неактивного матча
-        await cleanup_inactive_match(session, match)
-
-    await session.commit()
-
-    if bot:
-        for match in matches:
-            await notify_meeting_started(bot, match)
-
-    return len(matches)
 
 
 async def _get_users_to_remind(
@@ -90,7 +39,7 @@ async def _get_users_to_remind(
     Args:
         session (AsyncSession): активная сессия БД.
         match (Match): объект матча с загруженными user_a и user_b.
-        stage (str): текущая стадия матча (pending_response, waiting_confirm).
+        stage (str): текущая стадия матча (pending_response).
 
     Returns:
         list: список пользователей (User), которым нужно отправить напоминание.
@@ -98,17 +47,10 @@ async def _get_users_to_remind(
     users_to_remind = []
 
     if stage == "pending_response":
-        # Напоминаем только тем, кто еще не ответил (response == "none")
-        if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_NONE:
+        # Напоминаем только тем, кто еще не ответил (response == "skip")
+        if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_SKIP:
             users_to_remind.append(match.user_a)
-        if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_NONE:
-            users_to_remind.append(match.user_b)
-
-    elif stage == "waiting_confirm":
-        # Напоминаем только тем, кто еще не подтвердил (response != "confirm")
-        if match.user_a and match.user_a_response != MATCH_USER_RESPONSE_CONFIRM:
-            users_to_remind.append(match.user_a)
-        if match.user_b and match.user_b_response != MATCH_USER_RESPONSE_CONFIRM:
+        if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_SKIP:
             users_to_remind.append(match.user_b)
 
     return users_to_remind
@@ -122,7 +64,7 @@ async def process_match_timeouts_and_reminders(
     """
     Обрабатывает напоминания и таймауты для матчей в активных стадиях.
 
-    Проверяет матчи со статусами pending_response, waiting_confirm:
+    Проверяет матчи со статусом pending_response:
     - отправляет напоминания с интервалом reminder_interval_time;
     - переводит в expired_timeout при превышении response_timeout_time.
 
@@ -144,7 +86,6 @@ async def process_match_timeouts_and_reminders(
     stats = {"reminded": 0, "expired": 0}
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 
     stmt = (
@@ -163,11 +104,8 @@ async def process_match_timeouts_and_reminders(
 
         # Определяем момент начала стадии согласно ТЗ:
         # - для pending_response: created_at (момент нахождения пары)
-        # - для waiting_confirm: updated_at (момент перехода в стадию)
         if stage == "pending_response":
             stage_start = match.created_at
-        else:
-            stage_start = match.updated_at
 
         if not stage_start:
             stage_start = match.created_at or now
@@ -180,8 +118,8 @@ async def process_match_timeouts_and_reminders(
         # Проверяем таймаут: если прошло больше response_timeout_time
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
-            match.user_a_response = MATCH_USER_RESPONSE_NONE
-            match.user_b_response = MATCH_USER_RESPONSE_NONE
+            match.user_a_response = MATCH_USER_RESPONSE_SKIP
+            match.user_b_response = MATCH_USER_RESPONSE_SKIP
             match.last_reminder_at = None
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
@@ -253,10 +191,9 @@ async def process_match_timeouts_only(
     timeout_hours = parse_time_to_hours(settings.response_timeout_time)
     timeout_delta = timedelta(hours=max(0, timeout_hours))
 
-    # Статусы, для которых проверяются таймауты (исключаем scheduled, там нет таймаутов)
+    # Статусы, для которых проверяются таймауты (исключаем matched, там нет таймаутов)
     timeout_check_statuses = {
         MATCH_STATUS_PENDING_RESPONSE,
-        MATCH_STATUS_WAITING_CONFIRM,
     }
 
     stmt = (
@@ -273,7 +210,6 @@ async def process_match_timeouts_only(
     expired_count = 0
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 
     for match in matches:
@@ -298,8 +234,8 @@ async def process_match_timeouts_only(
         # Проверяем таймаут
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
-            match.user_a_response = MATCH_USER_RESPONSE_NONE
-            match.user_b_response = MATCH_USER_RESPONSE_NONE
+            match.user_a_response = MATCH_USER_RESPONSE_SKIP
+            match.user_b_response = MATCH_USER_RESPONSE_SKIP
             match.last_reminder_at = None
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
@@ -349,10 +285,9 @@ async def process_match_reminders_only(
     if reminder_delta <= timedelta(0):
         return 0
 
-    # Статусы, для которых отправляются напоминания (исключаем scheduled, там нет напоминаний)
+    # Статусы, для которых отправляются напоминания (исключаем matched, там нет напоминаний)
     reminder_statuses = {
         MATCH_STATUS_PENDING_RESPONSE,
-        MATCH_STATUS_WAITING_CONFIRM,
     }
 
     stmt = (
@@ -369,7 +304,6 @@ async def process_match_reminders_only(
     reminded_count = 0
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 
     for match in matches:

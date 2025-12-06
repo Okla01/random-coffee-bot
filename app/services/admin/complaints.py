@@ -54,21 +54,11 @@ def _format_user_info(user: User) -> str:
     return "\n".join(lines)
 
 
-def _format_meeting_time(meeting_start_at: Optional[datetime]) -> str:
-    """Форматирует время встречи."""
-    if not meeting_start_at:
-        return "Не указано"
-    # Предполагаем встречу длится 1 час
-    meeting_end_at = meeting_start_at + timedelta(hours=1)
-    return f"{meeting_start_at.strftime('%Y-%m-%d %H:%M')}–{meeting_end_at.strftime('%H:%M')}"
-
-
 def format_complaint_message(
     reporter: User,
     reported: User,
     complaint_text: str,
     warnings_count: int,
-    meeting_start_at: Optional[datetime],
 ) -> str:
     """
     Форматирует сообщение о жалобе для админ-чата.
@@ -78,7 +68,6 @@ def format_complaint_message(
         reported: пользователь, на которого жалоба
         complaint_text: текст жалобы
         warnings_count: текущее количество предупреждений у reported
-        meeting_start_at: время начала встречи
 
     Returns:
         str: отформатированный текст сообщения
@@ -90,8 +79,7 @@ def format_complaint_message(
         f"От кого:\n"
         f"{_format_user_info(reporter)}\n\n"
         f"Текст жалобы: {complaint_text}\n"
-        f"Предупреждений: {warnings_count}\n"
-        f"Время встречи: {_format_meeting_time(meeting_start_at)}"
+        f"Предупреждений: {warnings_count}"
     )
 
 
@@ -102,7 +90,6 @@ async def submit_complaint(
     reporter_user_id: int,
     reported_user_id: int,
     complaint_text: str,
-    meeting_start_at: Optional[datetime] = None,
     match_id: Optional[int] = None,
 ) -> Complaint:
     """
@@ -117,8 +104,7 @@ async def submit_complaint(
         reporter_user_id: telegram_id отправителя жалобы
         reported_user_id: telegram_id того, на кого жалоба
         complaint_text: текст жалобы
-        meeting_start_at: время начала встречи (опционально)
-        match_id: ID матча для получения времени встречи (опционально)
+        match_id: ID матча (опционально)
 
     Returns:
         Complaint: созданный объект жалобы
@@ -137,21 +123,12 @@ async def submit_complaint(
     if not reporter or not reported:
         raise ValueError("Пользователи не найдены в БД")
 
-    # Если передан match_id, получаем время встречи из матча
-    if meeting_start_at is None and match_id is not None:
-        match = (
-            await session.execute(select(Match).where(Match.id == match_id))
-        ).scalar_one_or_none()
-        if match:
-            meeting_start_at = match.meeting_start_at
-
     # Создаём жалобу
     complaint = Complaint(
         reporter_id=reporter.id,
         reported_id=reported.id,
         text=complaint_text,
         status=COMPLAINT_STATUS_PENDING,
-        meeting_start_at=meeting_start_at,
         warnings_count_at_complaint=reported.warnings_count,
     )
     session.add(complaint)
@@ -163,7 +140,6 @@ async def submit_complaint(
         reported=reported,
         complaint_text=complaint_text,
         warnings_count=reported.warnings_count,
-        meeting_start_at=meeting_start_at,
     )
 
     sent_message = await bot.send_message(

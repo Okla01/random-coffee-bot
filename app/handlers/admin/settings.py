@@ -39,6 +39,7 @@ from app.services.admin.settings import (
 )
 from app.services.const import DEFAULT_SETTINGS
 from app.services.matching.scheduler import (
+    refresh_feedback_schedule,
     refresh_matching_round_schedule,
     refresh_timeouts_schedule,
 )
@@ -428,6 +429,7 @@ async def cb_save_admin_settings(
     if matching_scheduler:
         await refresh_matching_round_schedule(matching_scheduler, session_factory)
         await refresh_timeouts_schedule(matching_scheduler, session_factory)
+        await refresh_feedback_schedule(matching_scheduler, session_factory)
     else:
         import logging
 

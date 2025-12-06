@@ -289,14 +289,11 @@ class Match(Base):
         String(16), default="pending_response", index=True
     )
     jaccard_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    user_a_response: Mapped[str] = mapped_column(String(16), default="none", index=True)
-    user_b_response: Mapped[str] = mapped_column(String(16), default="none", index=True)
-    meeting_start_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
-    )
-    meeting_end_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    user_a_response: Mapped[str] = mapped_column(String(16), default="skip", index=True)
+    user_b_response: Mapped[str] = mapped_column(String(16), default="skip", index=True)
+    # Обратная связь от пользователей после встречи (None, "positive", "complaint")
+    user_a_feedback: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    user_b_feedback: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     last_reminder_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )
@@ -357,9 +354,6 @@ class Complaint(Base):
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # Время обработки жалобы
-    meeting_start_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )  # Время начала встречи, по которой жалоба
     warnings_count_at_complaint: Mapped[int] = mapped_column(
         Integer, default=0
     )  # Количество предупреждений у reported на момент жалобы

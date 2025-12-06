@@ -4,17 +4,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 import logging
 
 from app.database import Match, User
-from app.keyboards.kb_matching import (
-    kb_match_confirm_prompt,
-    kb_meeting_feedback,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -37,35 +31,6 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
         actor.telegram_id,
         "Мы сообщили твоему коллеге, что ты готов/ва пойти с ним на кофе и теперь ждем его ответа!🙃",
     )
-
-
-async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
-    """
-    Сообщает обоим участникам о взаимном согласии.
-
-    Вызывается когда оба участника нажали «Готов выпить кофе».
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    for user in (match.user_a, match.user_b):
-        if not user or not user.telegram_id:
-            continue
-        partner = _get_partner(match, user)
-        partner_hint = _format_partner_hint(partner)
-        text = (
-            "🎉 Отличные новости!\n"
-            f"Вы совпали с {partner_hint}.\n"
-            "Теперь вы можете списаться и договориться о времени встречи!"
-        )
-        await bot.send_message(
-            user.telegram_id,
-            text,
-        )
 
 
 async def notify_match_skip_self(bot: Bot, user: User) -> None:
@@ -151,80 +116,20 @@ async def notify_match_not_found(bot: Bot, user: User) -> None:
     )
 
 
-async def notify_waiting_confirm(
-    bot: Bot, match: Match, start_dt: datetime, end_dt: datetime
-) -> dict[int, int]:
+async def notify_match_scheduled(bot: Bot, match: Match) -> None:
     """
-    Уведомляет обоих участников о найденном пересечении и запрашивает подтверждение.
+    Уведомляет обоих участников о том, что они совпали.
 
-    Отправляет сообщение с предложенным временем встречи и клавиатуру с кнопками
-    «Подтвердить» / «Назначить заново».
+    Вызывается когда оба участника нажали «Готов выпить кофе» и матч
+    перешёл в статус matched. Пользователи теперь сами договариваются о времени в ЛС.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
         match (Match): объект матча с загруженными user_a и user_b.
-        start_dt (datetime): дата и время начала встречи.
-        end_dt (datetime): дата и время окончания встречи.
-
-    Returns:
-        dict[int, int]: отображение user_id -> message_id отправленного сообщения.
-    """
-    text = (
-        "✅ Обоим подходит "
-        f"{start_dt:%d.%m %H:%M} – {end_dt:%H:%M}.\n"
-        "Подтвердить встречу или выбрать время заново?"
-    )
-    message_ids: dict[int, int] = {}
-    markup = kb_match_confirm_prompt(match.id)
-    for user in (match.user_a, match.user_b):
-        if not user or not user.telegram_id:
-            continue
-        sent = await bot.send_message(
-            user.telegram_id,
-            text,
-            reply_markup=markup,
-        )
-        if user.id:
-            message_ids[user.id] = sent.message_id
-    return message_ids
-
-
-async def notify_match_confirm_waiting(bot: Bot, user: User) -> None:
-    """
-    Уведомляет пользователя о том, что его подтверждение получено, ожидается подтверждение партнёра.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        user (User): пользователь, который подтвердил встречу.
 
     Returns:
         None: ничего не возвращает.
     """
-    if not user.telegram_id:
-        return
-    await bot.send_message(
-        user.telegram_id,
-        "Ваше подтверждение получено. Ждём подтверждения от вашей пары.",
-    )
-
-
-async def notify_match_scheduled(bot: Bot, match: Match) -> None:
-    """
-    Уведомляет обоих участников о том, что встреча успешно назначена.
-
-    Вызывается когда оба участника подтвердили предложенное время и матч
-    перешёл в статус scheduled.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b и установленным meeting_start_at.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    if not match.meeting_start_at:
-        return
-
     # Отправляем персонализированное сообщение каждому участнику
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
@@ -236,93 +141,12 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
         )
 
         text = (
-            f"⏰ Встреча назначена с {partner_username}!\n"
-            f"Дата и время: {match.meeting_start_at:%d.%m %H:%M}.\n"
-            "Приятного общения!"
+            "🎉 Отличные новости!\n"
+            f"Вы совпали с {partner_username}!\n"
+            "Спишитесь для выбора времени встречи!"
         )
+
         await bot.send_message(user.telegram_id, text)
-
-
-async def notify_match_reschedule_partner(
-    bot: Bot, match: Match, initiator: User
-) -> None:
-    """
-    Уведомляет партнёра о том, что вторая сторона решила выбрать время заново.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-        initiator (User): пользователь, который инициировал повторный выбор времени.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    partner = _get_partner(match, initiator)
-    if not partner or not partner.telegram_id:
-        return
-    await bot.send_message(
-        partner.telegram_id,
-        "Ваша пара решила выбрать время заново.\n"
-        "Давайте выберем удобное время для встречи.",
-    )
-
-
-async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
-    """
-    Уведомляет обоих участников о необходимости повторного выбора времени встречи.
-
-    Вызывается после того, как один из участников нажал «Назначить заново».
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    for user in (match.user_a, match.user_b):
-        if not user or not user.telegram_id:
-            continue
-        await bot.send_message(
-            user.telegram_id,
-            "Время встречи сброшено. Пожалуйста, выберите время заново.",
-        )
-
-
-async def notify_meeting_started(bot: Bot, match: Match) -> None:
-    """
-    Уведомляет обоих участников о наступлении времени встречи.
-
-    Вызывается автоматической джобой, когда meeting_start_at <= текущее время.
-    Отправляет сообщение с кнопками для оценки встречи.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    text = (
-        "👋 Время вашей встречи наступило. "
-        "Хорошего общения!\n"
-        "После встречи вы можете оценить как всё прошло!"
-    )
-    markup = kb_meeting_feedback(match.id)
-
-    for user in (match.user_a, match.user_b):
-        if not user or not user.telegram_id:
-            continue
-        try:
-            await bot.send_message(
-                user.telegram_id,
-                text,
-                reply_markup=markup,
-            )
-        except Exception as e:
-            logger.exception(
-                "Failed to send meeting started notification to user %s: %s", user.id, e
-            )
 
 
 async def notify_match_timeout(bot: Bot, match: Match) -> None:
@@ -372,11 +196,9 @@ async def notify_match_reminder(
             "Напоминаем, что у вас есть пара для Random Coffee. "
             "Нажмите «Готов выпить кофе» или «Пропустить на этой неделе»."
         )
-    else:  # waiting_confirm
-        text = (
-            "Напоминаем, что нужно подтвердить предложенное время "
-            "или выбрать «Назначить заново»."
-        )
+    else:
+        # Неизвестная стадия, пропускаем
+        return
 
     if users_to_remind is None:
         # Обратная совместимость: отправляем обоим участникам
@@ -403,24 +225,6 @@ async def _broadcast(bot: Bot, match: Match, text: str) -> None:
     for user in (match.user_a, match.user_b):
         if user and user.telegram_id:
             await bot.send_message(user.telegram_id, text)
-
-
-async def _broadcast_with_markup(bot: Bot, match: Match, text: str, markup) -> None:
-    """
-    Отправляет текстовое сообщение с клавиатурой обоим участникам матча.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-        text (str): текст сообщения.
-        markup: inline-клавиатура для сообщения.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    for user in (match.user_a, match.user_b):
-        if user and user.telegram_id:
-            await bot.send_message(user.telegram_id, text, reply_markup=markup)
 
 
 def _get_partner(match: Match, actor: User) -> User | None:

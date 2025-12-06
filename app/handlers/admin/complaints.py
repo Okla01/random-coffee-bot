@@ -135,7 +135,6 @@ async def cb_complaint_block(
             reported=reported_user,
             complaint_text=complaint.text,
             warnings_count=complaint.warnings_count_at_complaint,
-            meeting_start_at=complaint.meeting_start_at,
         )
 
         admin_display = _get_admin_display(cq.from_user)
@@ -242,7 +241,6 @@ async def cb_complaint_unblock(
             reported=reported_user,
             complaint_text=complaint.text,
             warnings_count=complaint.warnings_count_at_complaint,
-            meeting_start_at=complaint.meeting_start_at,
         )
 
         admin_display = _get_admin_display(cq.from_user)
@@ -331,7 +329,6 @@ async def cb_complaint_close(
             reported=reported_user,
             complaint_text=complaint.text,
             warnings_count=complaint.warnings_count_at_complaint,
-            meeting_start_at=complaint.meeting_start_at,
         )
 
         admin_display = _get_admin_display(cq.from_user)
@@ -586,7 +583,6 @@ async def handle_warning_text(
                     reported=reported_user,
                     complaint_text=complaint.text,
                     warnings_count=complaint.warnings_count_at_complaint,
-                    meeting_start_at=complaint.meeting_start_at,
                 )
 
                 new_text = format_complaint_result(

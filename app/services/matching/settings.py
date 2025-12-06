@@ -196,6 +196,8 @@ class MatchingSettings:
     reminder_interval_time: str  # Формат "ЧЧ:ММ"
     repeat_pair_cooldown_weeks: int
     min_jaccard: float
+    feedback_day: str
+    feedback_msk_time: str  # Формат "ЧЧ:ММ"
 
 
 async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
@@ -261,6 +263,10 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
         except (TypeError, ValueError):
             reminder_interval_time = "1:00"
 
+    # Загрузка настроек обратной связи
+    feedback_day = await _get_setting_value(session, "feedback_day") or "sun"
+    feedback_msk_time = await _get_setting_value(session, "feedback_msk_time") or "18:00"
+
     return MatchingSettings(
         matching_enabled=await get_setting_bool(session, "matching_enabled"),
         match_day=await _require_setting(session, "match_day"),
@@ -272,4 +278,6 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
             "repeat_pair_cooldown_weeks",
         ),
         min_jaccard=await get_setting_float(session, "min_jaccard"),
+        feedback_day=feedback_day,
+        feedback_msk_time=feedback_msk_time,
     )

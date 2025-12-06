@@ -15,9 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.database.utils import MOSCOW_TZ
 from app.services.matching import run_matching_round
 from app.services.matching.jobs import (
-    complete_due_meetings,
     process_match_timeouts_and_reminders,
 )
+from app.services.matching.feedback import send_feedback_to_users
 from app.services.matching.settings import (
     calculate_optimal_scheduler_interval,
     load_matching_settings,
@@ -34,10 +34,9 @@ async def setup_matching_scheduler(
     """
     Создаёт и конфигурирует APScheduler для фоновых задач матчинга.
 
-    Регистрирует три периодические задачи:
+    Регистрирует две периодические задачи:
     - еженедельный раунд матчинга (по настройкам match_day и match_msk_time);
-    - завершение наступивших встреч (каждые 5 минут);
-    - обработка таймаутов и напоминаний (каждые 5 минут).
+    - обработка таймаутов и напоминаний (динамический интервал).
 
     Args:
         session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
@@ -73,15 +72,6 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
 
-    # Джоба завершения встреч — каждые 5 минут
-    scheduler.add_job(
-        _complete_meetings_job,
-        IntervalTrigger(minutes=5, timezone=MOSCOW_TZ),
-        args=[session_factory, bot],
-        id="complete_meetings",
-        replace_existing=True,
-    )
-
     # Джоба напоминаний/таймаутов — динамический интервал на основе настроек
     timeout_interval, interval_unit = calculate_optimal_scheduler_interval(
         settings.reminder_interval_time,
@@ -107,6 +97,28 @@ async def setup_matching_scheduler(
         interval_display,
         settings.reminder_interval_time,
         settings.response_timeout_time,
+    )
+
+    # Парсинг времени обратной связи из формата "ЧЧ:ММ"
+    feedback_time_parts = parse_time_to_hours_minutes(settings.feedback_msk_time)
+    if feedback_time_parts is None:
+        logger.warning("Invalid feedback_msk_time format, using default 18:00")
+        feedback_hour, feedback_minute = 18, 0
+    else:
+        feedback_hour, feedback_minute = feedback_time_parts
+
+    # Cron-триггер для отправки обратной связи
+    scheduler.add_job(
+        _feedback_job,
+        CronTrigger(
+            day_of_week=settings.feedback_day or "sun",
+            hour=feedback_hour,
+            minute=feedback_minute,
+            timezone=MOSCOW_TZ,
+        ),
+        args=[session_factory, bot],
+        id="feedback",
+        replace_existing=True,
     )
 
     return scheduler
@@ -239,32 +251,6 @@ async def _matching_round_job(
         raise
 
 
-async def _complete_meetings_job(
-    session_factory: async_sessionmaker[AsyncSession],
-    bot: Bot,
-) -> None:
-    """
-    Внутренняя джоба для завершения наступивших встреч.
-
-    Вызывается APScheduler каждые 5 минут (IntervalTrigger).
-
-    Args:
-        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
-        bot (Bot): экземпляр бота для отправки уведомлений.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    logger.debug("Complete meetings job started by scheduler")
-    try:
-        async with session_factory() as session:
-            await complete_due_meetings(session, bot)
-        logger.debug("Complete meetings job completed successfully")
-    except Exception as e:
-        logger.exception("Complete meetings job failed with error: %s", e)
-        raise
-
-
 async def _timeouts_job(
     session_factory: async_sessionmaker[AsyncSession],
     bot: Bot,
@@ -290,3 +276,82 @@ async def _timeouts_job(
     except Exception as e:
         logger.exception("Timeouts and reminders job failed with error: %s", e)
         raise
+
+
+async def _feedback_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    bot: Bot,
+) -> None:
+    """
+    Внутренняя джоба для отправки обратной связи.
+
+    Вызывается APScheduler по расписанию (Cron-триггер).
+
+    Args:
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+        bot (Bot): экземпляр бота для отправки уведомлений.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    logger.info("Feedback job started by scheduler")
+    try:
+        async with session_factory() as session:
+            count = await send_feedback_to_users(session, bot)
+        logger.info("Feedback job completed successfully. Sent to %d users", count)
+    except Exception as e:
+        logger.exception("Feedback job failed with error: %s", e)
+        raise
+
+
+async def refresh_feedback_schedule(
+    scheduler: AsyncIOScheduler,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """
+    Перечитывает feedback_day/feedback_msk_time и обновляет cron-триггер джобы.
+
+    Используется при сохранении настроек в админке, чтобы не требовался рестарт.
+
+    Args:
+        scheduler (AsyncIOScheduler): планировщик задач.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+    """
+    async with session_factory() as session:
+        settings = await load_matching_settings(session)
+
+    # Парсинг времени обратной связи из формата "ЧЧ:ММ"
+    time_parts = parse_time_to_hours_minutes(settings.feedback_msk_time)
+    if time_parts is None:
+        logger.warning("Invalid feedback_msk_time format, using default 18:00")
+        feedback_hour, feedback_minute = 18, 0
+    else:
+        feedback_hour, feedback_minute = time_parts
+
+    logger.info(
+        "Refreshing feedback schedule: day=%s, time=%s (%d:%02d)",
+        settings.feedback_day,
+        settings.feedback_msk_time,
+        feedback_hour,
+        feedback_minute,
+    )
+
+    scheduler.reschedule_job(
+        "feedback",
+        trigger=CronTrigger(
+            day_of_week=settings.feedback_day or "sun",
+            hour=feedback_hour,
+            minute=feedback_minute,
+            timezone=MOSCOW_TZ,
+        ),
+    )
+
+    # Получаем информацию о следующем запуске для логирования
+    job = scheduler.get_job("feedback")
+    if job and job.next_run_time:
+        logger.info(
+            "Feedback job rescheduled. Next run: %s",
+            job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
+        )
+    else:
+        logger.warning("Feedback job not found or has no next run time")

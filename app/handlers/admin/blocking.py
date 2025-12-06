@@ -95,8 +95,8 @@ async def admin_notify_callbacks(
                     pass
 
         else:
-            # Разблокировка пользователя
-            await unblock_user(session, cq.from_user.id, user)
+            # Разблокировка пользователя (при неверных email/OTP - сбрасываем stage)
+            await unblock_user(session, cq.from_user.id, user, reset_stage=True)
 
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             await cq.message.edit_text(

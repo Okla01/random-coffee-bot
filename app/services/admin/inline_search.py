@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
-from app.services.admin.users import get_user_roles
+from app.services.admin.users import get_user_roles, get_complaints_count
 from app.services.const import (
     IS_RESULT_KEY_HAS_PHOTOS,
     IS_RESULT_KEY_DESCRIPTION,
@@ -35,7 +35,9 @@ if TYPE_CHECKING:
 # ----------------------------- Формирование результатов поиска ----------------------------- #
 
 
-def build_user_profile_text(user: User, roles_str: str, status_str: str) -> str:
+def build_user_profile_text(
+    user: User, roles_str: str, status_str: str, complaints_count: int = 0
+) -> str:
     """
     Формирует полный текст профиля пользователя для отображения.
 
@@ -43,6 +45,7 @@ def build_user_profile_text(user: User, roles_str: str, status_str: str) -> str:
         user (User): объект пользователя.
         roles_str (str): строковое представление ролей пользователя.
         status_str (str): строковое представление статуса пользователя.
+        complaints_count (int): количество жалоб на пользователя.
 
     Returns:
         str: отформатированный текст профиля.
@@ -62,6 +65,8 @@ def build_user_profile_text(user: User, roles_str: str, status_str: str) -> str:
         "",
         f"Зарегистрирован: {user.registered_at:%d.%m.%Y %H:%M}",
         f"Последняя активность: {user.last_activity:%d.%m.%Y %H:%M}",
+        "",
+        f"⚠️ Жалоб на пользователя: {complaints_count}",
     ]
     return "\n".join(text_lines)
 
@@ -166,8 +171,11 @@ async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
     )
     status_str = USER_STATUS_NAMES.get(user.status, user.status)
 
+    # Получение количества жалоб на пользователя
+    complaints_count = await get_complaints_count(session, user.id)
+
     # Формирование текста профиля
-    profile_text = build_user_profile_text(user, roles_str, status_str)
+    profile_text = build_user_profile_text(user, roles_str, status_str, complaints_count)
 
     # Получение фотографий пользователя
     photos_list = get_photos_list(user)

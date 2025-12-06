@@ -23,6 +23,7 @@ from app.keyboards.kb_admin import (
     kb_admin_settings,
     kb_admin_settings_change_day_of_week,
     kb_admin_settings_change_cooldown_weeks,
+    kb_admin_settings_change_feedback_day,
 )
 from app.keyboards.utils import clear_last_kb
 from app.services.admin.settings import (
@@ -317,6 +318,40 @@ async def cb_update_reminder_interval_time(
     await state.set_state(AdminSettingsStates.waiting_reminder_interval_time)
 
 
+@router.callback_query(F.data == "admin:update_feedback_schedule")
+async def cb_update_feedback_schedule(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """
+    Запрашивает новый день недели для отправки отзывов.
+
+    Удаляет предыдущую клавиатуру, получает текущий день недели отзывов из черновика
+    и отображает клавиатуру выбора нового дня недели для отправки отзывов.
+    После выбора дня бот запросит время.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    data = await state.get_data()
+    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
+    current_day = draft.get("feedback_day", "sun")
+
+    # Редактируем текущее сообщение с клавиатурой выбора дня недели
+    await cq.message.edit_text(
+        "Выберите день недели для отправки отзывов:",
+        reply_markup=kb_admin_settings_change_feedback_day(current_day),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
+
+
 @router.callback_query(F.data == "admin:save_admin_settings")
 async def cb_save_admin_settings(
     cq: CallbackQuery,
@@ -544,6 +579,43 @@ async def cb_change_cooldown_weeks(
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
+@router.callback_query(F.data.startswith("admin:change_feedback_day:"))
+async def cb_change_feedback_day(
+    cq: CallbackQuery,
+    state: FSMContext,
+) -> None:
+    """
+    Обрабатывает выбор нового дня недели для отправки отзывов.
+
+    Извлекает код дня из callback data, обновляет черновик настроек и
+    переходит к запросу времени отправки отзывов.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    # Получение кода дня из callback_data
+    # "admin:change_feedback_day:mon" -> "mon"
+    day_code = cq.data.split(":")[-1]
+
+    # Обновление дня недели отзывов в черновых настройках
+    await update_draft_setting(state, "feedback_day", day_code)
+
+    # Удаление последней клавиатуры
+    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
+
+    # Запрос времени отправки отзывов
+    await cq.message.edit_text(
+        "Введите время отправки отзывов в формате ЧЧ:ММ (например, 18:00):"
+    )
+
+    # Переход в состояние ожидания времени
+    await state.set_state(AdminSettingsStates.waiting_feedback_msk_time)
+
+
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------
 
 
@@ -769,3 +841,40 @@ async def on_reminder_interval_time_input(msg: Message, state: FSMContext) -> No
             reply_markup=kb_admin_settings(),
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
+
+
+@router.message(StateFilter(AdminSettingsStates.waiting_feedback_msk_time))
+async def on_feedback_msk_time_input(msg: Message, state: FSMContext) -> None:
+    """
+    Обрабатывает ввод нового времени отправки отзывов в формате ЧЧ:ММ.
+
+    Валидирует введённое время (формат ЧЧ:ММ), обновляет черновик настроек,
+    выходит из состояния ожидания значения и обновляет отображение меню настроек.
+    При некорректном вводе запрашивает повторный ввод.
+
+    Args:
+        msg (Message): объект сообщения с введённым временем.
+        state (FSMContext): контекст FSM для управления состоянием.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    feedback_time: str | None = try_to_input_time(msg.text)
+    if feedback_time is None:
+        await msg.answer(
+            "Некорректный ввод. Пожалуйста, введите время в формате ЧЧ:ММ (например, 18:00)."
+        )
+        return
+
+    draft = await update_draft_setting(state, "feedback_msk_time", feedback_time)
+    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
+
+    # Выход из состояния ожидания значения
+    await state.set_state(None)
+
+    # Отправляем новое сообщение с настройками
+    sent = await msg.answer(
+        format_settings_text(draft),
+        reply_markup=kb_admin_settings(),
+    )
+    await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

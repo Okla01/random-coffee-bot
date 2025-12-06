@@ -12,7 +12,7 @@ from typing import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import Role, User, UserRole
+from app.database import Role, User, UserRole, Complaint
 from app.services.const import (
     ROLE_NAMES,
     USER_STATUS_ACTIVE,
@@ -142,6 +142,29 @@ async def build_users_page_text(session: AsyncSession, users: list[User]) -> str
     text += "\n\t— <code>Имя</code> — поиск по имени в анкете</b>"
 
     return text
+
+
+# ---------------------- Жалобы на пользователя ---------------------- #
+
+
+async def get_complaints_count(
+    session: AsyncSession,
+    user_id: int,
+) -> int:
+    """
+    Получает количество жалоб на пользователя.
+
+    Args:
+        session (AsyncSession): сессия БД.
+        user_id (int): ID пользователя в БД.
+
+    Returns:
+        int: количество жалоб на пользователя.
+    """
+    result = await session.scalar(
+        select(func.count()).select_from(Complaint).where(Complaint.reported_id == user_id)
+    )
+    return result or 0
 
 
 # ---------------------- Блокировка/разблокировка пользователей ---------------------- #

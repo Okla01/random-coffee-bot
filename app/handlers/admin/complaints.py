@@ -27,6 +27,7 @@ from app.services.admin.complaints import (
     close_complaint,
     warn_user,
     block_user_from_complaint,
+    unblock_user_from_complaint,
     format_complaint_result,
 )
 from app.services.core import Settings
@@ -144,8 +145,115 @@ async def cb_complaint_block(
             admin_username=admin_display,
         )
 
-        await cq.message.edit_text(new_text, reply_markup=None)
+        # Добавляем кнопку разблокировки после блокировки
+        from app.keyboards.kb_admin import kb_complaint_unblock
+
+        await cq.message.edit_text(
+            new_text, reply_markup=kb_complaint_unblock(complaint_id)
+        )
         await cq.answer("✅ Пользователь заблокирован")
+
+
+@router.callback_query(F.data.startswith("complaint:unblock:"))
+async def cb_complaint_unblock(
+    cq: CallbackQuery,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Обрабатывает разблокировку пользователя по жалобе.
+
+    Проверяет права администратора, получает жалобу по ID, разблокирует пользователя
+    через сервисную функцию (которая устанавливает статус в зависимости от заполненности
+    анкеты), уведомляет разблокированного пользователя и обновляет сообщение с жалобой
+    в админ-чате.
+
+    Args:
+        cq (CallbackQuery): объект callback-запроса.
+        session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
+        settings (Settings): конфигурация приложения.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    data = cq.data or ""
+    _, _, complaint_id_str = data.split(":")
+    complaint_id = int(complaint_id_str)
+
+    async with session_factory() as session:
+        # Проверяем права администратора
+        if not await is_admin(session, settings, cq.from_user.id):
+            await cq.answer("Нет прав")
+            return
+
+        # Получаем жалобу
+        complaint = await get_complaint_by_id(session, complaint_id)
+        if not complaint:
+            await cq.answer("Жалоба не найдена")
+            return
+
+        # Получаем пользователя
+        reported_user = (
+            await session.execute(select(User).where(User.id == complaint.reported_id))
+        ).scalar_one()
+
+        # Проверяем, что пользователь действительно заблокирован
+        from app.services.const import (
+            USER_STATUS_BLOCKED,
+            USER_STATUS_ACTIVE,
+            USER_STATUS_NOT_ACTIVE,
+        )
+
+        if reported_user.status != USER_STATUS_BLOCKED:
+            await cq.answer("Пользователь не заблокирован")
+            return
+
+        # Разблокируем пользователя
+        reported_user = await unblock_user_from_complaint(
+            session=session,
+            complaint=complaint,
+            admin_tg_id=cq.from_user.id,
+        )
+
+        # Уведомляем разблокированного пользователя
+        try:
+            status_text = (
+                "Активный"
+                if reported_user.status == USER_STATUS_ACTIVE
+                else "Не активен (заполните анкету для активации)"
+            )
+            await cq.bot.send_message(
+                reported_user.telegram_id,
+                f"Вас разблокировали по результатам рассмотрения жалобы. "
+                f"Ваш статус: {status_text}.",
+            )
+        except Exception:
+            pass
+
+        # Редактируем сообщение с жалобой (пересоздаём текст в новом формате)
+        from app.services.admin.complaints import format_complaint_message
+
+        reporter = (
+            await session.execute(select(User).where(User.id == complaint.reporter_id))
+        ).scalar_one()
+
+        original_text = format_complaint_message(
+            reporter=reporter,
+            reported=reported_user,
+            complaint_text=complaint.text,
+            warnings_count=complaint.warnings_count_at_complaint,
+            meeting_start_at=complaint.meeting_start_at,
+        )
+
+        admin_display = _get_admin_display(cq.from_user)
+        new_text = format_complaint_result(
+            original_text=original_text,
+            decision="Разблокирован",
+            admin_username=admin_display,
+        )
+
+        await cq.message.edit_text(new_text, reply_markup=None)
+        await cq.answer("✅ Пользователь разблокирован")
 
 
 @router.callback_query(F.data.startswith("complaint:close:"))

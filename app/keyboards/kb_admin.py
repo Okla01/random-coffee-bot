@@ -143,6 +143,12 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
+                    text="📝 День/время отправки отзывов",
+                    callback_data="admin:update_feedback_schedule",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
                     text="🧹 Сбросить до заводских настроек",
                     callback_data="admin:clear_selection",
                 ),
@@ -217,6 +223,36 @@ def kb_admin_settings_change_cooldown_weeks(current_weeks: int) -> InlineKeyboar
             InlineKeyboardButton(
                 text=f"{mark} {week_label}",
                 callback_data=f"admin:change_cooldown_weeks:{week}",
+            )
+        )
+
+    keyboard.append(row)
+
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
+
+
+def kb_admin_settings_change_feedback_day(
+    current_day_of_week: str,
+) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для выбора дня недели отправки отзывов.
+
+    Args:
+        current_day_of_week (str): код текущего дня недели (mon, tue, wed...).
+    """
+    keyboard = []
+    row = []
+
+    for day_code, label in DAYS_OF_WEEK.items():
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+
+        mark = "✅" if day_code == current_day_of_week else "❌"
+        row.append(
+            InlineKeyboardButton(
+                text=f"{mark} {label}",
+                callback_data=f"admin:change_feedback_day:{day_code}",
             )
         )
 
@@ -336,13 +372,39 @@ def kb_admin_user_actions(
             callback_data=f"admin:make_admin:{user_id}",
         )
 
+    # 3) Отправить сообщение
+    message_btn = InlineKeyboardButton(
+        text="✉️ Сообщение",
+        callback_data=f"admin:message:{user_id}",
+    )
+
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [block_btn],
             [role_btn],
+            [message_btn],
             [
                 InlineKeyboardButton(
                     text="⬅️ В главное меню", callback_data="admin:back_to_menu"
+                )
+            ],
+        ]
+    )
+
+
+def kb_admin_message_cancel() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для отмены отправки сообщения пользователю.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопкой отмены.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data="admin:cancel_message",
                 )
             ],
         ]
@@ -375,6 +437,30 @@ def kb_complaint_actions(complaint_id: int) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text="❌ Закрыть",
                     callback_data=f"complaint:close:{complaint_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def kb_complaint_unblock(complaint_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру с кнопкой разблокировки для жалобы.
+
+    Используется после блокировки пользователя по жалобе.
+
+    Args:
+        complaint_id: ID жалобы для формирования callback data.
+
+    Returns:
+        InlineKeyboardMarkup: клавиатура с кнопкой разблокировки.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🔓 Разблокировать",
+                    callback_data=f"complaint:unblock:{complaint_id}",
                 ),
             ],
         ]

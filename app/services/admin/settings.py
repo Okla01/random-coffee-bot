@@ -218,6 +218,11 @@ def format_settings_text(settings: dict) -> str:
             interval_display = interval_value
     text += f"🔹 Интервал напоминаний: {interval_display}\n"
 
+    # 8. День и время отправки отзывов
+    feedback_day_code = settings.get("feedback_day", "sun")
+    feedback_time = settings.get("feedback_msk_time", "18:00")
+    text += f"🔹 День/время отправки отзывов: {DAYS_OF_WEEK.get(feedback_day_code, feedback_day_code)}, {feedback_time}\n"
+
     return text
 
 

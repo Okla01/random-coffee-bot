@@ -284,5 +284,9 @@ async def cmd_stage2_debug(
         await clear_last_kb(state, message.chat.id, message.bot)
 
         await message.answer(
-            "✅ Debug mode: перешли на stage2 (profile_name).\nДавайте заполним анкету! Как вас зовут?"
+            "✅ Debug mode: перешли на stage2 (profile_name).\n\n"
+            "Здравствуй! 👋\n\n"
+            "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
+            "Так что давай заполним анкету!\n\n"
+            "Напиши свое ФИО 🙌"
         )

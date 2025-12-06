@@ -189,7 +189,12 @@ async def on_email_or_code(
 
             if result_type == OtpResultType.SUCCESS:
                 await message.answer("Успешная авторизация! ✅")
-                await message.answer("Давайте заполним анкету! Как вас зовут?")
+                await message.answer(
+                    "Здравствуй! 👋\n\n"
+                    "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
+                    "Так что давай заполним анкету!\n\n"
+                    "Напиши свое ФИО 🙌"
+                )
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
                 return
 

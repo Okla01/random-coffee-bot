@@ -344,7 +344,12 @@ async def cb_prof_edit_field(
                 state,
                 {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
             )
-            await cq.message.answer("Давайте заполним анкету! Как вас зовут?")
+            await cq.message.answer(
+                "Здравствуй! 👋\n\n"
+                "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
+                "Так что давай заполним анкету!\n\n"
+                "Напиши свое ФИО 🙌"
+            )
         elif field == "bio":
             await update_user_stage(
                 session,

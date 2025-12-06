@@ -206,7 +206,12 @@ async def handle_start_result(
         return
 
     if result.action == "ask_profile_name":
-        await answer("Давайте заполним анкету! Как вас зовут?")
+        await answer(
+            "Здравствуй! 👋\n\n"
+            "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
+            "Так что давай заполним анкету!\n\n"
+            "Напиши свое ФИО 🙌"
+        )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 

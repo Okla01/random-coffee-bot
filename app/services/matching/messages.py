@@ -41,10 +41,9 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
 
 async def notify_waiting_partner_ready(bot: Bot, match: Match) -> None:
     """
-    Сообщает обоим участникам о взаимном согласии и отправляет календарь выбора времени.
+    Сообщает обоим участникам о взаимном согласии.
 
-    Вызывается когда оба участника нажали «Готов выпить кофе» и матч перешёл
-    в статус waiting_slots.
+    Вызывается когда оба участника нажали «Готов выпить кофе».
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
@@ -150,43 +149,6 @@ async def notify_match_not_found(bot: Bot, user: User) -> None:
         "Сегодня состоялся круг “Random Coffee”, но, к сожалению, по твоим интересам не удалось найти «мэтч» 😔\n"
         "Однако ты автоматически участвуешь в следующих раундах🤜🏽🤛🏻"
     )
-
-
-async def notify_match_slots_saved(bot: Bot, user: User) -> None:
-    """
-    Уведомляет пользователя о сохранении выбранных временных слотов.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        user (User): пользователь, который сохранил слоты.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    if not user.telegram_id:
-        return
-    await bot.send_message(
-        user.telegram_id,
-        "Ваши варианты времени сохранены. Ждём выбор времени от вашей пары.",
-    )
-
-
-async def notify_no_common_slot(bot: Bot, match: Match) -> None:
-    """
-    Уведомляет обоих участников о том, что не найдено пересечение временных слотов.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    text = (
-        "К сожалению, не удалось найти время, которое подошло бы вам обоим. "
-        "Вы сможете участвовать в следующих раундах."
-    )
-    await _broadcast(bot, match, text)
 
 
 async def notify_waiting_confirm(
@@ -301,14 +263,13 @@ async def notify_match_reschedule_partner(
     await bot.send_message(
         partner.telegram_id,
         "Ваша пара решила выбрать время заново.\n"
-        "Давайте выберем удобное время для встречи.\n"
-        "Календарь открыт повторно — отметьте новые слоты.",
+        "Давайте выберем удобное время для встречи.",
     )
 
 
 async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
     """
-    Отправляет обоим участникам календарь для повторного выбора времени встречи.
+    Уведомляет обоих участников о необходимости повторного выбора времени встречи.
 
     Вызывается после того, как один из участников нажал «Назначить заново».
 
@@ -322,6 +283,10 @@ async def notify_match_reschedule_prompt(bot: Bot, match: Match) -> None:
     for user in (match.user_a, match.user_b):
         if not user or not user.telegram_id:
             continue
+        await bot.send_message(
+            user.telegram_id,
+            "Время встречи сброшено. Пожалуйста, выберите время заново.",
+        )
 
 
 async def notify_meeting_started(bot: Bot, match: Match) -> None:
@@ -395,7 +360,7 @@ async def notify_match_reminder(
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
         match (Match): объект матча с загруженными user_a и user_b.
-        stage (str): текущая стадия матча (pending_response, waiting_slots, waiting_confirm).
+        stage (str): текущая стадия матча (pending_response, waiting_confirm).
         users_to_remind (list[User] | None): список пользователей, которым нужно отправить напоминание.
             Если None, отправляет обоим участникам.
 
@@ -407,8 +372,6 @@ async def notify_match_reminder(
             "Напоминаем, что у вас есть пара для Random Coffee. "
             "Нажмите «Готов выпить кофе» или «Пропустить на этой неделе»."
         )
-    elif stage == "waiting_slots":
-        text = "Напоминаем, что нужно выбрать удобные дни и время для встречи."
     else:  # waiting_confirm
         text = (
             "Напоминаем, что нужно подтвердить предложенное время "

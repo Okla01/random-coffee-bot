@@ -9,7 +9,6 @@ from __future__ import annotations
 # Match statuses
 MATCH_STATUS_PENDING_RESPONSE = "pending_response"
 MATCH_STATUS_SKIPPED = "skipped"
-MATCH_STATUS_WAITING_SLOTS = "waiting_slots"
 MATCH_STATUS_WAITING_CONFIRM = "waiting_confirm"
 MATCH_STATUS_SCHEDULED = "scheduled"
 MATCH_STATUS_COMPLETED = "completed"
@@ -22,7 +21,6 @@ MATCH_STATUS_EXPIRED_TIMEOUT = "expired_timeout"
 
 MATCH_ACTIVE_STATUSES = {
     MATCH_STATUS_PENDING_RESPONSE,
-    MATCH_STATUS_WAITING_SLOTS,
     MATCH_STATUS_WAITING_CONFIRM,
     MATCH_STATUS_SCHEDULED,
 }
@@ -50,13 +48,3 @@ MATCH_RESPONSE_VALUES = {
     MATCH_USER_RESPONSE_CONFIRM,
 }
 
-# Slot picking defaults
-MATCH_SLOT_CALENDAR_DAYS = 14
-MATCH_SLOT_TIME_WINDOWS = [
-    ("09:00", "11:00"),
-    ("11:00", "13:00"),
-    ("13:00", "15:00"),
-    ("15:00", "17:00"),
-    ("17:00", "19:00"),
-    ("19:00", "21:00"),
-]

@@ -11,8 +11,6 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
-from aiogram_dialog import StartMode
-from aiogram_dialog.api.protocols import BgManagerFactory
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.database import Match, User
@@ -24,7 +22,6 @@ from app.services.matching.constants import (
     MATCH_STATUS_SCHEDULED,
     MATCH_STATUS_SKIPPED,
     MATCH_STATUS_WAITING_CONFIRM,
-    MATCH_STATUS_WAITING_SLOTS,
     MATCH_USER_RESPONSE_CONFIRM,
     MATCH_USER_RESPONSE_NONE,
     MATCH_USER_RESPONSE_READY,
@@ -45,7 +42,6 @@ from app.services.matching.storage import (
     get_match_with_relations,
     set_match_response,
 )
-from app.handlers.matching.slots import MatchSlotsDialogSG
 from app.handlers.fsm import MeetingFeedbackStates, FSMDataKeys
 from app.keyboards.kb_matching import kb_meeting_feedback, kb_complaint_cancel
 from app.services.admin.complaints import submit_complaint
@@ -58,13 +54,12 @@ logger = logging.getLogger(__name__)
 async def on_match_ready(
     cq: CallbackQuery,
     session_factory: async_sessionmaker[AsyncSession],
-    dialog_bg_factory: BgManagerFactory,
 ) -> None:
     """
     Обрабатывает callback кнопки «Готов выпить кофе».
 
     Обновляет ответ пользователя на "ready" и, если оба участника готовы,
-    переводит матч в статус waiting_slots и отправляет календарь выбора времени.
+    переводит матч в статус waiting_confirm.
 
     Args:
         cq (CallbackQuery): объект callback-запроса от Telegram.
@@ -103,16 +98,10 @@ async def on_match_ready(
         if not both_ready:
             await notify_match_ready(cq.bot, match, user)
         if both_ready:
-            match.status = MATCH_STATUS_WAITING_SLOTS
+            match.status = MATCH_STATUS_WAITING_CONFIRM
             match.last_reminder_at = None
         await session.commit()
         if both_ready:
-            await _start_slots_dialog_for_user(
-                cq.bot, dialog_bg_factory, match, match.user_a
-            )
-            await _start_slots_dialog_for_user(
-                cq.bot, dialog_bg_factory, match, match.user_b
-            )
             await notify_waiting_partner_ready(cq.bot, match)
 
 
@@ -234,15 +223,13 @@ async def on_match_confirm(
 async def on_match_reschedule(
     cq: CallbackQuery,
     session_factory: async_sessionmaker[AsyncSession],
-    dialog_bg_factory: BgManagerFactory,
 ) -> None:
     await cq.message.delete_reply_markup()
 
     """
     Обрабатывает callback кнопки «Назначить заново» на этапе waiting_confirm.
 
-    Сбрасывает выбранное время встречи, очищает все слоты, переводит матч
-    обратно в статус waiting_slots и отправляет календарь для повторного выбора.
+    Сбрасывает выбранное время встречи и переводит матч обратно в pending_response.
 
     Args:
         cq (CallbackQuery): объект callback-запроса от Telegram.
@@ -262,23 +249,20 @@ async def on_match_reschedule(
             await cq.answer("Обновите регистрацию", show_alert=True)
             return
 
-        match.status = MATCH_STATUS_WAITING_SLOTS
+        match.status = MATCH_STATUS_PENDING_RESPONSE
         match.meeting_start_at = None
         match.meeting_end_at = None
         match.user_a_response = MATCH_USER_RESPONSE_NONE
         match.user_b_response = MATCH_USER_RESPONSE_NONE
         match.last_reminder_at = None
         await _remove_last_message_keyboards(cq.bot, match)
-        # Очищаем слоты и message_id при переназначении встречи
+        # Очищаем данные при переназначении встречи
         await cleanup_inactive_match(session, match)
         await session.commit()
 
-    # Сначала отправляем сообщение партнёру, затем открываем календари
     await notify_match_reschedule_partner(cq.bot, match, user)
-    await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_a)
-    await _start_slots_dialog_for_user(cq.bot, dialog_bg_factory, match, match.user_b)
     await notify_match_reschedule_prompt(cq.bot, match)
-    await cq.answer("Выбор времени сброшен. Заполните новые слоты.", show_alert=False)
+    await cq.answer("Встреча сброшена.", show_alert=False)
 
 
 async def _get_user(session: AsyncSession, telegram_id: int) -> User | None:
@@ -326,29 +310,6 @@ async def _remove_last_message_keyboards(bot, match) -> None:
                 getattr(user, "id", None),
                 message_id,
             )
-
-
-async def _start_slots_dialog_for_user(
-    bot: Bot,
-    bg_factory: BgManagerFactory,
-    match: Match,
-    user: User | None,
-) -> None:
-    """
-    Запускает диалог выбора слотов для указанного пользователя.
-    """
-    if not user or not user.telegram_id:
-        return
-    manager = bg_factory.bg(
-        bot=bot,
-        user_id=user.telegram_id,
-        chat_id=user.telegram_id,
-    )
-    await manager.start(
-        MatchSlotsDialogSG.calendar,
-        data={"match_id": match.id, "user_id": user.id},
-        mode=StartMode.RESET_STACK,
-    )
 
 
 @router.callback_query(F.data.startswith("meeting_complaint:"))

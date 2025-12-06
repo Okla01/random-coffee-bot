@@ -30,7 +30,6 @@ __all__ = [
     "UserRole",
     "AdminLog",
     "Match",
-    "MatchSlot",
     "Complaint",
     "Setting",
 ]

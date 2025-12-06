@@ -15,7 +15,7 @@ from aiogram.types import Message
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.database import Match, User, MatchSlot
+from app.database import Match, User
 from app.database.utils import now_msk
 from app.keyboards.utils import clear_last_kb
 from app.services.admin import is_admin
@@ -154,7 +154,6 @@ async def cmd_reset_matching(
     async with session_factory() as session:
         # Удаляем все записи из matches
         await session.execute(delete(Match))
-        await session.execute(delete(MatchSlot))
         # Очищаем last_pairing_at и last_match_at у всех пользователей
         await session.execute(
             update(User).values(last_pairing_at=None, last_match_at=None)

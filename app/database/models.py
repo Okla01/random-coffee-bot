@@ -4,7 +4,7 @@
 Содержит модели для всех таблиц приложения: User (пользователи и их профили),
 Otp (одноразовые коды для подтверждения email), AuthAttempt (попытки авторизации),
 Role и UserRole (система ролей доступа), AdminLog (журнал действий администраторов),
-Match и MatchSlot (матчи между пользователями и выбранные временные слоты),
+Match (матчи между пользователями),
 Complaint (жалобы пользователей), Setting (настройки приложения).
 Все модели наследуются от Base и используют современный синтаксис SQLAlchemy 2.x
 с типизацией через Mapped.
@@ -309,43 +309,6 @@ class Match(Base):
     )
     user_b: Mapped["User"] = relationship(
         "User", foreign_keys=[user_b_id], back_populates="matches_as_b"
-    )
-
-
-class MatchSlot(Base):
-    """
-    Интервалы времени, выбранные пользователями для конкретного матча.
-
-    Хранит выбранные пользователем временные слоты для встречи: дату, время начала и окончания.
-    Имеет уникальное ограничение на комбинацию match_id, user_id, date, time_from и time_to,
-    что предотвращает дублирование слотов для одного пользователя в одном матче.
-    """
-
-    __tablename__ = "match_slots"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    match_id: Mapped[int] = mapped_column(
-        ForeignKey("matches.id", ondelete="CASCADE"), index=True
-    )
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
-    )
-    date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    time_from: Mapped[str] = mapped_column(String(5))
-    time_to: Mapped[str] = mapped_column(String(5))
-
-    match: Mapped["Match"] = relationship()
-    user: Mapped["User"] = relationship()
-
-    __table_args__ = (
-        UniqueConstraint(
-            "match_id",
-            "user_id",
-            "date",
-            "time_from",
-            "time_to",
-            name="uq_matchslot_unique",
-        ),
     )
 
 

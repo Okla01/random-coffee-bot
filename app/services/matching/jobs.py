@@ -19,7 +19,6 @@ from app.services.matching.constants import (
     MATCH_STATUS_PENDING_RESPONSE,
     MATCH_STATUS_SCHEDULED,
     MATCH_STATUS_WAITING_CONFIRM,
-    MATCH_STATUS_WAITING_SLOTS,
     MATCH_USER_RESPONSE_NONE,
     MATCH_USER_RESPONSE_CONFIRM,
 )
@@ -30,7 +29,7 @@ from app.services.matching.messages import (
     remove_match_keyboards,
 )
 from app.services.matching.settings import MatchingSettings, parse_time_to_hours
-from app.services.matching.storage import cleanup_inactive_match, user_has_match_slots
+from app.services.matching.storage import cleanup_inactive_match
 
 
 async def complete_due_meetings(
@@ -91,7 +90,7 @@ async def _get_users_to_remind(
     Args:
         session (AsyncSession): активная сессия БД.
         match (Match): объект матча с загруженными user_a и user_b.
-        stage (str): текущая стадия матча (pending_response, waiting_slots, waiting_confirm).
+        stage (str): текущая стадия матча (pending_response, waiting_confirm).
 
     Returns:
         list: список пользователей (User), которым нужно отправить напоминание.
@@ -103,17 +102,6 @@ async def _get_users_to_remind(
         if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_NONE:
             users_to_remind.append(match.user_a)
         if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_NONE:
-            users_to_remind.append(match.user_b)
-
-    elif stage == "waiting_slots":
-        # Напоминаем только тем, кто еще не выбрал слоты
-        if match.user_a and not await user_has_match_slots(
-            session, match.id, match.user_a_id
-        ):
-            users_to_remind.append(match.user_a)
-        if match.user_b and not await user_has_match_slots(
-            session, match.id, match.user_b_id
-        ):
             users_to_remind.append(match.user_b)
 
     elif stage == "waiting_confirm":
@@ -134,7 +122,7 @@ async def process_match_timeouts_and_reminders(
     """
     Обрабатывает напоминания и таймауты для матчей в активных стадиях.
 
-    Проверяет матчи со статусами pending_response, waiting_slots, waiting_confirm:
+    Проверяет матчи со статусами pending_response, waiting_confirm:
     - отправляет напоминания с интервалом reminder_interval_time;
     - переводит в expired_timeout при превышении response_timeout_time.
 
@@ -156,7 +144,6 @@ async def process_match_timeouts_and_reminders(
     stats = {"reminded": 0, "expired": 0}
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_SLOTS: "waiting_slots",
         MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 
@@ -176,7 +163,7 @@ async def process_match_timeouts_and_reminders(
 
         # Определяем момент начала стадии согласно ТЗ:
         # - для pending_response: created_at (момент нахождения пары)
-        # - для waiting_slots и waiting_confirm: updated_at (момент перехода в стадию)
+        # - для waiting_confirm: updated_at (момент перехода в стадию)
         if stage == "pending_response":
             stage_start = match.created_at
         else:
@@ -269,7 +256,6 @@ async def process_match_timeouts_only(
     # Статусы, для которых проверяются таймауты (исключаем scheduled, там нет таймаутов)
     timeout_check_statuses = {
         MATCH_STATUS_PENDING_RESPONSE,
-        MATCH_STATUS_WAITING_SLOTS,
         MATCH_STATUS_WAITING_CONFIRM,
     }
 
@@ -287,7 +273,6 @@ async def process_match_timeouts_only(
     expired_count = 0
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_SLOTS: "waiting_slots",
         MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 
@@ -367,7 +352,6 @@ async def process_match_reminders_only(
     # Статусы, для которых отправляются напоминания (исключаем scheduled, там нет напоминаний)
     reminder_statuses = {
         MATCH_STATUS_PENDING_RESPONSE,
-        MATCH_STATUS_WAITING_SLOTS,
         MATCH_STATUS_WAITING_CONFIRM,
     }
 
@@ -385,7 +369,6 @@ async def process_match_reminders_only(
     reminded_count = 0
     stage_map = {
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
-        MATCH_STATUS_WAITING_SLOTS: "waiting_slots",
         MATCH_STATUS_WAITING_CONFIRM: "waiting_confirm",
     }
 

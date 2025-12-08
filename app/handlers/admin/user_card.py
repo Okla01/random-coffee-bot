@@ -27,6 +27,8 @@ from app.services.admin import (
 )
 from app.services.core import Settings
 from app.services.const import USER_STATUS_BLOCKED, USER_STATUS_NEW
+from app.services.admin.blocking import block_user
+from app.services.matching.messages import notify_match_skip_partner
 
 router = Router()
 
@@ -149,20 +151,18 @@ async def cb_block_unblock(
         )
 
         if action == "block":
-            # Блокируем пользователя
-            user.status = USER_STATUS_BLOCKED
-            
-            # Логируем действие
-            session.add(
-                AdminLog(
-                    admin_id=cq.from_user.id,
-                    action="block",
-                    payload={"user_id": user.id},
-                )
-            )
-            await session.commit()
+            # Блокируем пользователя и обновляем активные мэтчи
+            updated_matches = await block_user(session, cq.from_user.id, user)
             
             await cq.answer(f"✅ {username_display} заблокирован")
+            
+            # Уведомляем партнёров в активных мэтчах
+            for match in updated_matches:
+                try:
+                    await notify_match_skip_partner(cq.bot, match, user)
+                except Exception:
+                    # Игнорируем ошибки отправки уведомлений
+                    pass
 
         else:
             # Разблокируем пользователя

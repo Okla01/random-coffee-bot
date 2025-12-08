@@ -274,10 +274,10 @@ class Match(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_a_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     user_b_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), index=True
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True
@@ -289,8 +289,8 @@ class Match(Base):
         String(16), default="pending_response", index=True
     )
     jaccard_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    user_a_response: Mapped[str] = mapped_column(String(16), default="skip", index=True)
-    user_b_response: Mapped[str] = mapped_column(String(16), default="skip", index=True)
+    user_a_response: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
+    user_b_response: Mapped[Optional[str]] = mapped_column(String(16), nullable=True, index=True)
     # Обратная связь от пользователей после встречи (None, "positive", "complaint")
     user_a_feedback: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
     user_b_feedback: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
@@ -300,6 +300,9 @@ class Match(Base):
     # ID последних сообщений с клавиатурами (для последующего удаления)
     last_message_id_a: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     last_message_id_b: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Флаги успешной отправки уведомлений о создании мэтча
+    notified_a: Mapped[bool] = mapped_column(default=False, index=True)
+    notified_b: Mapped[bool] = mapped_column(default=False, index=True)
 
     user_a: Mapped["User"] = relationship(
         "User", foreign_keys=[user_a_id], back_populates="matches_as_a"

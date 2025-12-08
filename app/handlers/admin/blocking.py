@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.services.core import Settings
 from app.database import User
 from app.services.admin import is_admin, block_user, unblock_user
+from app.services.matching.messages import notify_match_skip_partner
 
 router = Router()
 
@@ -70,8 +71,8 @@ async def admin_notify_callbacks(
         reviewed_by = cq.from_user.username or str(cq.from_user.id)
 
         if action == "block":
-            # Блокировка пользователя
-            await block_user(session, cq.from_user.id, user)
+            # Блокировка пользователя и обновление активных мэтчей
+            updated_matches = await block_user(session, cq.from_user.id, user)
 
             # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             await cq.message.edit_text(
@@ -92,6 +93,14 @@ async def admin_notify_callbacks(
                         ),
                     )
                 except Exception:
+                    pass
+            
+            # Уведомляем партнёров в активных мэтчах
+            for match in updated_matches:
+                try:
+                    await notify_match_skip_partner(cq.message.bot, match, user)
+                except Exception:
+                    # Игнорируем ошибки отправки уведомлений
                     pass
 
         else:
@@ -123,3 +132,4 @@ async def admin_notify_callbacks(
 
         # Закрываем "часы" у колбэка
         await cq.answer()
+

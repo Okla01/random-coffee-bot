@@ -14,7 +14,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Match, User
-from app.database.utils import now_msk
+from app.database.utils import now_msk, ensure_aware_msk
 from app.keyboards.kb_matching import kb_match_invitation
 from app.services.const import USER_STATUS_ACTIVE
 from app.services.matching.constants import MATCH_ACTIVE_STATUSES
@@ -130,14 +130,23 @@ async def _load_candidates(
     result = await session.execute(stmt)
     users = list(result.scalars().all())
 
-    cooldown_weeks = max(settings.repeat_pair_cooldown_weeks, 1)
-    cooldown_delta = timedelta(weeks=cooldown_weeks)
+    # Кулдаун с последнего мэтча - фиксированная 1 неделя
+    cooldown_delta = timedelta(weeks=1)
+    # Погрешность в 1 секунду для учета точности времени (миллисекунды)
+    cooldown_tolerance = timedelta(seconds=1)
     eligible: list[User] = []
     for user in users:
         if not user.telegram_id:
             continue
-        if user.last_pairing_at and now - user.last_pairing_at < cooldown_delta:
-            continue
+        if user.last_pairing_at:
+            # Приводим last_pairing_at к aware-формату для корректного вычитания
+            last_pairing_aware = ensure_aware_msk(user.last_pairing_at)
+            if last_pairing_aware:
+                time_passed = now - last_pairing_aware
+                # Если прошло меньше кулдауна (с учетом погрешности) - пропускаем
+                # Используем погрешность чтобы избежать проблем с точностью времени
+                if time_passed < cooldown_delta - cooldown_tolerance:
+                    continue
         eligible.append(user)
     return eligible
 
@@ -279,7 +288,11 @@ def _recency_bonus(user: User, now) -> float:
     last_match = user.last_match_at or user.last_pairing_at
     if not last_match:
         return 0.1
-    delta = now - last_match
+    # Приводим last_match к aware-формату для корректного вычитания
+    last_match_aware = ensure_aware_msk(last_match)
+    if not last_match_aware:
+        return 0.1
+    delta = now - last_match_aware
     weeks = delta.days / 7
     return min(0.2, weeks * 0.01)
 
@@ -377,7 +390,7 @@ async def _send_match_invite(
     Отправляет сообщение одному участнику с приглашением на встречу.
 
     Сначала отправляет все фото партнёра (если есть), затем текстовое сообщение
-    с анкетой партнёра и клавиатурой для ответа. Сохраняет message_id в БД.
+    с анкетой партнёра и клавиатурой для ответа. Сохраняет message_id в БД и устанавливает флаг notified.
 
     Args:
         session (AsyncSession): активная сессия БД для сохранения message_id.
@@ -390,43 +403,65 @@ async def _send_match_invite(
     """
     user = match.user_a if is_user_a else match.user_b
     partner = match.user_b if is_user_a else match.user_a
+    
+    # Проверяем, что пользователь существует и является владельцем telegram_id
     if not user or not user.telegram_id or not partner:
         return
+    
+    # Проверяем, что текущий пользователь с этим telegram_id - тот же, что в мэтче
+    # Это защита от переиспользования telegram_id
+    expected_user_id = match.user_a_id if is_user_a else match.user_b_id
+    if user.id != expected_user_id:
+        logger.warning(
+            "User ID mismatch for match %s: expected %s, got %s (telegram_id: %s)",
+            match.id,
+            expected_user_id,
+            user.id,
+            user.telegram_id,
+        )
+        return
 
-    # Отправляем фото партнёра, если есть
-    if partner.photos_json and partner.photos_json.get("photos"):
-        photos_list = partner.photos_json.get("photos", [])
-        if photos_list:
-            media_group = []
-            for photo_data in photos_list:
-                media_group.append(InputMediaPhoto(media=photo_data["file_id"]))
-            try:
-                await bot.send_media_group(user.telegram_id, media=media_group)
-            except Exception:
-                # Если не удалось отправить группу, отправляем по одному
+    try:
+        # Отправляем фото партнёра, если есть
+        if partner.photos_json and partner.photos_json.get("photos"):
+            photos_list = partner.photos_json.get("photos", [])
+            if photos_list:
+                media_group = []
                 for photo_data in photos_list:
-                    await bot.send_photo(user.telegram_id, photo_data["file_id"])
+                    media_group.append(InputMediaPhoto(media=photo_data["file_id"]))
+                try:
+                    await bot.send_media_group(user.telegram_id, media=media_group)
+                except Exception:
+                    # Если не удалось отправить группу, отправляем по одному
+                    for photo_data in photos_list:
+                        await bot.send_photo(user.telegram_id, photo_data["file_id"])
 
-    # Отправляем текстовое сообщение с анкетой
-    partner_caption = _build_partner_caption(partner)
-    text = (
-        "☕️ Random Coffee\n\n"
-        "Мэтч состоялся! Ознакомься с анкетой:\n\n"
-        f"{partner_caption}\n\n"
-        "Если готов(а) пойти с ним на кофе — нажми кнопку ниже. ☺️\n"
-    )
-    sent_message = await bot.send_message(
-        chat_id=user.telegram_id,
-        text=text,
-        reply_markup=kb_match_invitation(match.id),
-        disable_web_page_preview=True,
-    )
-    # Сохраняем message_id для возможности удаления клавиатуры
-    if is_user_a:
-        match.last_message_id_a = sent_message.message_id
-    else:
-        match.last_message_id_b = sent_message.message_id
-    await session.flush()  # Сохраняем message_id в БД
+        # Отправляем текстовое сообщение с анкетой
+        partner_caption = _build_partner_caption(partner)
+        text = (
+            "☕️ Random Coffee\n\n"
+            "Мэтч состоялся! Ознакомься с анкетой:\n\n"
+            f"{partner_caption}\n\n"
+            "Если готов(а) пойти с ним на кофе — нажми кнопку ниже. ☺️\n"
+        )
+        sent_message = await bot.send_message(
+            chat_id=user.telegram_id,
+            text=text,
+            reply_markup=kb_match_invitation(match.id),
+            disable_web_page_preview=True,
+        )
+        # Сохраняем message_id и устанавливаем флаг успешной отправки
+        if is_user_a:
+            match.last_message_id_a = sent_message.message_id
+            match.notified_a = True
+        else:
+            match.last_message_id_b = sent_message.message_id
+            match.notified_b = True
+        await session.flush()  # Сохраняем message_id и флаг в БД
+    except Exception as e:
+        logger.exception("Failed to send match invite to user %s (match %s): %s", user.id, match.id, e)
+        # Не устанавливаем флаг, чтобы джоба могла повторить отправку
+        raise
 
 
 def _build_partner_caption(user: User) -> str:

@@ -28,6 +28,7 @@ from app.services.const import (
     USER_STATUS_NOT_ACTIVE,
 )
 from app.services.profile.utils import is_profile_complete
+from app.services.admin.blocking import block_user
 
 
 def _format_user_info(user: User) -> str:
@@ -267,7 +268,7 @@ async def block_user_from_complaint(
     session: AsyncSession,
     complaint: Complaint,
     admin_tg_id: int,
-) -> User:
+) -> tuple[User, list[Match]]:
     """
     Блокирует пользователя по жалобе.
 
@@ -277,15 +278,15 @@ async def block_user_from_complaint(
         admin_tg_id: telegram_id админа
 
     Returns:
-        User: заблокированный пользователь
+        tuple[User, list[Match]]: заблокированный пользователь и список обновлённых мэтчей
     """
     # Получаем пользователя, на которого жалоба
     reported = (
         await session.execute(select(User).where(User.id == complaint.reported_id))
     ).scalar_one()
 
-    # Блокируем пользователя
-    reported.status = USER_STATUS_BLOCKED
+    # Блокируем пользователя и обновляем активные мэтчи
+    updated_matches = await block_user(session, admin_tg_id, reported)
 
     # Обновляем жалобу
     complaint.status = COMPLAINT_STATUS_BLOCKED
@@ -304,7 +305,7 @@ async def block_user_from_complaint(
     )
     await session.commit()
 
-    return reported
+    return reported, updated_matches
 
 
 async def unblock_user_from_complaint(

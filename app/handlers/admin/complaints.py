@@ -31,6 +31,7 @@ from app.services.admin.complaints import (
     format_complaint_result,
 )
 from app.services.core import Settings
+from app.services.matching.messages import notify_match_skip_partner
 
 router = Router()
 
@@ -106,8 +107,8 @@ async def cb_complaint_block(
             await cq.answer(f"Жалоба уже обработана админом {admin_name}")
             return
 
-        # Блокируем пользователя
-        reported_user = await block_user_from_complaint(
+        # Блокируем пользователя и получаем обновлённые мэтчи
+        reported_user, updated_matches = await block_user_from_complaint(
             session=session,
             complaint=complaint,
             admin_tg_id=cq.from_user.id,
@@ -122,6 +123,14 @@ async def cb_complaint_block(
             )
         except Exception:
             pass
+        
+        # Уведомляем партнёров в активных мэтчах
+        for match in updated_matches:
+            try:
+                await notify_match_skip_partner(cq.bot, match, reported_user)
+            except Exception:
+                # Игнорируем ошибки отправки уведомлений
+                pass
 
         # Редактируем сообщение с жалобой (пересоздаём текст в новом формате)
         from app.services.admin.complaints import format_complaint_message

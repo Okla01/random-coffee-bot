@@ -50,7 +50,7 @@ async def set_match_response(
         session (AsyncSession): активная сессия БД.
         match (Match): объект мэтча.
         user (User): пользователь, чей ответ обновляется.
-        response (str): значение ответа (ready, skip, confirm, none).
+        response (str): значение ответа ("confirm" или "skip"). None означает, что пользователь еще не ответил.
 
     Returns:
         bool: True если пользователь является участником мэтча и ответ обновлён,

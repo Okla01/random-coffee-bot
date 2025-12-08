@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 
 from aiogram import Bot
@@ -26,6 +27,9 @@ from app.services.matching.messages import (
 )
 from app.services.matching.settings import MatchingSettings, parse_time_to_hours
 from app.services.matching.storage import cleanup_inactive_match
+from app.services.matching.round import _send_match_invite
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -47,10 +51,10 @@ async def _get_users_to_remind(
     users_to_remind = []
 
     if stage == "pending_response":
-        # Напоминаем только тем, кто еще не ответил (response == "skip")
-        if match.user_a and match.user_a_response == MATCH_USER_RESPONSE_SKIP:
+        # Напоминаем только тем, кто еще не ответил (response is None)
+        if match.user_a and match.user_a_response is None:
             users_to_remind.append(match.user_a)
-        if match.user_b and match.user_b_response == MATCH_USER_RESPONSE_SKIP:
+        if match.user_b and match.user_b_response is None:
             users_to_remind.append(match.user_b)
 
     return users_to_remind
@@ -118,8 +122,11 @@ async def process_match_timeouts_and_reminders(
         # Проверяем таймаут: если прошло больше response_timeout_time
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
-            match.user_a_response = MATCH_USER_RESPONSE_SKIP
-            match.user_b_response = MATCH_USER_RESPONSE_SKIP
+            # Устанавливаем skip только если пользователь еще не ответил
+            if match.user_a_response is None:
+                match.user_a_response = MATCH_USER_RESPONSE_SKIP
+            if match.user_b_response is None:
+                match.user_b_response = MATCH_USER_RESPONSE_SKIP
             match.last_reminder_at = None
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
@@ -234,8 +241,11 @@ async def process_match_timeouts_only(
         # Проверяем таймаут
         if elapsed >= timeout_delta:
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
-            match.user_a_response = MATCH_USER_RESPONSE_SKIP
-            match.user_b_response = MATCH_USER_RESPONSE_SKIP
+            # Устанавливаем skip только если пользователь еще не ответил
+            if match.user_a_response is None:
+                match.user_a_response = MATCH_USER_RESPONSE_SKIP
+            if match.user_b_response is None:
+                match.user_b_response = MATCH_USER_RESPONSE_SKIP
             match.last_reminder_at = None
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
@@ -349,3 +359,72 @@ async def process_match_reminders_only(
     await session.commit()
 
     return reminded_count
+
+
+async def resend_failed_match_notifications(
+    session: AsyncSession,
+    bot: Bot | None = None,
+) -> int:
+    """
+    Повторно отправляет уведомления о создании мэтчей, которые не были доставлены.
+
+    Проверяет мэтчи со статусом pending_response, у которых флаги notified_a или notified_b = False,
+    и пытается отправить уведомления повторно.
+
+    Args:
+        session (AsyncSession): активная сессия БД.
+        bot (Bot | None): экземпляр бота для отправки уведомлений (опционально).
+
+    Returns:
+        int: количество успешно отправленных уведомлений.
+    """
+    if bot is None:
+        return 0
+
+    stmt = (
+        select(Match)
+        .options(
+            selectinload(Match.user_a),
+            selectinload(Match.user_b),
+        )
+        .where(
+            Match.status == MATCH_STATUS_PENDING_RESPONSE,
+            (Match.notified_a == False) | (Match.notified_b == False),
+        )
+    )
+    result = await session.execute(stmt)
+    matches = list(result.scalars().all())
+
+    sent_count = 0
+    for match in matches:
+        try:
+            # Пытаемся отправить уведомление user_a, если не было отправлено
+            if not match.notified_a and match.user_a and match.user_a.telegram_id:
+                try:
+                    await _send_match_invite(session, bot, match, is_user_a=True)
+                    sent_count += 1
+                except Exception as e:
+                    logger.warning(
+                        "Failed to resend notification to user_a (match %s, user %s): %s",
+                        match.id,
+                        match.user_a_id,
+                        e,
+                    )
+
+            # Пытаемся отправить уведомление user_b, если не было отправлено
+            if not match.notified_b and match.user_b and match.user_b.telegram_id:
+                try:
+                    await _send_match_invite(session, bot, match, is_user_a=False)
+                    sent_count += 1
+                except Exception as e:
+                    logger.warning(
+                        "Failed to resend notification to user_b (match %s, user %s): %s",
+                        match.id,
+                        match.user_b_id,
+                        e,
+                    )
+        except Exception as e:
+            logger.exception("Error processing match %s for resend: %s", match.id, e)
+
+    await session.commit()
+    return sent_count

@@ -8,21 +8,30 @@
 
 from __future__ import annotations
 
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import User, AdminLog
+from app.database import User, AdminLog, Match
 from app.services.const import (
     USER_STATUS_BLOCKED,
     USER_STATUS_NEW,
     USER_STATUS_ACTIVE,
     USER_STATUS_NOT_ACTIVE,
 )
+from app.services.matching.constants import (
+    MATCH_ACTIVE_STATUSES,
+    MATCH_STATUS_USER_A_BLOCKED,
+    MATCH_STATUS_USER_B_BLOCKED,
+)
 from app.services.profile.utils import is_profile_complete
 
 
-async def block_user(session: AsyncSession, admin_tg_id: int, user: User) -> None:
+async def block_user(session: AsyncSession, admin_tg_id: int, user: User) -> list[Match]:
     """
-    Блокирует пользователя и логирует действие.
+    Блокирует пользователя, обновляет активные мэтчи и логирует действие.
+
+    При блокировке пользователя все его активные мэтчи переводятся в статус
+    user_a_blocked или user_b_blocked в зависимости от роли пользователя в мэтче.
 
     Args:
         session (AsyncSession): сессия БД.
@@ -30,9 +39,28 @@ async def block_user(session: AsyncSession, admin_tg_id: int, user: User) -> Non
         user (User): объект пользователя для блокировки.
 
     Returns:
-        None: ничего не возвращает.
+        list[Match]: список обновлённых активных мэтчей (для последующей отправки уведомлений).
     """
     user.status = USER_STATUS_BLOCKED
+    
+    # Обновляем все активные мэтчи заблокированного пользователя
+    active_matches_stmt = select(Match).where(
+        or_(Match.user_a_id == user.id, Match.user_b_id == user.id),
+        Match.status.in_(MATCH_ACTIVE_STATUSES)
+    )
+    result = await session.execute(active_matches_stmt)
+    updated_matches = []
+    
+    for match in result.scalars():
+        # Загружаем связанных пользователей для доступа к ним
+        await session.refresh(match, ["user_a", "user_b"])
+        
+        if match.user_a_id == user.id:
+            match.status = MATCH_STATUS_USER_A_BLOCKED
+        else:
+            match.status = MATCH_STATUS_USER_B_BLOCKED
+        updated_matches.append(match)
+    
     session.add(
         AdminLog(
             admin_id=admin_tg_id,
@@ -41,6 +69,8 @@ async def block_user(session: AsyncSession, admin_tg_id: int, user: User) -> Non
         )
     )
     await session.commit()
+    
+    return updated_matches
 
 
 async def unblock_user(
@@ -87,3 +117,6 @@ async def unblock_user(
         )
     )
     await session.commit()
+
+
+

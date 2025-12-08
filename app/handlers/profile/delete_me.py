@@ -94,7 +94,8 @@ async def cb_delete_yes(
 
     async with session_factory() as session:
         # Удаляем пользователя напрямую по telegram_id
-        await delete_user_by_telegram_id(session, cq.from_user.id)
+        # Передаём bot для уведомления партнёров в активных мэтчах
+        await delete_user_by_telegram_id(session, cq.from_user.id, bot=cq.message.bot)
 
         # Сбрасываем все стейты в оперативной памяти
         await state.clear()

@@ -96,6 +96,49 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
     )
 
 
+async def notify_match_user_deleted(bot: Bot, match: Match, deleted_user: User) -> None:
+    """
+    Уведомляет партнёра о том, что вторая сторона удалила анкету.
+
+    Удаляет клавиатуру из сообщения с приглашением у партнёра.
+
+    Args:
+        bot (Bot): экземпляр бота для отправки сообщений.
+        match (Match): объект мэтча с загруженными user_a и user_b.
+        deleted_user (User): пользователь, который удалил анкету.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    partner = _get_partner(match, deleted_user)
+    if not partner or not partner.telegram_id:
+        return
+
+    # Удаляем клавиатуру из сообщения с приглашением у партнёра
+    partner_message_id = None
+    if partner.id == match.user_a_id and match.last_message_id_a:
+        partner_message_id = match.last_message_id_a
+    elif partner.id == match.user_b_id and match.last_message_id_b:
+        partner_message_id = match.last_message_id_b
+
+    if partner_message_id:
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=partner.telegram_id,
+                message_id=partner_message_id,
+                reply_markup=None,
+            )
+        except Exception:
+            # Игнорируем ошибки (сообщение могло быть удалено или изменено)
+            pass
+
+    await bot.send_message(
+        partner.telegram_id,
+        "К сожалению, твоя пара удалила анкету. "
+        "Ты автоматически попадёшь в следующий раунд.",
+    )
+
+
 async def notify_match_not_found(bot: Bot, user: User) -> None:
     """
     Уведомляет пользователя о том, что в текущем раунде ему не подобрали пару.
@@ -243,28 +286,6 @@ def _get_partner(match: Match, actor: User) -> User | None:
     if actor.id == match.user_b_id:
         return match.user_a
     return None
-
-
-def _format_partner_hint(partner: User | None) -> str:
-    """
-    Форматирует краткое описание партнёра для использования в сообщениях.
-
-    Args:
-        partner (User | None): объект партнёра или None.
-
-    Returns:
-        str: строка с username партнёра (если есть), иначе имя или "твоей парой" если партнёр не указан.
-    """
-    if not partner:
-        return "твоей парой"
-    # Приоритет: username > name > telegram_id
-    if partner.username:
-        return f"@{partner.username}"
-    if partner.name:
-        return partner.name
-    if partner.telegram_id:
-        return f"tg://user?id={partner.telegram_id}"
-    return "твоей парой"
 
 
 async def remove_match_keyboards(bot: Bot, match: Match) -> None:

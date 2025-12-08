@@ -16,6 +16,7 @@ from app.database.utils import MOSCOW_TZ
 from app.services.matching import run_matching_round
 from app.services.matching.jobs import (
     process_match_timeouts_and_reminders,
+    resend_failed_match_notifications,
 )
 from app.services.matching.feedback import send_feedback_to_users
 from app.services.matching.settings import (
@@ -98,6 +99,16 @@ async def setup_matching_scheduler(
         settings.reminder_interval_time,
         settings.response_timeout_time,
     )
+
+    # Джоба для повторной отправки неудавшихся уведомлений о создании мэтчей
+    scheduler.add_job(
+        _resend_notifications_job,
+        IntervalTrigger(minutes=30, timezone=MOSCOW_TZ),
+        args=[session_factory, bot],
+        id="resend_match_notifications",
+        replace_existing=True,
+    )
+    logger.info("Resend match notifications job scheduled with interval: 30 minutes")
 
     # Парсинг времени обратной связи из формата "ЧЧ:ММ"
     feedback_time_parts = parse_time_to_hours_minutes(settings.feedback_msk_time)
@@ -301,6 +312,35 @@ async def _feedback_job(
         logger.info("Feedback job completed successfully. Sent to %d users", count)
     except Exception as e:
         logger.exception("Feedback job failed with error: %s", e)
+        raise
+
+
+async def _resend_notifications_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    bot: Bot,
+) -> None:
+    """
+    Внутренняя джоба для повторной отправки неудавшихся уведомлений о создании мэтчей.
+
+    Вызывается APScheduler каждые 30 минут (IntervalTrigger).
+
+    Args:
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+        bot (Bot): экземпляр бота для отправки уведомлений.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    logger.debug("Resend match notifications job started by scheduler")
+    try:
+        async with session_factory() as session:
+            count = await resend_failed_match_notifications(session, bot)
+            if count > 0:
+                logger.info("Resend match notifications job completed. Resent %d notifications", count)
+            else:
+                logger.debug("Resend match notifications job completed. No notifications to resend")
+    except Exception as e:
+        logger.exception("Resend match notifications job failed with error: %s", e)
         raise
 
 

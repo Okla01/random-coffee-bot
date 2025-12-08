@@ -76,6 +76,12 @@ async def on_match_ready(
             await cq.answer("Обновите регистрацию", show_alert=True)
             return
 
+        # Idempotency check: если пользователь уже ответил "confirm", не обновляем и не отправляем уведомление
+        user_response = match.user_a_response if user.id == match.user_a_id else match.user_b_response
+        if user_response == MATCH_USER_RESPONSE_CONFIRM:
+            await cq.answer("Вы уже подтвердили готовность к встрече", show_alert=True)
+            return
+
         updated = await set_match_response(
             session,
             match,
@@ -136,6 +142,12 @@ async def on_match_skip(
             await cq.answer("Обновите регистрацию", show_alert=True)
             return
 
+        # Idempotency check: если пользователь уже ответил "skip", не обновляем
+        user_response = match.user_a_response if user.id == match.user_a_id else match.user_b_response
+        if user_response == MATCH_USER_RESPONSE_SKIP:
+            await cq.answer("Вы уже пропустили этот раунд", show_alert=True)
+            return
+
         updated = await set_match_response(
             session,
             match,
@@ -168,39 +180,6 @@ async def _get_user(session: AsyncSession, telegram_id: int) -> User | None:
         User | None: объект пользователя или None, если не найден.
     """
     return await get_user_by_tg_id(session, telegram_id)
-
-
-async def _remove_last_message_keyboards(bot, match) -> None:
-    """
-    Удаляет inline-клавиатуры по сохранённым message_id у обоих участников.
-    """
-    for user, message_id_attr in (
-        (match.user_a, "last_message_id_a"),
-        (match.user_b, "last_message_id_b"),
-    ):
-        message_id = getattr(match, message_id_attr, None)
-        if not user or not user.telegram_id or not message_id:
-            continue
-        try:
-            await bot.edit_message_reply_markup(
-                chat_id=user.telegram_id,
-                message_id=message_id,
-                reply_markup=None,
-            )
-        except TelegramBadRequest as exc:
-            if "message is not modified" not in str(exc):
-                logger.exception(
-                    "Failed to remove keyboard for user %s message %s: %s",
-                    getattr(user, "id", None),
-                    message_id,
-                    exc,
-                )
-        except Exception:
-            logger.exception(
-                "Failed to remove keyboard for user %s message %s",
-                getattr(user, "id", None),
-                message_id,
-            )
 
 
 @router.callback_query(F.data.startswith("meeting_complaint:"))

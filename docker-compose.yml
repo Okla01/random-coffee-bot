@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rcb-bot
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///data/db.sqlite3
+    volumes:
+      # Монтируем директорию с данными (БД и бэкапы)
+      - ./data:/app/data
+    networks:
+      - rcb-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    container_name: rcb-backup
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DB_PATH=/app/data/db.sqlite3
+      - BACKUP_DIR=/app/data/backups
+      - BACKUP_DAYS=7
+    volumes:
+      # Монтируем ту же директорию с данными для доступа к БД и записи бэкапов
+      - ./data:/app/data
+    networks:
+      - rcb-network
+    depends_on:
+      - bot
+    # Запускаем бекап сразу при старте (опционально)
+    # Можно убрать, если нужен только cron
+    # command: python scripts/backup_db.py && /app/start-cron.sh
+
+networks:
+  rcb-network:
+    driver: bridge
+
+volumes:
+  data:
+    driver: local
+

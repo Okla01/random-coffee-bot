@@ -1,0 +1,48 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Устанавливаем cron и зависимости
+RUN apt-get update && apt-get install -y \
+    cron \
+    gcc \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем файлы зависимостей
+COPY requirements.txt .
+
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Копируем код приложения (нужен для импорта app.database.utils)
+COPY . .
+
+# Создаём директории для бэкапов
+RUN mkdir -p /app/data/backups
+
+# Создаём скрипт запуска cron
+RUN echo '#!/bin/bash\n\
+set -e\n\
+# Запускаем cron в фоне\n\
+cron\n\
+# Выводим логи cron в stdout\n\
+tail -f /var/log/backup.log' > /app/start-cron.sh && \
+    chmod +x /app/start-cron.sh
+
+# Задаём переменные окружения по умолчанию
+ENV PYTHONUNBUFFERED=1 \
+    DB_PATH=/app/data/db.sqlite3 \
+    BACKUP_DIR=/app/data/backups \
+    BACKUP_DAYS=7
+
+# Настраиваем cron для ежесуточного запуска в 2:00 МСК (23:00 UTC предыдущего дня)
+# Используем UTC, т.к. контейнеры обычно работают в UTC
+RUN echo "0 23 * * * cd /app && python scripts/backup_db.py >> /var/log/backup.log 2>&1" | crontab -
+
+# Создаём лог-файл
+RUN touch /var/log/backup.log
+
+# Запускаем cron
+CMD ["/app/start-cron.sh"]
+

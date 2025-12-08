@@ -61,13 +61,13 @@ async def send_photo_request(
     if hasattr(message_or_cq, "message"):
         # Это CallbackQuery
         sent = await message_or_cq.message.answer(
-            "Добавь несколько своих фото(1-5шт)",
+            "Добавь свое фото",
             reply_markup=kb,
         )
     else:
         # Это Message
         sent = await message_or_cq.answer(
-            "Добавь несколько своих фото(1-5шт)",
+            "Добавь свое фото",
             reply_markup=kb,
         )
 

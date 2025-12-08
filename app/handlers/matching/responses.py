@@ -54,7 +54,7 @@ async def on_match_ready(
     Обрабатывает callback кнопки «Готов выпить кофе».
 
     Обновляет ответ пользователя на "confirm" и, если оба участника готовы,
-    переводит матч в статус matched.
+    переводит мэтч в статус matched.
 
     Args:
         cq (CallbackQuery): объект callback-запроса от Telegram.
@@ -69,7 +69,7 @@ async def on_match_ready(
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_PENDING_RESPONSE:
-            await cq.answer("Матч уже недоступен", show_alert=True)
+            await cq.answer("мэтч уже недоступен", show_alert=True)
             return
         user = await _get_user(session, cq.from_user.id)
         if not user:
@@ -115,7 +115,7 @@ async def on_match_skip(
     """
     Обрабатывает callback кнопки «Пропустить на этой неделе».
 
-    Обновляет ответ пользователя на "skip", переводит матч в статус skipped
+    Обновляет ответ пользователя на "skip", переводит мэтч в статус skipped
     и уведомляет обоих участников.
 
     Args:
@@ -129,7 +129,7 @@ async def on_match_skip(
     async with session_factory() as session:
         match = await get_match_with_relations(session, match_id)
         if not match or match.status != MATCH_STATUS_PENDING_RESPONSE:
-            await cq.answer("Матч уже недоступен", show_alert=True)
+            await cq.answer("мэтч уже недоступен", show_alert=True)
             return
         user = await _get_user(session, cq.from_user.id)
         if not user:
@@ -148,7 +148,7 @@ async def on_match_skip(
 
         match.status = MATCH_STATUS_SKIPPED
         match.last_reminder_at = None
-        # Очищаем данные неактивного матча
+        # Очищаем данные неактивного мэтча
         await cleanup_inactive_match(session, match)
         await session.commit()
 
@@ -279,7 +279,7 @@ async def on_complaint_cancel(
             return
 
     # Возвращаем исходное сообщение
-    text = "Оцените пожалуйста как прошла ваша встреча. Это очень важно для нас!"
+    text = "Оцените пожалуйста как прошла твоя встреча. Это очень важно для нас!"
     markup = kb_meeting_feedback(match_id)
 
     try:
@@ -379,9 +379,9 @@ async def on_complaint_text_input(
 
             # Редактируем сообщение с подтверждением и текстом жалобы
             confirmation_text = (
-                f"Ваша жалоба отправлена.\nТекст вашей жалобы: {complaint_text}\n"
+                f"Твоя жалоба отправлена.\nТекст твоей жалобы: {complaint_text}\n"
             )
-            await msg.answer("Вы автоматически участвуете в следующем подборе пары!")
+            await msg.answer("Ты автоматически участвуешь в следующем подборе мэтча!")
             try:
                 await msg.bot.edit_message_text(
                     chat_id=msg.chat.id,
@@ -438,7 +438,7 @@ async def on_meeting_positive(
         await session.commit()
 
     # Редактируем сообщение
-    text = "Рады, что встреча прошла успешно! Вы автоматически участвуете в следующем подборе пары!"
+    text = "Рады, что встреча прошла успешно! Ты автоматически участвуешь в следующем подборе мэтча!"
 
     try:
         await cq.message.edit_text(text, reply_markup=None)

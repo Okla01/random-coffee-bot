@@ -118,7 +118,7 @@ async def on_email_or_code(
                 return
 
             if result_type == EmailResultType.SUCCESS:
-                msg = "Отправили 6-значный код на вашу почту. Введите его в течение 2 минут."
+                msg = "Отправили 6-значный код на твою почту. Введи его в течение 2 минут."
                 if warn:
                     msg += f"\n⚠️ {warn}"
                 sent = await message.answer(msg, reply_markup=kb_auth_code_wait())
@@ -240,7 +240,7 @@ async def cb_otp_resend(
 
         ok, warn = await send_or_resend_otp(session, settings, user)
         await session.commit()
-        msg = "Новый код отправлен на вашу почту. Введите его:"
+        msg = "Новый код отправлен на твою почту. Введи его:"
         if warn:
             msg += f"\n⚠️ {warn}"
         # отправляем новое сообщение с клавиатурой
@@ -294,6 +294,6 @@ async def cb_change_email(
 
         user.stage = "verifying_email"
         await session.commit()
-        await cq.message.answer("Отправьте новый корпоративный e-mail:")
+        await cq.message.answer("Отправь новый корпоративный e-mail:")
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         await cq.answer()

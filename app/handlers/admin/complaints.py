@@ -223,8 +223,8 @@ async def cb_complaint_unblock(
             )
             await cq.bot.send_message(
                 reported_user.telegram_id,
-                f"Вас разблокировали по результатам рассмотрения жалобы. "
-                f"Ваш статус: {status_text}.",
+                f"Тебя разблокировали по результатам рассмотрения жалобы. "
+                f"Твой статус: {status_text}.",
             )
         except Exception:
             pass

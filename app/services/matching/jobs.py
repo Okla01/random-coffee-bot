@@ -1,5 +1,5 @@
 """
-Периодические задачи домена матчинга.
+Периодические задачи домена мэтчинга.
 """
 
 from __future__ import annotations
@@ -38,8 +38,8 @@ async def _get_users_to_remind(
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match (Match): объект матча с загруженными user_a и user_b.
-        stage (str): текущая стадия матча (pending_response).
+        match (Match): объект мэтча с загруженными user_a и user_b.
+        stage (str): текущая стадия мэтча (pending_response).
 
     Returns:
         list: список пользователей (User), которым нужно отправить напоминание.
@@ -62,15 +62,15 @@ async def process_match_timeouts_and_reminders(
     bot: Bot | None = None,
 ) -> dict[str, int]:
     """
-    Обрабатывает напоминания и таймауты для матчей в активных стадиях.
+    Обрабатывает напоминания и таймауты для мэтчей в активных стадиях.
 
-    Проверяет матчи со статусом pending_response:
+    Проверяет мэтчи со статусом pending_response:
     - отправляет напоминания с интервалом reminder_interval_time;
     - переводит в expired_timeout при превышении response_timeout_time.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки матчинга (таймауты, интервалы напоминаний).
+        settings (MatchingSettings): настройки мэтчинга (таймауты, интервалы напоминаний).
         bot (Bot | None): экземпляр бота для отправки уведомлений (опционально).
 
     Returns:
@@ -124,7 +124,7 @@ async def process_match_timeouts_and_reminders(
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
                 await remove_match_keyboards(bot, match)
-            # Очищаем данные неактивного матча
+            # Очищаем данные неактивного мэтча
             await cleanup_inactive_match(session, match)
             stats["expired"] += 1
             continue
@@ -174,18 +174,18 @@ async def process_match_timeouts_only(
     bot: Bot | None = None,
 ) -> int:
     """
-    Проверяет и обрабатывает только таймауты для матчей в активных стадиях.
+    Проверяет и обрабатывает только таймауты для мэтчей в активных стадиях.
 
-    Проверяет матчи с активными статусами и переводит их в expired_timeout
+    Проверяет мэтчи с активными статусами и переводит их в expired_timeout
     при превышении response_timeout_time.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки матчинга (таймауты).
+        settings (MatchingSettings): настройки мэтчинга (таймауты).
         bot (Bot | None): экземпляр бота для отправки уведомлений (опционально).
 
     Returns:
-        int: количество истёкших матчей.
+        int: количество истёкших мэтчей.
     """
     now = now_msk()
     timeout_hours = parse_time_to_hours(settings.response_timeout_time)
@@ -240,7 +240,7 @@ async def process_match_timeouts_only(
             # Удаляем клавиатуры из старых сообщений перед очисткой данных
             if bot:
                 await remove_match_keyboards(bot, match)
-            # Очищаем данные неактивного матча
+            # Очищаем данные неактивного мэтча
             await cleanup_inactive_match(session, match)
             expired_count += 1
 
@@ -260,14 +260,14 @@ async def process_match_reminders_only(
     bot: Bot | None = None,
 ) -> int:
     """
-    Проверяет и отправляет только напоминания для матчей в активных стадиях.
+    Проверяет и отправляет только напоминания для мэтчей в активных стадиях.
 
-    Проверяет матчи с активными статусами и отправляет напоминания,
+    Проверяет мэтчи с активными статусами и отправляет напоминания,
     если прошло достаточно времени с момента последнего напоминания.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки матчинга (интервалы напоминаний).
+        settings (MatchingSettings): настройки мэтчинга (интервалы напоминаний).
         bot (Bot | None): экземпляр бота для отправки уведомлений (опционально).
 
     Returns:

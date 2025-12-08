@@ -1,5 +1,5 @@
 """
-Утилиты доступа к данным матчей.
+Утилиты доступа к данным мэтчей.
 """
 
 from __future__ import annotations
@@ -16,14 +16,14 @@ async def get_match_with_relations(
     session: AsyncSession, match_id: int
 ) -> Match | None:
     """
-    Загружает матч с предзагруженными связанными пользователями.
+    Загружает мэтч с предзагруженными связанными пользователями.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match_id (int): ID матча.
+        match_id (int): ID мэтча.
 
     Returns:
-        Match | None: объект матча с загруженными user_a и user_b, или None если не найден.
+        Match | None: объект мэтча с загруженными user_a и user_b, или None если не найден.
     """
     stmt = (
         select(Match)
@@ -44,17 +44,17 @@ async def set_match_response(
     response: str,
 ) -> bool:
     """
-    Обновляет поле ответа участника матча (user_a_response или user_b_response).
+    Обновляет поле ответа участника мэтча (user_a_response или user_b_response).
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match (Match): объект матча.
+        match (Match): объект мэтча.
         user (User): пользователь, чей ответ обновляется.
         response (str): значение ответа (ready, skip, confirm, none).
 
     Returns:
-        bool: True если пользователь является участником матча и ответ обновлён,
-            False если пользователь не участвует в матче.
+        bool: True если пользователь является участником мэтча и ответ обновлён,
+            False если пользователь не участвует в мэтче.
     """
     if user.id == match.user_a_id:
         match.user_a_response = response
@@ -73,17 +73,17 @@ async def set_match_feedback(
     feedback: str,
 ) -> bool:
     """
-    Устанавливает обратную связь от пользователя и проверяет, нужно ли переводить матч в completed.
+    Устанавливает обратную связь от пользователя и проверяет, нужно ли переводить мэтч в completed.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match (Match): объект матча.
+        match (Match): объект мэтча.
         user (User): пользователь, который дал обратную связь.
         feedback (str): тип обратной связи ("positive" или "complaint").
 
     Returns:
-        bool: True если пользователь является участником матча и обратная связь установлена,
-            False если пользователь не участвует в матче.
+        bool: True если пользователь является участником мэтча и обратная связь установлена,
+            False если пользователь не участвует в мэтче.
     """
     if user.id == match.user_a_id:
         match.user_a_feedback = feedback
@@ -100,14 +100,14 @@ async def check_and_complete_match(
     match: Match,
 ) -> bool:
     """
-    Проверяет, дали ли оба пользователя обратную связь, и переводит матч в completed если да.
+    Проверяет, дали ли оба пользователя обратную связь, и переводит мэтч в completed если да.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match (Match): объект матча.
+        match (Match): объект мэтча.
 
     Returns:
-        bool: True если матч был переведён в completed, False если ещё не все дали обратную связь.
+        bool: True если мэтч был переведён в completed, False если ещё не все дали обратную связь.
     """
     from app.services.matching.constants import MATCH_STATUS_COMPLETED
     
@@ -125,13 +125,13 @@ async def cleanup_inactive_match(
     match: Match,
 ) -> None:
     """
-    Очищает данные матча при переходе в неактивный статус.
+    Очищает данные мэтча при переходе в неактивный статус.
 
     Обнуляет поля last_message_id_a и last_message_id_b.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        match (Match): объект матча.
+        match (Match): объект мэтча.
 
     Returns:
         None: ничего не возвращает.

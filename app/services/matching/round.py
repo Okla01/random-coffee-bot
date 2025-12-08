@@ -1,5 +1,5 @@
 """
-Запуск раунда матчинга Random Coffee.
+Запуск раунда мэтчинга Random Coffee.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 @dataclass(slots=True)
 class PairingEdge:
     """
-    Представление потенциальной пары пользователей для матчинга.
+    Представление потенциальной пары пользователей для мэтчинга.
 
     Attributes:
         user_a (User): первый пользователь пары.
@@ -47,9 +47,9 @@ class PairingEdge:
 
 async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
     """
-    Главная процедура запуска раунда матчинга.
+    Главная процедура запуска раунда мэтчинга.
 
-    Загружает настройки, фильтрует кандидатов, строит пары, сохраняет матчи
+    Загружает настройки, фильтрует кандидатов, строит пары, сохраняет мэтчи
     и отправляет уведомления участникам.
 
     Args:
@@ -107,16 +107,16 @@ async def _load_candidates(
     """
     Возвращает список пользователей, готовых к участию в новом раунде.
 
-    Фильтрует пользователей по статусу, стадии профиля, отсутствию активных матчей
+    Фильтрует пользователей по статусу, стадии профиля, отсутствию активных мэтчей
     и соблюдению кулдауна last_pairing_at.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки матчинга.
+        settings (MatchingSettings): настройки мэтчинга.
         now: текущее время в МСК.
 
     Returns:
-        list[User]: список пользователей-кандидатов для матчинга.
+        list[User]: список пользователей-кандидатов для мэтчинга.
     """
     active_ids = await _load_users_with_active_matches(session)
 
@@ -144,13 +144,13 @@ async def _load_candidates(
 
 async def _load_users_with_active_matches(session: AsyncSession) -> set[int]:
     """
-    Возвращает множество user_id, у которых есть активные матчи.
+    Возвращает множество user_id, у которых есть активные мэтчи.
 
     Args:
         session (AsyncSession): активная сессия БД.
 
     Returns:
-        set[int]: множество ID пользователей с активными матчами.
+        set[int]: множество ID пользователей с активными мэтчами.
     """
     active_ids: set[int] = set()
     stmt = select(Match.user_a_id, Match.user_b_id).where(
@@ -170,13 +170,13 @@ async def _load_recent_pairs(
     now,
 ) -> set[frozenset[int]]:
     """
-    Возвращает пары пользователей, которые встречались в недавних матчах.
+    Возвращает пары пользователей, которые встречались в недавних мэтчах.
 
     Используется для исключения повторных пар в рамках cooldown периода.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки матчинга (repeat_pair_cooldown_weeks).
+        settings (MatchingSettings): настройки мэтчинга (repeat_pair_cooldown_weeks).
         now: текущее время в МСК.
 
     Returns:
@@ -205,9 +205,9 @@ def _build_pairing_edges(
     и исключает недавние пары. Сортирует рёбра по приоритету (убывание).
 
     Args:
-        candidates (list[User]): список кандидатов для матчинга.
+        candidates (list[User]): список кандидатов для мэтчинга.
         recent_pairs (set[frozenset[int]]): множество недавних пар для исключения.
-        settings (MatchingSettings): настройки матчинга (min_jaccard).
+        settings (MatchingSettings): настройки мэтчинга (min_jaccard).
         now: текущее время в МСК.
 
     Returns:
@@ -245,7 +245,7 @@ def _build_pairing_edges(
 
 def _calc_priority(user_a: User, user_b: User, now, jaccard: float) -> float:
     """
-    Вычисляет приоритет пары: высокий Jaccard + давность последних матчей.
+    Вычисляет приоритет пары: высокий Jaccard + давность последних мэтчей.
 
     Приоритет = jaccard + recency_bonus(user_a) + recency_bonus(user_b).
 
@@ -265,9 +265,9 @@ def _calc_priority(user_a: User, user_b: User, now, jaccard: float) -> float:
 
 def _recency_bonus(user: User, now) -> float:
     """
-    Возвращает бонус за длительное отсутствие матчей.
+    Возвращает бонус за длительное отсутствие мэтчей.
 
-    Бонус увеличивается с количеством недель с последнего матча (до 0.2).
+    Бонус увеличивается с количеством недель с последнего мэтча (до 0.2).
 
     Args:
         user (User): пользователь для расчёта бонуса.
@@ -352,12 +352,12 @@ async def _notify_new_matches(
     """
     Отправляет участникам сообщения о новой паре.
 
-    Для каждого матча отправляет приглашение обоим участникам и сохраняет message_id.
+    Для каждого мэтча отправляет приглашение обоим участникам и сохраняет message_id.
 
     Args:
         session (AsyncSession): активная сессия БД для сохранения message_id.
         bot (Bot): экземпляр бота для отправки сообщений.
-        matches (list[Match]): список созданных матчей.
+        matches (list[Match]): список созданных мэтчей.
 
     Returns:
         None: ничего не возвращает.
@@ -382,7 +382,7 @@ async def _send_match_invite(
     Args:
         session (AsyncSession): активная сессия БД для сохранения message_id.
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
         is_user_a (bool): True если отправляем user_a, False если user_b.
 
     Returns:
@@ -411,9 +411,9 @@ async def _send_match_invite(
     partner_caption = _build_partner_caption(partner)
     text = (
         "☕️ Random Coffee\n\n"
-        "Тебе подобрана новая пара! Ознакомься с анкетой:\n\n"
+        "Мэтч состоялся! Ознакомься с анкетой:\n\n"
         f"{partner_caption}\n\n"
-        "Если готов/ва пойти с ним на кофе — нажми кнопку ниже. ☺️\n"
+        "Если готов(а) пойти с ним на кофе — нажми кнопку ниже. ☺️\n"
     )
     sent_message = await bot.send_message(
         chat_id=user.telegram_id,

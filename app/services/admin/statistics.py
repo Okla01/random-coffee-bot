@@ -141,14 +141,14 @@ async def get_successful_matches_count(session: AsyncSession, period: str) -> in
 
 async def get_average_jaccard_score(session: AsyncSession, period: str) -> float | None:
     """
-    Получает средний Jaccard-коэффициент из матчей за период.
+    Получает средний Jaccard-коэффициент из мэтчей за период.
 
     Args:
         session (AsyncSession): сессия БД.
         period (str): код периода.
 
     Returns:
-        float | None: средний Jaccard-коэффициент или None, если матчей нет.
+        float | None: средний Jaccard-коэффициент или None, если мэтчей нет.
     """
     period_start = _get_period_start(period)
     query = select(func.avg(Match.jaccard_score))

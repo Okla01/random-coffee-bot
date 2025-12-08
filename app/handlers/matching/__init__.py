@@ -1,5 +1,5 @@
 """
-Роутеры для callback-логики матчинга.
+Роутеры для callback-логики мэтчинга.
 """
 
 from aiogram import Router

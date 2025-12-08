@@ -51,9 +51,9 @@ async def send_otp_email(settings: Settings, to_email: str, otp_code: str) -> No
     msg["To"] = to_email
     msg["Subject"] = "Код подтверждения для Random Coffee"
     msg.set_content(
-        f"Ваш код подтверждения: {otp_code}\n"
+        f"Твой код подтверждения: {otp_code}\n"
         f"Срок действия: {settings.otp_ttl_seconds} секунд.\n"
-        "Если вы не запрашивали код — просто игнорируйте это письмо."
+        "Если ты не запрашивал код — просто игнорируй это письмо."
     )
 
     # Создаём TLS-контекст с принудительным TLS 1.2+

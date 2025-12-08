@@ -1,5 +1,5 @@
 """
-Сообщения пользователям в разных стадиях матчинга.
+Сообщения пользователям в разных стадиях мэтчинга.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча.
+        match (Match): объект мэтча.
         actor (User): пользователь, который нажал кнопку.
 
     Returns:
@@ -29,7 +29,7 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
         return
     await bot.send_message(
         actor.telegram_id,
-        "Мы сообщили твоему коллеге, что ты готов/ва пойти с ним на кофе и теперь ждем его ответа!🙃",
+        "Мы сообщили твоему коллеге, что ты готов(а) пойти с ним на кофе и теперь ждем его ответа!🙃",
     )
 
 
@@ -48,8 +48,8 @@ async def notify_match_skip_self(bot: Bot, user: User) -> None:
         return
     await bot.send_message(
         user.telegram_id,
-        "Вы пропустили участие на этой неделе. "
-        "Вы сможете снова участвовать в следующих раундах.",
+        "Ты пропустил участие на этой неделе. "
+        "Ты сможешь снова участвовать в следующих раундах.",
     )
 
 
@@ -61,7 +61,7 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
         skipper (User): пользователь, который пропустил раунд.
 
     Returns:
@@ -91,8 +91,8 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
 
     await bot.send_message(
         partner.telegram_id,
-        "К сожалению, ваша пара решила пропустить участие на этой неделе. "
-        "Вы автоматически попадёте в следующий раунд.",
+        "К сожалению, твоя пара решила пропустить участие на этой неделе. "
+        "Ты автоматически попадёшь в следующий раунд.",
     )
 
 
@@ -120,12 +120,12 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
     """
     Уведомляет обоих участников о том, что они совпали.
 
-    Вызывается когда оба участника нажали «Готов выпить кофе» и матч
+    Вызывается когда оба участника нажали «Готов выпить кофе» и мэтч
     перешёл в статус matched. Пользователи теперь сами договариваются о времени в ЛС.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
 
     Returns:
         None: ничего не возвращает.
@@ -137,13 +137,13 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
 
         partner = _get_partner(match, user)
         partner_username = (
-            f"@{partner.username}" if partner and partner.username else "вашей парой"
+            f"@{partner.username}" if partner and partner.username else "твоей парой"
         )
 
         text = (
             "🎉 Отличные новости!\n"
             f"Вы совпали с {partner_username}!\n"
-            "Спишитесь для выбора времени встречи!"
+            "Напишите коллеге для выбора времени встречи!"
         )
 
         await bot.send_message(user.telegram_id, text)
@@ -153,12 +153,12 @@ async def notify_match_timeout(bot: Bot, match: Match) -> None:
     """
     Уведомляет обоих участников об истечении времени на согласование встречи.
 
-    Вызывается автоматической джобой при переводе матча в статус expired_timeout.
+    Вызывается автоматической джобой при переводе мэтча в статус expired_timeout.
     Перед отправкой уведомления удаляет клавиатуры из старых сообщений.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
 
     Returns:
         None: ничего не возвращает.
@@ -177,14 +177,14 @@ async def notify_match_reminder(
     bot: Bot, match: Match, stage: str, users_to_remind: list[User] | None = None
 ) -> None:
     """
-    Отправляет напоминание указанным пользователям в зависимости от текущей стадии матча.
+    Отправляет напоминание указанным пользователям в зависимости от текущей стадии мэтча.
 
     Если users_to_remind не указан, отправляет напоминание обоим участникам (обратная совместимость).
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
-        stage (str): текущая стадия матча (pending_response, waiting_confirm).
+        match (Match): объект мэтча с загруженными user_a и user_b.
+        stage (str): текущая стадия мэтча (pending_response, waiting_confirm).
         users_to_remind (list[User] | None): список пользователей, которым нужно отправить напоминание.
             Если None, отправляет обоим участникам.
 
@@ -212,11 +212,11 @@ async def notify_match_reminder(
 
 async def _broadcast(bot: Bot, match: Match, text: str) -> None:
     """
-    Отправляет текстовое сообщение обоим участникам матча.
+    Отправляет текстовое сообщение обоим участникам мэтча.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
         text (str): текст сообщения.
 
     Returns:
@@ -229,14 +229,14 @@ async def _broadcast(bot: Bot, match: Match, text: str) -> None:
 
 def _get_partner(match: Match, actor: User) -> User | None:
     """
-    Возвращает партнёра участника матча.
+    Возвращает партнёра участника мэтча.
 
     Args:
-        match (Match): объект матча с загруженными user_a и user_b.
-        actor (User): участник матча, для которого нужно найти партнёра.
+        match (Match): объект мэтча с загруженными user_a и user_b.
+        actor (User): участник мэтча, для которого нужно найти партнёра.
 
     Returns:
-        User | None: партнёр участника или None, если actor не является участником матча.
+        User | None: партнёр участника или None, если actor не является участником мэтча.
     """
     if actor.id == match.user_a_id:
         return match.user_b
@@ -253,10 +253,10 @@ def _format_partner_hint(partner: User | None) -> str:
         partner (User | None): объект партнёра или None.
 
     Returns:
-        str: строка с username партнёра (если есть), иначе имя или "вашей парой" если партнёр не указан.
+        str: строка с username партнёра (если есть), иначе имя или "твоей парой" если партнёр не указан.
     """
     if not partner:
-        return "вашей парой"
+        return "твоей парой"
     # Приоритет: username > name > telegram_id
     if partner.username:
         return f"@{partner.username}"
@@ -264,16 +264,16 @@ def _format_partner_hint(partner: User | None) -> str:
         return partner.name
     if partner.telegram_id:
         return f"tg://user?id={partner.telegram_id}"
-    return "вашей парой"
+    return "твоей парой"
 
 
 async def remove_match_keyboards(bot: Bot, match: Match) -> None:
     """
-    Удаляет inline-клавиатуры по сохранённым message_id у обоих участников матча.
+    Удаляет inline-клавиатуры по сохранённым message_id у обоих участников мэтча.
 
     Args:
         bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект матча с загруженными user_a и user_b.
+        match (Match): объект мэтча с загруженными user_a и user_b.
     """
     for user, message_id_attr in (
         (match.user_a, "last_message_id_a"),

@@ -51,7 +51,7 @@ async def seed_fake_users_and_matches(
 
             user_ids = [u.id for u in users]
 
-            # 2) Матчи (уникальные пары)
+            # 2) мэтчи (уникальные пары)
             # максимальное число уникальных пар: users_n * (users_n - 1) / 2
             max_pairs = users_n * (users_n - 1) // 2
             if matches_n > max_pairs:
@@ -112,7 +112,7 @@ async def seed_fake_users_and_matches(
             await session.commit()
 
     print(f"Добавлено пользователей: {users_n}")
-    print(f"Добавлено матчей: {matches_n}")
+    print(f"Добавлено мэтчей: {matches_n}")
 
 
 if __name__ == "__main__":

@@ -198,7 +198,7 @@ async def handle_start_result(
 
     if result.action == "ask_code":
         sent = await answer(
-            "Мы уже отправили код подтверждения на вашу почту. Введите код.\n"
+            "Мы уже отправили код подтверждения на твою почту. Введи код.\n"
             "Если код истёк — воспользуйтесь кнопкой ниже.",
             reply_markup=kb_auth_code_wait(),
         )
@@ -230,7 +230,7 @@ async def handle_start_result(
             await send_photos_with_actions(bot, chat_id, user, state, photos_list)
         else:
             sent = await answer(
-                "Добавь несколько своих фото(1-5шт)",
+                "Добавь свое фото",
                 reply_markup=kb_profile_photo(),
             )
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

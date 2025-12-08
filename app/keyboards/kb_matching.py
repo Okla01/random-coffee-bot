@@ -1,5 +1,5 @@
 """
-Inline-клавиатуры для сценариев матчинга Random Coffee.
+Inline-клавиатуры для сценариев мэтчинга Random Coffee.
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ def kb_match_invitation(match_id: int) -> InlineKeyboardMarkup:
     """
     Генерирует клавиатуру с кнопками «Готов выпить кофе» / «Пропустить».
 
-    Используется при отправке приглашения на встречу после создания матча.
+    Используется при отправке приглашения на встречу после создания мэтча.
 
     Args:
-        match_id (int): ID матча для формирования callback_data.
+        match_id (int): ID мэтча для формирования callback_data.
 
     Returns:
         InlineKeyboardMarkup: inline-клавиатура с двумя кнопками.
@@ -42,7 +42,7 @@ def kb_meeting_feedback(match_id: int) -> InlineKeyboardMarkup:
     Генерирует клавиатуру для оценки встречи после её завершения.
 
     Args:
-        match_id (int): ID матча для формирования callback_data.
+        match_id (int): ID мэтча для формирования callback_data.
 
     Returns:
         InlineKeyboardMarkup: inline-клавиатура с кнопками [⚠️] и [👍].
@@ -68,7 +68,7 @@ def kb_complaint_cancel(match_id: int) -> InlineKeyboardMarkup:
     Генерирует клавиатуру для отмены жалобы.
 
     Args:
-        match_id (int): ID матча для формирования callback_data.
+        match_id (int): ID мэтча для формирования callback_data.
 
     Returns:
         InlineKeyboardMarkup: inline-клавиатура с кнопкой «Отменить жалобу».

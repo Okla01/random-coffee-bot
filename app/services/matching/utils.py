@@ -1,5 +1,5 @@
 """
-Вспомогательные функции для домена матчинга: проверки активных матчей и расчёт Jaccard.
+Вспомогательные функции для домена мэтчинга: проверки активных мэтчей и расчёт Jaccard.
 """
 
 from __future__ import annotations
@@ -15,16 +15,16 @@ from .constants import MATCH_ACTIVE_STATUSES
 
 async def user_has_active_match(session: AsyncSession, user_id: int) -> bool:
     """
-    Проверяет, есть ли у пользователя активный матч.
+    Проверяет, есть ли у пользователя активный мэтч.
 
-    Активными считаются матчи со статусами: pending_response, matched.
+    Активными считаются мэтчи со статусами: pending_response, matched.
 
     Args:
         session (AsyncSession): активная сессия БД.
         user_id (int): ID пользователя для проверки.
 
     Returns:
-        bool: True если у пользователя есть активный матч, иначе False.
+        bool: True если у пользователя есть активный мэтч, иначе False.
     """
     stmt = (
         select(Match.id)

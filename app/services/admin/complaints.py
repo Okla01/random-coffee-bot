@@ -104,7 +104,7 @@ async def submit_complaint(
         reporter_user_id: telegram_id отправителя жалобы
         reported_user_id: telegram_id того, на кого жалоба
         complaint_text: текст жалобы
-        match_id: ID матча (опционально)
+        match_id: ID мэтча (опционально)
 
     Returns:
         Complaint: созданный объект жалобы

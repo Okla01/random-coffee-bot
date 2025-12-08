@@ -118,7 +118,7 @@ def kb_admin_settings() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton(
-                    text="🗓️ День побора", callback_data="admin:update_match_day"
+                    text="🗓️ День подбора", callback_data="admin:update_match_day"
                 ),
                 InlineKeyboardButton(
                     text="🕐 Время подбора", callback_data="admin:update_match_msk_time"

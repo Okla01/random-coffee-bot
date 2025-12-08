@@ -1,5 +1,5 @@
 """
-Middleware для внедрения планировщика матчинга в контекст обработчиков.
+Middleware для внедрения планировщика мэтчинга в контекст обработчиков.
 
 Предоставляет matching_scheduler каждому обработчику через параметры data,
 позволяя обработчикам получить доступ к планировщику для обновления расписания.
@@ -16,7 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 class SchedulerMiddleware(BaseMiddleware):
     """
-    Middleware для внедрения планировщика матчинга.
+    Middleware для внедрения планировщика мэтчинга.
 
     Добавляет matching_scheduler в параметры data каждого обновления (update),
     позволяя обработчикам получить доступ к планировщику для управления джобами.
@@ -27,7 +27,7 @@ class SchedulerMiddleware(BaseMiddleware):
         Инициализирует middleware с планировщиком.
 
         Args:
-            scheduler (AsyncIOScheduler): планировщик задач матчинга.
+            scheduler (AsyncIOScheduler): планировщик задач мэтчинга.
         """
         super().__init__()
         self._scheduler = scheduler

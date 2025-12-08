@@ -115,19 +115,19 @@ async def cmd_test_matching(
     settings: Settings,
 ) -> None:
     """
-    Принудительно запускает раунд матчинга (доступно только администраторам).
+    Принудительно запускает раунд мэтчинга (доступно только администраторам).
     """
     async with session_factory() as session:
         if not await is_admin(session, settings, message.from_user.id):
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Запускаю тестовый раунд матчинга...")
+    await message.answer("Запускаю тестовый раунд мэтчинга...")
 
     async with session_factory() as session:
         await run_matching_round(session, message.bot)
 
-    await message.answer("✅ Раунд матчинга завершён.")
+    await message.answer("✅ Раунд мэтчинга завершён.")
 
 
 @router.message(Command("reset_matching"))
@@ -139,14 +139,14 @@ async def cmd_reset_matching(
     """
     Очищает все записи в таблице matches и сбрасывает last_pairing_at у всех пользователей.
 
-    Доступно только администраторам. Используется для полного сброса состояния матчинга.
+    Доступно только администраторам. Используется для полного сброса состояния мэтчинга.
     """
     async with session_factory() as session:
         if not await is_admin(session, settings, message.from_user.id):
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Очищаю все матчи и сбрасываю last_pairing_at...")
+    await message.answer("Очищаю все мэтчи и сбрасываю last_pairing_at...")
 
     async with session_factory() as session:
         # Удаляем все записи из matches
@@ -159,7 +159,7 @@ async def cmd_reset_matching(
         await session.commit()
 
     await message.answer(
-        "✅ Все матчи удалены, last_pairing_at сброшен у всех пользователей."
+        "✅ Все мэтчи удалены, last_pairing_at сброшен у всех пользователей."
     )
 
 
@@ -170,7 +170,7 @@ async def cmd_test_scheduler(
     settings: Settings,
 ) -> None:
     """
-    Немедленно запускает джобу матчинга из планировщика (доступно только администраторам).
+    Немедленно запускает джобу мэтчинга из планировщика (доступно только администраторам).
 
     Полезно для тестирования работы планировщика без ожидания наступления времени.
     """
@@ -179,7 +179,7 @@ async def cmd_test_scheduler(
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Запускаю джобу матчинга из планировщика...")
+    await message.answer("Запускаю джобу мэтчинга из планировщика...")
 
     from app.services.matching.scheduler import _matching_round_job
 
@@ -194,9 +194,9 @@ async def cmd_test_timeouts(
     settings: Settings,
 ) -> None:
     """
-    Принудительно проверяет таймауты для матчей в активных статусах (доступно только администраторам).
+    Принудительно проверяет таймауты для мэтчей в активных статусах (доступно только администраторам).
 
-    Проверяет все матчи с активными статусами и переводит их в expired_timeout,
+    Проверяет все мэтчи с активными статусами и переводит их в expired_timeout,
     если истёк таймаут ответа.
     """
     async with session_factory() as session:
@@ -204,7 +204,7 @@ async def cmd_test_timeouts(
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Проверяю таймауты для активных матчей...")
+    await message.answer("Проверяю таймауты для активных мэтчей...")
 
     async with session_factory() as session:
         matching_settings = await load_matching_settings(session)
@@ -213,7 +213,7 @@ async def cmd_test_timeouts(
         )
 
     await message.answer(
-        f"✅ Проверка таймаутов завершена. Истёкших матчей: {expired_count}"
+        f"✅ Проверка таймаутов завершена. Истёкших мэтчей: {expired_count}"
     )
 
 
@@ -224,9 +224,9 @@ async def cmd_test_reminder(
     settings: Settings,
 ) -> None:
     """
-    Принудительно проверяет и отправляет напоминания для матчей в активных статусах (доступно только администраторам).
+    Принудительно проверяет и отправляет напоминания для мэтчей в активных статусах (доступно только администраторам).
 
-    Проверяет все матчи с активными статусами и отправляет напоминания,
+    Проверяет все мэтчи с активными статусами и отправляет напоминания,
     если прошло достаточно времени с момента последнего напоминания.
     """
     async with session_factory() as session:
@@ -234,7 +234,7 @@ async def cmd_test_reminder(
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Проверяю и отправляю напоминания для активных матчей...")
+    await message.answer("Проверяю и отправляю напоминания для активных мэтчей...")
 
     async with session_factory() as session:
         matching_settings = await load_matching_settings(session)

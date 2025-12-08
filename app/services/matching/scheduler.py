@@ -1,5 +1,5 @@
 """
-Регистрация фоновых задач APScheduler для матчинга.
+Регистрация фоновых задач APScheduler для мэтчинга.
 """
 
 from __future__ import annotations
@@ -32,10 +32,10 @@ async def setup_matching_scheduler(
     bot: Bot,
 ) -> AsyncIOScheduler:
     """
-    Создаёт и конфигурирует APScheduler для фоновых задач матчинга.
+    Создаёт и конфигурирует APScheduler для фоновых задач мэтчинга.
 
     Регистрирует две периодические задачи:
-    - еженедельный раунд матчинга (по настройкам match_day и match_msk_time);
+    - еженедельный раунд мэтчинга (по настройкам match_day и match_msk_time);
     - обработка таймаутов и напоминаний (динамический интервал).
 
     Args:
@@ -58,7 +58,7 @@ async def setup_matching_scheduler(
     else:
         match_hour, match_minute = time_parts
 
-    # Cron-триггер для раунда матчинга
+    # Cron-триггер для раунда мэтчинга
     scheduler.add_job(
         _matching_round_job,
         CronTrigger(
@@ -230,7 +230,7 @@ async def _matching_round_job(
     bot: Bot,
 ) -> None:
     """
-    Внутренняя джоба для запуска раунда матчинга.
+    Внутренняя джоба для запуска раунда мэтчинга.
 
     Вызывается APScheduler по расписанию (Cron-триггер).
 

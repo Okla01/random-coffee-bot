@@ -116,7 +116,7 @@ async def admin_name_approval_callbacks(
             )
             await cq.message.edit_text(
                 cq.message.text
-                + f"\n\nРешение: Пользователю {username_display} отказано в доступе к анкете, он возвращён к вводу имени."
+                + f"\n\nРешение: Пользователю {username_display} отказано в доступе к анкете, он возвращён к вводу ФИО."
                 + f"\n👨‍💻Рассмотрел: @{reviewed_by}",
                 reply_markup=None,
             )
@@ -126,7 +126,7 @@ async def admin_name_approval_callbacks(
                 try:
                     await cq.message.bot.send_message(
                         user.telegram_id,
-                        "⚠️ Ваша заявка рассмотрена.\nРешение: Пожалуйста, введите корректное имя:",
+                        "⚠️ Твоя заявка рассмотрена.\nРешение: Пожалуйста, введи корректное ФИО:",
                     )
                 except Exception:
                     pass

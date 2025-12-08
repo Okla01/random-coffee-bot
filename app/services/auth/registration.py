@@ -155,7 +155,7 @@ async def send_or_resend_otp(
                     await send_otp_email(settings, user.email, existing.code)
                     existing.resend_count += 1
                     existing.last_sent_at = now
-                    warn = "Код отправлен повторно. Проверьте вашу почту и введите код:"
+                    warn = "Код отправлен повторно. Проверь твою почту и введи код:"
             return True, warn
 
     code = generate_otp(6)

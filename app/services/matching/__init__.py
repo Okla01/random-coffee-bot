@@ -1,5 +1,5 @@
 """
-Пакет с утилитами и сервисами матчинга Random Coffee.
+Пакет с утилитами и сервисами мэтчинга Random Coffee.
 """
 
 from .constants import (

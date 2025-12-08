@@ -1,5 +1,5 @@
 """
-Вспомогательные функции для чтения настроек матчинга из таблицы settings.
+Вспомогательные функции для чтения настроек мэтчинга из таблицы settings.
 """
 
 from __future__ import annotations
@@ -183,10 +183,10 @@ def calculate_optimal_scheduler_interval(
 @dataclass(slots=True)
 class MatchingSettings:
     """
-    Типизированные настройки матчинга Random Coffee.
+    Типизированные настройки мэтчинга Random Coffee.
 
     Содержит все параметры, необходимые для работы алгоритма подбора пар
-    и управления жизненным циклом матчей.
+    и управления жизненным циклом мэтчей.
     """
 
     matching_enabled: bool
@@ -202,7 +202,7 @@ class MatchingSettings:
 
 async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
     """
-    Загружает и типизирует ключевые настройки матчинга из таблицы settings.
+    Загружает и типизирует ключевые настройки мэтчинга из таблицы settings.
 
     Читает все необходимые настройки из БД и возвращает их в виде типизированного объекта.
     Использует значения по умолчанию, если настройки отсутствуют.
@@ -212,7 +212,7 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
         session (AsyncSession): активная сессия БД.
 
     Returns:
-        MatchingSettings: объект с загруженными настройками матчинга.
+        MatchingSettings: объект с загруженными настройками мэтчинга.
     """
     # Загрузка времени подбора с поддержкой миграции
     match_time_value = await _get_setting_value(session, "match_msk_time")

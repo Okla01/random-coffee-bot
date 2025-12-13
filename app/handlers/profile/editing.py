@@ -90,9 +90,7 @@ async def _send_interests_keyboard(
     Отправляет (или переотправляет) клавиатуру выбора интересов и сохраняет состояние.
     """
     page = clamp_page(page, len(UNIVERSAL_INTERESTS), INTERESTS_PAGE_SIZE)
-    prompt = "Выбери свои главные увлечения ✨ (4–10)"
-    if mention_editing:
-        prompt += "\nТекущие отмечены галочкой."
+    prompt = "А теперь выбери свои главные увлечения ✍️\n\n(☝️нужно выбрать от 4 увлечений)"
 
     markup = kb_profile_interests(
         selection,

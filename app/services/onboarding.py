@@ -223,7 +223,7 @@ async def handle_start_result(
         await answer(
             "Здравствуй! 👋\n\n"
             "Этот чат-бот поможет тебе найти коллег, которые скрасят твой обеденный перерыв приятной беседой☕️\n\n"
-            "Так что давай заполним анкету!\n\n"
+            "Давай заполним небольшую анкету!\n"
             "Напиши свое ФИО🙌"
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
@@ -232,7 +232,7 @@ async def handle_start_result(
     if result.action == "wait_name_approval":
         await answer(
             "Отлично!💪\n\n"
-            "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
+            "Твоя заявка была отправлена на рассмотрение администратору!\n\nПожалуйста, ожидай😌"
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
@@ -271,7 +271,7 @@ async def handle_start_result(
             INTERESTS_PAGE_SIZE,
         )
         sent = await answer(
-            "Выбери свои главные увлечения ✨ (4–10)",
+            "А теперь выбери свои главные увлечения ✍️\n\n(☝️нужно выбрать от 4 увлечений)",
             reply_markup=kb_profile_interests(
                 selection,
                 page,

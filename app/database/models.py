@@ -84,6 +84,9 @@ class User(Base):
     # Счётчик предупреждений
     warnings_count: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Флаг первоначального одобрения профиля администратором
+    profile_approved: Mapped[bool] = mapped_column(default=False, index=True)
+
     # Аудит и временные метки
     registered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=now_msk, index=True

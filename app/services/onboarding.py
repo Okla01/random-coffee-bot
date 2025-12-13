@@ -139,7 +139,7 @@ async def process_start(
         return StartResult(action="ask_profile_name")
 
     # Пользователь ожидает одобрения заявки на доступ
-    if user.stage == "profile_name_pending":
+    if user.stage in {"profile_name_pending", "profile_review_pending"}:
         await session.commit()
         return StartResult(action="wait_name_approval")
 
@@ -244,7 +244,7 @@ async def handle_start_result(
             await send_photos_with_actions(bot, chat_id, user, state, photos_list)
         else:
             sent = await answer(
-                "Добавь свое фото",
+                "Выбери фото и пришли их ниже 👇",
                 reply_markup=kb_profile_photo(),
             )
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
@@ -256,7 +256,7 @@ async def handle_start_result(
         return
 
     if result.action == "ask_profile_age":
-        await answer("Укажи свой возраст (16–50):")
+        await answer("Подскажи свой возраст?🙏")
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
         return
 

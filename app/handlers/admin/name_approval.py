@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.services.core import Settings
 from app.database import User
 from app.services.admin import is_admin
+from app.services.profile.editing import process_save_profile
+from app.services.const import USER_STATUS_ACTIVE, USER_STATUS_NOT_ACTIVE
 
 router = Router()
 
@@ -71,62 +73,63 @@ async def admin_name_approval_callbacks(
         reviewed_by = cq.from_user.username or str(cq.from_user.id)
 
         if action == "approve":
-            # Одобрение заявки - переводим на этап загрузки фото
-            user.stage = "profile_photo"
+            # Одобрение заявки - финализируем анкету
+            await process_save_profile(session, user)
+            user.status = USER_STATUS_ACTIVE
+            user.profile_approved = True
             await session.commit()
 
-            # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             username_display = (
                 f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
             )
             await cq.message.edit_text(
                 cq.message.text
-                + f"\n\nРешение: Пользователю {username_display} одобрен доступ к анкете."
+                + f"\n\nРешение: Пользователю {username_display} анкета одобрена."
                 + f"\n👨‍💻Рассмотрел: @{reviewed_by}",
                 reply_markup=None,
             )
 
-            # Уведомляем пользователя и запрашиваем фото
             if user.telegram_id:
                 try:
-                    from app.keyboards.kb_profile import kb_profile_photo
-
                     await cq.message.bot.send_message(
                         user.telegram_id,
-                        "Ура! Заявка на авторизацию была одобрена✅\n"
-                        "Продолжим анкетирование?",
-                    )
-                    # Запрашиваем фото
-                    await cq.message.bot.send_message(
-                        user.telegram_id,
-                        "Выбери несколько своих фото(1-5шт)",
-                        reply_markup=kb_profile_photo(),
+                        "✨Вуаля✨ Твоя анкета одобрена! ✅\n"
+                        "Теперь ты автоматически участвуешь в следующем подборе друллеги!🤗",
                     )
                 except Exception:
                     pass
 
         else:
-            # Отклонение заявки - возвращаем на этап ввода имени
+            # Отклонение заявки - очищаем профиль и возвращаем на ввод ФИО
+            # Сохраняем username для отображения в сообщении
+            username_for_display = user.username
+            user.name = None
+            # username не очищаем, чтобы можно было использовать в сообщениях
+            user.email = None
+            user.bio = None
+            user.age = None
+            user.photos_json = None
+            user.interests_json = None
             user.stage = "profile_name"
+            user.status = USER_STATUS_NOT_ACTIVE
+            user.profile_approved = False
             await session.commit()
 
-            # Обновляем исходное сообщение: дописываем решение и убираем inline-клавиатуру
             username_display = (
-                f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+                f"@{username_for_display}" if username_for_display else f"ID:{user.telegram_id}"
             )
             await cq.message.edit_text(
                 cq.message.text
-                + f"\n\nРешение: Пользователю {username_display} отказано в доступе к анкете, он возвращён к вводу ФИО."
+                + f"\n\nРешение: Пользователю {username_display} отказано, профиль очищен и пользователь возвращён к заполнению анкеты."
                 + f"\n👨‍💻Рассмотрел: @{reviewed_by}",
                 reply_markup=None,
             )
 
-            # Уведомляем пользователя
             if user.telegram_id:
                 try:
                     await cq.message.bot.send_message(
                         user.telegram_id,
-                        "⚠️ Твоя заявка рассмотрена.\nРешение: Пожалуйста, введи корректное ФИО:",
+                        "⚠️ Твоя анкета отклонена.\nПожалуйста, заполни анкету заново - /start",
                     )
                 except Exception:
                     pass

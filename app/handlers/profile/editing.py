@@ -47,7 +47,6 @@ from app.services.profile.editing import (
     process_age_field,
     process_save_profile,
     process_edit_review,
-    notify_admin_on_name_request,
 )
 from app.services.profile.photo import send_photo_request
 
@@ -56,6 +55,9 @@ from app.database.db import (
     update_user_stage,
 )
 from app.handlers.fsm import FSMDataKeys
+from aiogram.types import InputMediaPhoto
+from app.keyboards.kb_admin import kb_admin_name_approval
+from app.database import User
 
 
 router = Router()
@@ -109,6 +111,42 @@ async def _send_interests_keyboard(
     )
 
 
+async def _notify_admin_profile_request(bot, settings: Settings, user: User) -> None:
+    """
+    Отправляет в админ-чат заявку на анкету со всеми данными пользователя.
+    """
+    if not settings.admin_chat_id:
+        return
+
+    photos = (user.photos_json or {}).get("photos", []) if user.photos_json else []
+    media = [
+        InputMediaPhoto(media=photo.get("file_id"))
+        for photo in photos
+        if photo.get("file_id")
+    ]
+    header_prefix = (
+        f"🔗: @{user.username}" if user.username else f"Telegram ID: {user.telegram_id}"
+    )
+    header = (
+        "🙋‍♂️ Новая заявка на анкету\n"
+        f"🆔: {user.telegram_id}\n"
+        f"{header_prefix}"
+    )
+    preview_text = build_profile_preview_text(user)
+    text = f"{header}\n\n{preview_text}"
+
+    try:
+        if media:
+            await bot.send_media_group(settings.admin_chat_id, media=media)
+        await bot.send_message(
+            settings.admin_chat_id,
+            text,
+            reply_markup=kb_admin_name_approval(user.id),
+        )
+    except Exception:
+        pass
+
+
 # --------------------------- text steps ------------------------- #
 
 
@@ -147,7 +185,7 @@ async def on_profile_text(
         )
 
         # Если пользователь ожидает одобрения заявки, отвечаем сообщением об ожидании
-        if user.stage == "profile_name_pending":
+        if user.stage in {"profile_name_pending", "profile_review_pending"}:
             await session.commit()
             await message.answer(
                 "Отлично!💪\n\n"
@@ -192,19 +230,8 @@ async def on_profile_text(
                 return
 
             if result.result_type == "field_updated_continue":
-                # Если перешли на этап ожидания одобрения заявки
-                if result.next_stage == "profile_name_pending":
-                    # Отправляем заявку в админский чат
-                    await notify_admin_on_name_request(
-                        session, settings, user, message.bot
-                    )
-                    await message.answer(
-                        "Отлично!💪\n\n"
-                        "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
-                    )
-                else:
-                    # Переход на этап загрузки фото (старая логика для редактирования)
-                    await send_photo_request(message, state, kb_profile_photo())
+                # Переход на этап загрузки фото
+                await send_photo_request(message, state, kb_profile_photo())
                 return
 
         # BIO
@@ -225,7 +252,7 @@ async def on_profile_text(
                 return
 
             if result.result_type == "field_updated_continue":
-                await message.answer("Укажи свой возраст (16–50):")
+                await message.answer("Подскажи свой возраст?🙏")
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
                 return
 
@@ -429,9 +456,10 @@ async def cb_prof_save(
     settings: Settings,
 ) -> None:
     """
-    Обрабатывает нажатие кнопки «Сохранить ✅» — финализирует анкету.
+    Обрабатывает нажатие кнопки «Сохранить ✅».
 
-    Переводит пользователя на стадию profile_filled и сразу вызывает функционал участия в подборе.
+    Формирует заявку в админ-чат на финальное одобрение анкеты и ставит профиль
+    в статус ожидания.
 
     Args:
         cq (CallbackQuery): callback запрос от пользователя.
@@ -444,15 +472,46 @@ async def cb_prof_save(
     """
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
-        await process_save_profile(session, user)
-        user.status = USER_STATUS_ACTIVE
+
+        if user.stage == "profile_review_pending":
+            await cq.answer("Заявка уже на рассмотрении", show_alert=True)
+            return
+
+        # Если профиль уже был одобрен ранее, сразу финализируем без отправки заявки
+        if user.profile_approved:
+            await process_save_profile(session, user)
+            user.status = USER_STATUS_ACTIVE
+            await session.commit()
+
+            try:
+                await cq.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+
+            await cq.message.answer(
+                "✨Вуаля✨\n"
+                "Теперь ты автоматически участвуешь в следующем подборе друллеги!🤗"
+            )
+            await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+            await cq.answer()
+            return
+
+        # Отправляем заявку
+        await _notify_admin_profile_request(cq.bot, settings, user)
+
+        # Ставим профиль в ожидание решения
+        user.stage = "profile_review_pending"
+        user.status = USER_STATUS_NOT_ACTIVE
         await session.commit()
 
-    # Сразу вызываем функционал участия в подборе
-    await cq.message.edit_reply_markup(reply_markup=None)
+    try:
+        await cq.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
     await cq.message.answer(
-        "✨Вуаля✨\n"
-        "Теперь ты автоматически участвуешь в следующем подборе друллеги!🤗"
+        "Отлично!💪\n\n"
+        "Твоя заявка была отправлена на рассмотрение администратору! Пожалуйста, ожидай😌"
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
     await cq.answer()
@@ -570,7 +629,7 @@ async def cb_prof_edit_field(
                 state,
                 {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
             )
-            await cq.message.answer("Укажи свой возраст (16–50):")
+            await cq.message.answer("Подскажи свой возраст?🙏")
         elif field == "interests":
             await update_user_stage(
                 session,

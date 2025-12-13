@@ -194,8 +194,6 @@ class MatchingSettings:
     match_msk_time: str  # Формат "ЧЧ:ММ"
     response_timeout_time: str  # Формат "ЧЧ:ММ"
     reminder_interval_time: str  # Формат "ЧЧ:ММ"
-    repeat_pair_cooldown_weeks: int
-    min_jaccard: float
     feedback_day: str
     feedback_msk_time: str  # Формат "ЧЧ:ММ"
 
@@ -273,11 +271,6 @@ async def load_matching_settings(session: AsyncSession) -> MatchingSettings:
         match_msk_time=match_msk_time,
         response_timeout_time=response_timeout_time,
         reminder_interval_time=reminder_interval_time,
-        repeat_pair_cooldown_weeks=await get_setting_int(
-            session,
-            "repeat_pair_cooldown_weeks",
-        ),
-        min_jaccard=await get_setting_float(session, "min_jaccard"),
         feedback_day=feedback_day,
         feedback_msk_time=feedback_msk_time,
     )

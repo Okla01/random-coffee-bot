@@ -12,7 +12,6 @@ from aiogram.fsm.state import State, StatesGroup
 class AdminSettingsStates(StatesGroup):
     """Состояния FSM для редактирования настроек администратора."""
 
-    waiting_min_jaccard = State()
     waiting_match_msk_time = State()
     waiting_response_timeout_time = State()
     waiting_reminder_interval_time = State()

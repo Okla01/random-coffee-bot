@@ -2,8 +2,8 @@
 Обработчик кнопок с настройками панели администратора.
 
 Обрабатывает callback-запросы и текстовые сообщения для просмотра и изменения настроек системы:
-включение/выключение мэтчинга, минимальный Jaccard коэффициент, периодичность встреч (в неделях),
-день недели для встреч, время подбора (МСК), таймаут ответа и интервал напоминаний в формате ЧЧ:ММ.
+включение/выключение мэтчинга, день недели для встреч, время подбора (МСК),
+таймаут ответа и интервал напоминаний в формате ЧЧ:ММ.
 Использует черновик настроек в FSM для предварительного просмотра изменений перед сохранением.
 При сохранении обновляет расписание мэтчинга и таймаутов в планировщике.
 """
@@ -22,7 +22,6 @@ from app.keyboards.kb_admin import (
     kb_admin_menu,
     kb_admin_settings,
     kb_admin_settings_change_day_of_week,
-    kb_admin_settings_change_cooldown_weeks,
     kb_admin_settings_change_feedback_day,
 )
 from app.keyboards.utils import clear_last_kb
@@ -32,7 +31,6 @@ from app.services.admin.settings import (
     save_settings,
     toggle_matching_enabled,
     toggle_email_auth_enabled,
-    try_to_input_min_jaccard,
     try_to_input_time,
     try_to_input_time_as_hours,
     update_draft_setting,
@@ -94,74 +92,6 @@ async def cb_admin_settings(
 
 
 # ----------------------------- Обработчики кнопок меню настроек -----------------------------
-
-
-@router.callback_query(F.data == "admin:update_min_jaccard")
-async def cb_update_min_jaccard(
-    cq: CallbackQuery,
-    state: FSMContext,
-) -> None:
-    """
-    Запрашивает новое значение минимального Jaccard коэффициента.
-
-    Удаляет предыдущую клавиатуру и переводит в состояние ожидания ввода
-    нового значения минимального Jaccard коэффициента (от 0,1 до 1,0).
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса.
-        state (FSMContext): контекст FSM для управления состоянием.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-
-    # Удаление последней клавиатуры
-    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-
-    await cq.message.answer(
-        "Введите новое значение минимального Jaccard коэффициента (0,1 - 1,0):"
-    )
-
-    # Переход с состояние ожидания значения
-    await state.set_state(AdminSettingsStates.waiting_min_jaccard)
-
-
-@router.callback_query(F.data == "admin:update_repeat_pair_cooldown_weeks")
-async def cb_update_repeat_pair_cooldown_weeks(
-    cq: CallbackQuery,
-    state: FSMContext,
-) -> None:
-    """
-    Запрашивает новое значение периодичности встреч в неделях.
-
-    Удаляет предыдущую клавиатуру, получает текущее значение кулдауна из черновика
-    и отображает клавиатуру выбора нового значения периодичности встреч (1-4 недели).
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса.
-        state (FSMContext): контекст FSM для управления состоянием.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    # Удаление последней клавиатуры
-    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-
-    data = await state.get_data()
-    draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
-
-    # Получаем текущее значение кулдауна
-    try:
-        current_weeks = int(draft.get("repeat_pair_cooldown_weeks", "1"))
-    except (ValueError, TypeError):
-        current_weeks = 1
-
-    # Редактируем текущее сообщение с клавиатурой выбора
-    await cq.message.edit_text(
-        "Выберите кулдаун повторной пары (недели):",
-        reply_markup=kb_admin_settings_change_cooldown_weeks(current_weeks),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
 @router.callback_query(F.data == "admin:update_match_day")
@@ -570,55 +500,6 @@ async def cb_change_day_of_week(
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
 
 
-@router.callback_query(F.data.startswith("admin:change_cooldown_weeks:"))
-async def cb_change_cooldown_weeks(
-    cq: CallbackQuery,
-    state: FSMContext,
-) -> None:
-    """
-    Обрабатывает выбор нового кулдауна повторной пары в неделях.
-
-    Извлекает количество недель из callback data, проверяет диапазон (1-4 недели),
-    обновляет черновик настроек, выходит из состояния ожидания значения, удаляет
-    предыдущую клавиатуру и возвращает в меню настроек с обновлённым значением.
-
-    Args:
-        cq (CallbackQuery): объект callback-запроса.
-        state (FSMContext): контекст FSM для управления состоянием.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    # Получение количества недель из callback_data
-    # "admin:change_cooldown_weeks:3" -> "3"
-    try:
-        weeks = int(cq.data.split(":")[-1])
-    except (ValueError, IndexError):
-        await cq.answer("Ошибка: некорректное значение")
-        return
-
-    # Проверка диапазона
-    if not (1 <= weeks <= 4):
-        await cq.answer("Ошибка: значение должно быть от 1 до 4")
-        return
-
-    # Обновление кулдауна в черновых настройках
-    draft = await update_draft_setting(state, "repeat_pair_cooldown_weeks", str(weeks))
-
-    # Выход из состояния ожидания значения
-    await state.set_state(None)
-
-    # Удаление последней клавиатуры
-    await clear_last_kb(state, cq.message.chat.id, cq.message.bot)
-
-    # Возвращение в меню настроек (редактируем текущее сообщение)
-    await cq.message.edit_text(
-        format_settings_text(draft),
-        reply_markup=kb_admin_settings(),
-    )
-    await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
-
-
 @router.callback_query(F.data.startswith("admin:change_feedback_day:"))
 async def cb_change_feedback_day(
     cq: CallbackQuery,
@@ -657,62 +538,6 @@ async def cb_change_feedback_day(
 
 
 # ----------------------------- Обработчики состояний ожидания значений настроек -----------------------------
-
-
-@router.message(StateFilter(AdminSettingsStates.waiting_min_jaccard))
-async def on_min_jaccard_input(msg: Message, state: FSMContext) -> None:
-    """
-    Обрабатывает ввод нового значения минимального Jaccard коэффициента.
-
-    Валидирует введённое значение (должно быть числом от 0,1 до 1,0), обновляет
-    черновик настроек, выходит из состояния ожидания значения и обновляет
-    отображение меню настроек. При некорректном вводе запрашивает повторный ввод.
-
-    Args:
-        msg (Message): объект сообщения с введённым значением.
-        state (FSMContext): контекст FSM для управления состоянием.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    min_jaccard: float | None = try_to_input_min_jaccard(msg.text)
-    if min_jaccard is None:
-        await msg.answer(
-            "Некорректный ввод. Пожалуйста, введите число в диапазоне\n0,1 - 1,0."
-        )
-        return
-
-    draft = await update_draft_setting(state, "min_jaccard", min_jaccard)
-    await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
-
-    # Выход из состояния ожидания значения
-    await state.set_state(None)
-
-    # Редактируем последнее сообщение с настройками
-    data = await state.get_data()
-    settings_msg_id = data.get(FSMDataKeys.LAST_KB_MID)
-    if settings_msg_id:
-        try:
-            await msg.bot.edit_message_text(
-                chat_id=msg.chat.id,
-                message_id=settings_msg_id,
-                text=format_settings_text(draft),
-                reply_markup=kb_admin_settings(),
-            )
-        except Exception:
-            # Если не удалось отредактировать, создаём новое сообщение
-            sent = await msg.answer(
-                format_settings_text(draft),
-                reply_markup=kb_admin_settings(),
-            )
-            await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
-    else:
-        # Если нет ID сообщения, создаём новое
-        sent = await msg.answer(
-            format_settings_text(draft),
-            reply_markup=kb_admin_settings(),
-        )
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
 
 
 @router.message(StateFilter(AdminSettingsStates.waiting_match_msk_time))

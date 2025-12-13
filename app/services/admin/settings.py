@@ -169,24 +169,7 @@ def format_settings_text(settings: dict) -> str:
     # Время подбора оставляем в формате ЧЧ:ММ (это время суток, не интервал)
     text += f"🔹 Время подбора: {match_time}\n"
 
-    # 5. Минимальный Jaccard
-    text += f"🔹 Минимальный Jaccard: {settings.get('min_jaccard', '0.3')}\n"
-
-    # 6. Кулдаун повторов
-    try:
-        cooldown_weeks = int(settings.get("repeat_pair_cooldown_weeks", "1"))
-        # Формируем правильное склонение для "неделя/недели/недель"
-        if cooldown_weeks == 1:
-            cooldown_display = "1 неделя"
-        elif 2 <= cooldown_weeks <= 4:
-            cooldown_display = f"{cooldown_weeks} недели"
-        else:
-            cooldown_display = f"{cooldown_weeks} недель"
-    except (ValueError, TypeError):
-        cooldown_display = settings.get("repeat_pair_cooldown_weeks", "1")
-    text += f"🔹 Кулдаун повторов: {cooldown_display}\n"
-
-    # 7. Таймаут ответа
+    # 5. Таймаут ответа
     timeout_value = settings.get("response_timeout_time") or settings.get(
         "response_timeout_hours", "8:00"
     )
@@ -204,7 +187,7 @@ def format_settings_text(settings: dict) -> str:
             timeout_display = timeout_value
     text += f"🔹 Таймаут ответа: {timeout_display}\n"
 
-    # 8. Интервал напоминаний
+    # 6. Интервал напоминаний
     interval_value = settings.get("reminder_interval_time") or settings.get(
         "reminder_interval_hours", "1:00"
     )
@@ -222,7 +205,7 @@ def format_settings_text(settings: dict) -> str:
             interval_display = interval_value
     text += f"🔹 Интервал напоминаний: {interval_display}\n"
 
-    # 9. День и время отправки отзывов
+    # 7. День и время отправки отзывов
     feedback_day_code = settings.get("feedback_day", "sun")
     feedback_time = settings.get("feedback_msk_time", "18:00")
     text += f"🔹 День/время отправки отзывов: {DAYS_OF_WEEK.get(feedback_day_code, feedback_day_code)}, {feedback_time}\n"
@@ -251,27 +234,6 @@ async def update_draft_setting(state: FSMContext, key: str, value: any) -> dict:
     await state.update_data(**{FSMDataKeys.DRAFT_SETTINGS: draft})
 
     return draft
-
-
-def try_to_input_min_jaccard(msg: str) -> float | None:
-    """
-    Пытается преобразовать введённый текст в числовое значения (типа float).
-
-    Также сразу происходит проверка на вхождение числа в промежуток.
-    """
-    text = msg.replace(",", ".").strip()
-
-    try:
-        value = float(text)
-    except ValueError:
-        return None
-
-    if 0.1 <= value <= 1.0:
-        return value
-
-    return None
-
-
 def try_to_input_time(msg: str) -> str | None:
     """
     Пытается преобразовать введённый текст во время в формате ЧЧ:ММ.

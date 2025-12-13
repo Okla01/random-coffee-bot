@@ -18,8 +18,6 @@ DAYS_OF_WEEK = {
 # Дефолтные настройки, которые будут созданы при инициализации
 DEFAULT_SETTINGS: dict[str, str] = {
     "matching_enabled": "true",
-    "min_jaccard": "0.3",
-    "repeat_pair_cooldown_weeks": "1",
     "match_day": "fri",
     "match_msk_time": "12:00",
     "response_timeout_time": "8:00",

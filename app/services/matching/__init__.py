@@ -14,6 +14,7 @@ from .constants import (
     MATCH_STATUS_USER_B_BLOCKED,
     MATCH_USER_RESPONSE_CONFIRM,
     MATCH_USER_RESPONSE_SKIP,
+    MATCH_SUCCESS_STATUSES,
 )
 from .settings import (
     MatchingSettings,
@@ -44,6 +45,7 @@ __all__ = [
     "MATCH_STATUS_EXPIRED_TIMEOUT",
     "MATCH_ACTIVE_STATUSES",
     "MATCH_INACTIVE_STATUSES",
+    "MATCH_SUCCESS_STATUSES",
     "MATCH_USER_RESPONSE_SKIP",
     "MATCH_USER_RESPONSE_CONFIRM",
     # utilities

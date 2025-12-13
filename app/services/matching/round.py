@@ -7,6 +7,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+import random
 
 from aiogram import Bot
 from aiogram.types import InputMediaPhoto
@@ -17,8 +18,8 @@ from app.database import Match, User
 from app.database.utils import now_msk, ensure_aware_msk
 from app.keyboards.kb_matching import kb_match_invitation
 from app.services.const import USER_STATUS_ACTIVE
-from app.services.matching.constants import MATCH_ACTIVE_STATUSES
-from app.services.matching.settings import MatchingSettings, load_matching_settings
+from app.services.matching.constants import MATCH_ACTIVE_STATUSES, MATCH_SUCCESS_STATUSES
+from app.services.matching.settings import load_matching_settings
 from app.services.matching.utils import (
     compute_jaccard,
     extract_interests_list,
@@ -65,13 +66,13 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
         return
 
     now = now_msk()
-    candidates = await _load_candidates(session, settings, now)
+    candidates = await _load_candidates(session, now)
     if len(candidates) < 2:
         await _notify_no_pairs(bot, candidates)
         return
 
-    recent_pairs = await _load_recent_pairs(session, settings, now)
-    edges = _build_pairing_edges(candidates, recent_pairs, settings, now)
+    successful_pairs = await _load_successful_pairs(session)
+    edges = _build_pairing_edges(candidates, successful_pairs)
 
     if not edges:
         await _notify_no_pairs(bot, candidates)
@@ -101,7 +102,6 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
 
 async def _load_candidates(
     session: AsyncSession,
-    settings: MatchingSettings,
     now,
 ) -> list[User]:
     """
@@ -112,7 +112,6 @@ async def _load_candidates(
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки мэтчинга.
         now: текущее время в МСК.
 
     Returns:
@@ -132,8 +131,8 @@ async def _load_candidates(
 
     # Кулдаун с последнего мэтча - фиксированная 1 неделя
     cooldown_delta = timedelta(weeks=1)
-    # Погрешность в 1 секунду для учета точности времени (миллисекунды)
-    cooldown_tolerance = timedelta(seconds=1)
+    # Погрешность в 1 час для учета точности времени
+    cooldown_tolerance = timedelta(hours=1)
     eligible: list[User] = []
     for user in users:
         if not user.telegram_id:
@@ -173,56 +172,48 @@ async def _load_users_with_active_matches(session: AsyncSession) -> set[int]:
     return active_ids
 
 
-async def _load_recent_pairs(
-    session: AsyncSession,
-    settings: MatchingSettings,
-    now,
-) -> set[frozenset[int]]:
+async def _load_successful_pairs(session: AsyncSession) -> set[frozenset[int]]:
     """
-    Возвращает пары пользователей, которые встречались в недавних мэтчах.
-
-    Используется для исключения повторных пар в рамках cooldown периода.
+    Возвращает пары пользователей, которые уже имели успешный мэтч.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        settings (MatchingSettings): настройки мэтчинга (repeat_pair_cooldown_weeks).
-        now: текущее время в МСК.
 
     Returns:
-        set[frozenset[int]]: множество пар (frozenset из двух user_id), созданных
-            в течение repeat_pair_cooldown_weeks.
+        set[frozenset[int]]: множество пар (frozenset из двух user_id), завершённых
+            со статусом успешного мэтча.
     """
-    if settings.repeat_pair_cooldown_weeks <= 0:
-        return set()
-
-    threshold = now - timedelta(weeks=settings.repeat_pair_cooldown_weeks)
-    stmt = select(Match.user_a_id, Match.user_b_id).where(Match.created_at >= threshold)
+    stmt = select(Match.user_a_id, Match.user_b_id).where(
+        Match.status.in_(MATCH_SUCCESS_STATUSES)
+    )
     result = await session.execute(stmt)
-    return {frozenset((row[0], row[1])) for row in result.all()}
+    return {
+        frozenset((row[0], row[1]))
+        for row in result.all()
+        if row[0] is not None and row[1] is not None
+    }
 
 
 def _build_pairing_edges(
     candidates: list[User],
-    recent_pairs: set[frozenset[int]],
-    settings: MatchingSettings,
-    now,
+    successful_pairs: set[frozenset[int]],
 ) -> list[PairingEdge]:
     """
     Строит список рёбер (потенциальных пар) с весами.
 
-    Вычисляет коэффициент Жаккара для каждой пары кандидатов, фильтрует по min_jaccard
-    и исключает недавние пары. Сортирует рёбра по приоритету (убывание).
+    Вычисляет коэффициент Жаккара для каждой пары кандидатов и исключает пары,
+    которые уже имели успешный мэтч. Рёбра с положительным Jaccard сортируются
+    по убыванию, рёбра с нулевым Jaccard перемешиваются случайно.
 
     Args:
         candidates (list[User]): список кандидатов для мэтчинга.
-        recent_pairs (set[frozenset[int]]): множество недавних пар для исключения.
-        settings (MatchingSettings): настройки мэтчинга (min_jaccard).
-        now: текущее время в МСК.
+        successful_pairs (set[frozenset[int]]): множество завершённых успешных пар.
 
     Returns:
         list[PairingEdge]: отсортированный по приоритету список потенциальных пар.
     """
-    edges: list[PairingEdge] = []
+    positive_edges: list[PairingEdge] = []
+    zero_edges: list[PairingEdge] = []
     precomputed_interests = {
         user.id: extract_interests_list(user.interests_json) for user in candidates
     }
@@ -231,70 +222,25 @@ def _build_pairing_edges(
         interests_a = precomputed_interests.get(user_a.id) or []
         for user_b in candidates[idx + 1 :]:
             pair_key = frozenset((user_a.id, user_b.id))
-            if pair_key in recent_pairs:
+            if pair_key in successful_pairs:
                 continue
 
             interests_b = precomputed_interests.get(user_b.id) or []
             jaccard = compute_jaccard(interests_a, interests_b)
-            if jaccard < settings.min_jaccard:
-                continue
-
-            priority = _calc_priority(user_a, user_b, now, jaccard)
-            edges.append(
-                PairingEdge(
-                    user_a=user_a,
-                    user_b=user_b,
-                    jaccard=jaccard,
-                    priority=priority,
-                )
+            edge = PairingEdge(
+                user_a=user_a,
+                user_b=user_b,
+                jaccard=jaccard,
+                priority=jaccard,
             )
-    edges.sort(key=lambda edge: edge.priority, reverse=True)
-    return edges
+            if jaccard == 0:
+                zero_edges.append(edge)
+            else:
+                positive_edges.append(edge)
 
-
-def _calc_priority(user_a: User, user_b: User, now, jaccard: float) -> float:
-    """
-    Вычисляет приоритет пары: высокий Jaccard + давность последних мэтчей.
-
-    Приоритет = jaccard + recency_bonus(user_a) + recency_bonus(user_b).
-
-    Args:
-        user_a (User): первый пользователь пары.
-        user_b (User): второй пользователь пары.
-        now: текущее время в МСК.
-        jaccard (float): коэффициент Жаккара для пары.
-
-    Returns:
-        float: приоритет пары (чем выше, тем лучше для жадного алгоритма).
-    """
-    bonus_a = _recency_bonus(user_a, now)
-    bonus_b = _recency_bonus(user_b, now)
-    return jaccard + bonus_a + bonus_b
-
-
-def _recency_bonus(user: User, now) -> float:
-    """
-    Возвращает бонус за длительное отсутствие мэтчей.
-
-    Бонус увеличивается с количеством недель с последнего мэтча (до 0.2).
-
-    Args:
-        user (User): пользователь для расчёта бонуса.
-        now: текущее время в МСК.
-
-    Returns:
-        float: бонус в диапазоне [0.0, 0.2].
-    """
-    last_match = user.last_match_at or user.last_pairing_at
-    if not last_match:
-        return 0.1
-    # Приводим last_match к aware-формату для корректного вычитания
-    last_match_aware = ensure_aware_msk(last_match)
-    if not last_match_aware:
-        return 0.1
-    delta = now - last_match_aware
-    weeks = delta.days / 7
-    return min(0.2, weeks * 0.01)
+    positive_edges.sort(key=lambda edge: edge.jaccard, reverse=True)
+    random.shuffle(zero_edges)
+    return positive_edges + zero_edges
 
 
 def _select_pairs(edges: list[PairingEdge]) -> list[PairingEdge]:

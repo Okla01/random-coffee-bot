@@ -20,11 +20,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
 from app.keyboards.kb_auth import kb_auth_code_wait
-from app.keyboards.kb_profile import kb_profile_photo, kb_profile_review
+from app.keyboards.kb_profile import (
+    kb_profile_photo,
+    kb_profile_review,
+    kb_profile_interests,
+)
 from app.services.core.config import Settings  # настройки приложения
 from app.database.models import User  # ORM-модель пользователя
 from app.services.profile.preview import send_profile_preview
 from app.services.matching.settings import get_setting_bool
+from app.services.const import (
+    INTERESTS_PAGE_SIZE,
+    MIN_INTERESTS_COUNT,
+    MAX_INTERESTS_COUNT,
+    UNIVERSAL_INTERESTS,
+)
+from app.services.profile.interests import (
+    normalize_selected_interests,
+    clamp_page,
+)
 
 
 # Перечень возможных действий после обработки /start.
@@ -247,11 +261,32 @@ async def handle_start_result(
         return
 
     if result.action == "ask_profile_interests":
-        await answer(
-            "А теперь перечисли свои главные увлечения через запятую✍️\n"
-            "(☝️Например: Python, музыка, дизайн)"
+        selection = normalize_selected_interests(
+            (user.interests_json or {}).get("interests") if user.interests_json else []
         )
-        await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+        state_data = await state.get_data()
+        page = clamp_page(
+            int(state_data.get(FSMDataKeys.INTERESTS_PAGE) or 1),
+            len(UNIVERSAL_INTERESTS),
+            INTERESTS_PAGE_SIZE,
+        )
+        sent = await answer(
+            "Выбери свои главные увлечения ✨ (4–10)",
+            reply_markup=kb_profile_interests(
+                selection,
+                page,
+                per_page=INTERESTS_PAGE_SIZE,
+                min_required=MIN_INTERESTS_COUNT,
+                max_allowed=MAX_INTERESTS_COUNT,
+            ),
+        )
+        await state.update_data(
+            **{
+                FSMDataKeys.INTERESTS_SELECTED: selection,
+                FSMDataKeys.INTERESTS_PAGE: page,
+                FSMDataKeys.LAST_KB_MID: sent.message_id,
+            }
+        )
         return
 
     if result.action == "show_profile_review":

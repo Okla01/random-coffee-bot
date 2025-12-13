@@ -20,6 +20,7 @@ from app.services.const import USER_STATUS_ACTIVE, USER_STATUS_NOT_ACTIVE
 from app.keyboards.kb_profile import (
     kb_profile_review,
     kb_profile_photo,
+    kb_profile_interests,
 )
 from app.keyboards.utils import clear_last_kb
 
@@ -27,11 +28,23 @@ from app.services.profile.preview import (
     send_profile_preview,
     build_profile_preview_text,
 )
+from app.services.const import (
+    INTERESTS_PAGE_SIZE,
+    MAX_INTERESTS_COUNT,
+    MIN_INTERESTS_COUNT,
+    UNIVERSAL_INTERESTS,
+)
+from app.services.profile.interests import (
+    can_save_interests,
+    clamp_page,
+    normalize_selected_interests,
+    toggle_interest,
+    process_interests_field,
+)
 from app.services.profile.editing import (
     process_name_field,
     process_bio_field,
     process_age_field,
-    process_interests_field,
     process_save_profile,
     process_edit_review,
     notify_admin_on_name_request,
@@ -46,6 +59,54 @@ from app.handlers.fsm import FSMDataKeys
 
 
 router = Router()
+
+
+# --------------------------- helpers ------------------------- #
+
+
+def _restore_selection(state_data: dict, user_interests_json: dict | None) -> list[str]:
+    """
+    Возвращает текущий выбор интересов из FSM или профиля.
+    """
+    from_state = state_data.get(FSMDataKeys.INTERESTS_SELECTED)
+    if from_state is not None:
+        return normalize_selected_interests(from_state)
+
+    raw_from_user = (user_interests_json or {}).get("interests") if user_interests_json else []
+    return normalize_selected_interests(raw_from_user)
+
+
+async def _send_interests_keyboard(
+    message: Message,
+    state: FSMContext,
+    selection: list[str],
+    page: int = 1,
+    *,
+    mention_editing: bool = False,
+) -> None:
+    """
+    Отправляет (или переотправляет) клавиатуру выбора интересов и сохраняет состояние.
+    """
+    page = clamp_page(page, len(UNIVERSAL_INTERESTS), INTERESTS_PAGE_SIZE)
+    prompt = "Выбери свои главные увлечения ✨ (4–10)"
+    if mention_editing:
+        prompt += "\nТекущие отмечены галочкой."
+
+    markup = kb_profile_interests(
+        selection,
+        page,
+        per_page=INTERESTS_PAGE_SIZE,
+        min_required=MIN_INTERESTS_COUNT,
+        max_allowed=MAX_INTERESTS_COUNT,
+    )
+    sent = await message.answer(prompt, reply_markup=markup)
+    await state.update_data(
+        **{
+            FSMDataKeys.INTERESTS_SELECTED: selection,
+            FSMDataKeys.INTERESTS_PAGE: page,
+            FSMDataKeys.LAST_KB_MID: sent.message_id,
+        }
+    )
 
 
 # --------------------------- text steps ------------------------- #
@@ -186,36 +247,175 @@ async def on_profile_text(
                 return
 
             if result.result_type == "field_updated_continue":
-                await message.answer(
-                    "А теперь перечисли свои главные увлечения через запятую✍️\n"
-                    "(☝️Например: Python, музыка, дизайн)"
+                selection = normalize_selected_interests(
+                    (user.interests_json or {}).get("interests") if user.interests_json else []
                 )
-                await state.update_data(**{FSMDataKeys.LAST_KB_MID: None})
+                await _send_interests_keyboard(
+                    message,
+                    state,
+                    selection,
+                    page=1,
+                    mention_editing=False,
+                )
                 return
 
         # INTERESTS
         if user.stage == "profile_interests":
+            state_data = await state.get_data()
+            selection = _restore_selection(state_data, user.interests_json)
+            page = int(state_data.get(FSMDataKeys.INTERESTS_PAGE) or 1)
+            await session.commit()
+            await _send_interests_keyboard(
+                message,
+                state,
+                selection,
+                page=page,
+                mention_editing=bool(editing_field),
+            )
+            return
+
+
+# --------------------------- interests callbacks ------------------ #
+
+
+@router.callback_query(F.data.startswith("prof:int:"))
+async def on_interests_callback(
+    cq: CallbackQuery,
+    state: FSMContext,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Управляет выбором интересов (пагинация, выбор, сохранение, очистка).
+    """
+    parts = cq.data.split(":")
+    if len(parts) < 3:
+        await cq.answer()
+        return
+
+    action = parts[2]
+
+    async with session_factory() as session:
+        user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
+        if user.stage != "profile_interests":
+            await cq.answer("Этот шаг уже завершён. Нажми /start для обновления.", show_alert=True)
+            return
+
+        state_data = await state.get_data()
+        selection = _restore_selection(state_data, user.interests_json)
+        page = int(state_data.get(FSMDataKeys.INTERESTS_PAGE) or 1)
+
+        if action == "page" and len(parts) >= 4:
+            try:
+                page = int(parts[3])
+            except ValueError:
+                await cq.answer("Некорректная страница", show_alert=True)
+                return
+            page = clamp_page(page, len(UNIVERSAL_INTERESTS), INTERESTS_PAGE_SIZE)
+            await state.update_data(**{FSMDataKeys.INTERESTS_PAGE: page})
+            await cq.message.edit_reply_markup(
+                reply_markup=kb_profile_interests(
+                    selection,
+                    page,
+                    per_page=INTERESTS_PAGE_SIZE,
+                    min_required=MIN_INTERESTS_COUNT,
+                    max_allowed=MAX_INTERESTS_COUNT,
+                )
+            )
+            await cq.answer()
+            return
+
+        if action == "sel" and len(parts) >= 4:
+            try:
+                index = int(parts[3])
+            except ValueError:
+                await cq.answer("Некорректный выбор", show_alert=True)
+                return
+            if not (0 <= index < len(UNIVERSAL_INTERESTS)):
+                await cq.answer("Интерес не найден", show_alert=True)
+                return
+            interest = UNIVERSAL_INTERESTS[index]
+            selection, error = toggle_interest(selection, interest, MAX_INTERESTS_COUNT)
+            if error:
+                await cq.answer(error, show_alert=True)
+                return
+            await state.update_data(
+                **{
+                    FSMDataKeys.INTERESTS_SELECTED: selection,
+                    FSMDataKeys.INTERESTS_PAGE: page,
+                }
+            )
+            await cq.message.edit_reply_markup(
+                reply_markup=kb_profile_interests(
+                    selection,
+                    page,
+                    per_page=INTERESTS_PAGE_SIZE,
+                    min_required=MIN_INTERESTS_COUNT,
+                    max_allowed=MAX_INTERESTS_COUNT,
+                )
+            )
+            await cq.answer()
+            return
+
+        if action == "clear":
+            selection = []
+            page = 1
+            await state.update_data(
+                **{
+                    FSMDataKeys.INTERESTS_SELECTED: selection,
+                    FSMDataKeys.INTERESTS_PAGE: page,
+                }
+            )
+            await cq.message.edit_reply_markup(
+                reply_markup=kb_profile_interests(
+                    selection,
+                    page,
+                    per_page=INTERESTS_PAGE_SIZE,
+                    min_required=MIN_INTERESTS_COUNT,
+                    max_allowed=MAX_INTERESTS_COUNT,
+                )
+            )
+            await cq.answer("Выбор очищен")
+            return
+
+        if action == "save":
+            if not can_save_interests(selection):
+                await cq.answer(
+                    f"Нужно выбрать от {MIN_INTERESTS_COUNT} до {MAX_INTERESTS_COUNT} интересов.",
+                    show_alert=True,
+                )
+                return
+
+            editing_field = state_data.get(FSMDataKeys.EDITING_FIELD)
             result = await process_interests_field(
-                session, user, text, settings, editing_field
+                session, user, selection, settings, editing_field
             )
 
             if result.result_type == "validation_error":
-                await message.answer(result.error_message)
+                await cq.answer(result.error_message or "Нужно выбрать интересы", show_alert=True)
                 return
 
-            if result.result_type == "field_updated_review":
-                await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
-                await send_profile_preview(
-                    message.bot, message.chat.id, user, state, kb_profile_review()
-                )
-                return
+            await state.update_data(
+                **{
+                    FSMDataKeys.INTERESTS_SELECTED: selection,
+                    FSMDataKeys.INTERESTS_PAGE: 1,
+                    FSMDataKeys.EDITING_FIELD: None,
+                    FSMDataKeys.LAST_KB_MID: None,
+                }
+            )
 
-            if result.result_type == "field_updated_continue":
-                # Отправить текстовый предпросмотр
-                await send_profile_preview(
-                    message.bot, message.chat.id, user, state, kb_profile_review()
-                )
-                return
+            try:
+                await cq.message.edit_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+
+            await send_profile_preview(
+                cq.bot, cq.message.chat.id, user, state, kb_profile_review()
+            )
+            await cq.answer("Интересы сохранены")
+            return
+
+    await cq.answer()
 
 
 # --------------------------- review / save ---------------------- #
@@ -377,9 +577,22 @@ async def cb_prof_edit_field(
                 user,
                 "profile_interests",
                 state,
-                {FSMDataKeys.EDITING_FIELD: field, FSMDataKeys.LAST_KB_MID: None},
+                {
+                    FSMDataKeys.EDITING_FIELD: field,
+                    FSMDataKeys.LAST_KB_MID: None,
+                    FSMDataKeys.INTERESTS_SELECTED: normalize_selected_interests(
+                        (user.interests_json or {}).get("interests") if user.interests_json else []
+                    ),
+                    FSMDataKeys.INTERESTS_PAGE: 1,
+                },
             )
-            await cq.message.answer("Перечисли свои главные увлечения через запятую✍️\n"
-                                    "(☝️Например: Python, музыка, дизайн)")
+            selection = _restore_selection(await state.get_data(), user.interests_json)
+            await _send_interests_keyboard(
+                cq.message,
+                state,
+                selection,
+                page=1,
+                mention_editing=True,
+            )
         await session.commit()
         await cq.answer()

@@ -13,42 +13,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-import re
-from typing import Iterable, List, Literal
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.core.config import Settings
 from app.services.profile.banned_words import contains_banned_words
 from app.services.profile.utils import is_profile_complete
+from app.services.profile.types import FieldResult
 from app.keyboards.kb_admin import kb_admin_name_approval
 from app.database.models import User, AdminLog
-
-# Типы результатов обработки полей профиля
-FieldResultType = Literal[
-    "validation_error",  # ошибка валидации (нужно показать сообщение об ошибке)
-    "field_updated_continue",  # поле обновлено, переходим к следующему шагу
-    "field_updated_review",  # поле обновлено, возвращаемся в предпросмотр
-]
-
-
-@dataclass
-class FieldResult:
-    """
-    Результат обработки поля профиля.
-
-    Attributes:
-        result_type (FieldResultType): тип результата.
-        error_message (str | None): сообщение об ошибке, если result_type == "validation_error".
-        next_stage (str | None): следующая стадия, если поле обновлено.
-        is_editing (bool): флаг, что это редактирование отдельного поля.
-    """
-
-    result_type: FieldResultType
-    error_message: str | None = None
-    next_stage: str | None = None
-    is_editing: bool = False
 
 
 async def process_name_field(
@@ -254,104 +226,6 @@ async def process_age_field(
         next_stage="profile_interests",
         is_editing=False,
     )
-
-
-async def process_interests_field(
-    session: AsyncSession,
-    user: User,
-    text: str,
-    settings: Settings,
-    editing_field: str | None,
-) -> FieldResult:
-    """
-    Обрабатывает ввод интересов пользователя.
-
-    Нормализует и валидирует интересы, обновляет поле user.interests_json,
-    определяет следующую стадию.
-
-    Args:
-        session (AsyncSession): активная сессия БД.
-        user (User): ORM-модель пользователя.
-        text (str): введённый текст интересов.
-        settings (Settings): настройки приложения.
-        editing_field (str | None): флаг редактирования ("interests" или None).
-
-    Returns:
-        FieldResult: результат обработки.
-    """
-    # Нормализация и валидация интересов
-    interests, err = normalize_interests(text, settings.banned_words)
-    if err:
-        await session.commit()
-        return FieldResult(result_type="validation_error", error_message="⚠️ " + err)
-
-    # Обновление поля
-    user.interests_json = {"interests": interests or []}
-
-    # Определение следующей стадии
-    # Если editing_field установлен ИЛИ профиль уже заполнен - это редактирование
-    is_editing = editing_field == "interests" or is_profile_complete(user)
-    if is_editing:
-        user.stage = "profile_review"
-        await session.commit()
-        return FieldResult(
-            result_type="field_updated_review",
-            next_stage="profile_review",
-            is_editing=True,
-        )
-
-    # Переход на предпросмотр анкеты
-    user.stage = "profile_review"
-    await session.commit()
-    return FieldResult(
-        result_type="field_updated_continue",
-        next_stage="profile_review",
-        is_editing=False,
-    )
-
-
-def normalize_interests(
-    raw: str, banned_words: Iterable[str]
-) -> tuple[List[str] | None, str | None]:
-    """
-    Нормализует и валидирует список интересов.
-
-    Разбивает строку по разделителям (запятая, точка с запятой, перевод строки),
-    тримит каждый элемент, проверяет индивидуальную длину (1–50 символов),
-    удаляет дубликаты (без учёта регистра), проверяет на запрещённые слова
-    и контролирует суммарную длину (макс. 300 символов) и количество (макс. 30).
-
-    Args:
-        raw (str): исходная строка с интересами, разделённые запятыми/другими разделителями.
-        banned_words (Iterable[str]): итерируемое собрание запрещённых слов.
-
-    Returns:
-        tuple[list[str] | None, str | None]: (список_интересов_или_None, сообщение_об_ошибке_или_None).
-                                               При успехе: (список, None), при ошибке: (None, текст_ошибки).
-    """
-    if not raw.strip():
-        return [], None
-    parts = re.split(r"[,\n;]+", raw)
-    interests = [p.strip() for p in parts if p.strip()]
-    if len(interests) > 30:
-        return None, "Слишком много значений (макс. 30)."
-    for interest in interests:
-        if not (1 <= len(interest) <= 50):
-            return None, f"Интерес «{interest}» недопустимой длины"
-        has_banned, word = contains_banned_words(interest, banned_words)
-        if has_banned:
-            return None, f"Интерес «{interest}» содержит недопустимое слово"
-    # удаляем дубликаты, сохраняя порядок
-    seen = set()
-    result: List[str] = []
-    for it in interests:
-        if it.lower() not in seen:
-            seen.add(it.lower())
-            result.append(it)
-    # итоговая длина строк
-    if sum(len(x) for x in result) > 300:
-        return None, "Суммарная длина интересов превышает 300 символов."
-    return result, None
 
 
 async def process_save_profile(

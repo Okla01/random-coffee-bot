@@ -58,3 +58,7 @@ class FSMDataKeys(str, Enum):
     # Ключи для отправки сообщения из админки
     ADMIN_MESSAGE_USER_ID = "admin_message_user_id"
     ADMIN_MESSAGE_CANCEL_MESSAGE_ID = "admin_message_cancel_message_id"
+
+    # Ключи для выбора интересов
+    INTERESTS_SELECTED = "interests_selected"
+    INTERESTS_PAGE = "interests_page"

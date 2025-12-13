@@ -9,6 +9,13 @@ from __future__ import annotations
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from app.services.const import (
+    INTERESTS_PAGE_SIZE,
+    MAX_INTERESTS_COUNT,
+    MIN_INTERESTS_COUNT,
+    UNIVERSAL_INTERESTS,
+)
+
 
 def kb_profile_review() -> InlineKeyboardMarkup:
     """
@@ -116,3 +123,63 @@ def kb_profile_delete_confirm() -> InlineKeyboardMarkup:
             ],
         ]
     )
+
+
+def kb_profile_interests(
+    selected: list[str],
+    page: int,
+    *,
+    per_page: int = INTERESTS_PAGE_SIZE,
+    min_required: int = MIN_INTERESTS_COUNT,
+    max_allowed: int = MAX_INTERESTS_COUNT,
+) -> InlineKeyboardMarkup:
+    """
+    Клавиатура выбора интересов с пагинацией.
+    """
+    total = len(UNIVERSAL_INTERESTS)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * per_page
+    end = min(start + per_page, total)
+    chunk = UNIVERSAL_INTERESTS[start:end]
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for offset, interest in enumerate(chunk):
+        global_index = start + offset
+        prefix = "✅ " if interest in selected else "• "
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{prefix}{interest}",
+                    callback_data=f"prof:int:sel:{global_index}",
+                )
+            ]
+        )
+
+    nav_row: list[InlineKeyboardButton] = []
+    if page > 1:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="⬅️ Назад", callback_data=f"prof:int:page:{page - 1}"
+            )
+        )
+    if page < total_pages:
+        nav_row.append(
+            InlineKeyboardButton(
+                text="Вперёд ➡️", callback_data=f"prof:int:page:{page + 1}"
+            )
+        )
+    if nav_row:
+        rows.append(nav_row)
+
+    if selected:
+        actions: list[InlineKeyboardButton] = [
+            InlineKeyboardButton(text="Очистить 🗑", callback_data="prof:int:clear")
+        ]
+        if min_required <= len(selected) <= max_allowed:
+            actions.append(
+                InlineKeyboardButton(text="Сохранить ✅", callback_data="prof:int:save")
+            )
+        rows.append(actions)
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)

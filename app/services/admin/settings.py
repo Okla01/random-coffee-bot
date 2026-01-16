@@ -11,6 +11,7 @@ from app.database import Setting
 
 from app.services.const import DAYS_OF_WEEK
 from app.handlers.fsm import FSMDataKeys
+from app.services.core.config import Settings
 
 
 async def get_current_settings(
@@ -292,6 +293,24 @@ def toggle_email_auth_enabled(current_value: str | bool) -> str:
     """
     current_bool = _as_bool(current_value)
     return "false" if current_bool else "true"
+
+
+def is_smtp_configured(settings: Settings) -> bool:
+    """
+    Проверяет, заполнены ли все необходимые SMTP настройки для отправки OTP кодов.
+
+    Args:
+        settings: объект Settings с конфигурацией приложения
+
+    Returns:
+        bool: True если все SMTP настройки заполнены, False иначе
+    """
+    return bool(
+        settings.smtp_host.strip()
+        and settings.smtp_user.strip()
+        and settings.smtp_password.strip()
+        and settings.smtp_from.strip()
+    )
 
 
 def try_to_input_time_as_hours(msg: str) -> str | None:

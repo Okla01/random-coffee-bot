@@ -31,10 +31,12 @@ from app.services.admin.settings import (
     save_settings,
     toggle_matching_enabled,
     toggle_email_auth_enabled,
+    is_smtp_configured,
     try_to_input_time,
     try_to_input_time_as_hours,
     update_draft_setting,
 )
+from app.services.core.config import Settings
 from app.services.const import DEFAULT_SETTINGS
 from app.services.matching.scheduler import (
     refresh_feedback_schedule,
@@ -167,16 +169,19 @@ async def cb_toggle_matching_enabled(
 async def cb_toggle_email_auth_enabled(
     cq: CallbackQuery,
     state: FSMContext,
+    settings: Settings,
 ) -> None:
     """
     Переключает авторизацию по email (включена/отключена).
 
     Получает текущее значение из черновика настроек, переключает его (true ↔ false),
     обновляет черновик и отображает обновлённое меню настроек.
+    При попытке включить email авторизацию проверяет наличие SMTP настроек.
 
     Args:
         cq (CallbackQuery): объект callback-запроса.
         state (FSMContext): контекст FSM для управления состоянием.
+        settings (Settings): объект настроек приложения.
 
     Returns:
         None: ничего не возвращает.
@@ -184,8 +189,16 @@ async def cb_toggle_email_auth_enabled(
     data = await state.get_data()
     draft = (data.get(FSMDataKeys.DRAFT_SETTINGS) or {}).copy()
 
-    current_value = draft.get("email_auth_enabled", "true")
+    current_value = draft.get("email_auth_enabled", "false")
     new_value = toggle_email_auth_enabled(current_value)
+
+    # Проверяем SMTP настройки при попытке включить email авторизацию
+    if new_value == "true" and not is_smtp_configured(settings):
+        await cq.answer(
+            "В настройках бота не заполнены данные для отправки OTP кодов.",
+            show_alert=True,
+        )
+        return
 
     draft = await update_draft_setting(state, "email_auth_enabled", new_value)
 

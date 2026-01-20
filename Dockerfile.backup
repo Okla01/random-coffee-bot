@@ -36,9 +36,10 @@ ENV PYTHONUNBUFFERED=1 \
     BACKUP_DIR=/app/data/backups \
     BACKUP_DAYS=7
 
-# Настраиваем cron для ежесуточного запуска в 2:00 МСК (23:00 UTC предыдущего дня)
+# Настраиваем cron для ежесуточного запуска в 3:00 МСК (00:00 UTC)
 # Используем UTC, т.к. контейнеры обычно работают в UTC
-RUN echo "0 23 * * * cd /app && python scripts/backup_db.py >> /var/log/backup.log 2>&1" | crontab -
+# МСК = UTC+3, поэтому 03:00 МСК = 00:00 UTC
+RUN echo "0 0 * * * cd /app && python scripts/backup_db.py >> /var/log/backup.log 2>&1" | crontab -
 
 # Создаём лог-файл
 RUN touch /var/log/backup.log

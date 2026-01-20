@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   bot:
     build:
@@ -49,8 +47,4 @@ services:
 networks:
   rcb-network:
     driver: bridge
-
-volumes:
-  data:
-    driver: local
 

@@ -13,10 +13,27 @@
 import os
 import sys
 import sqlite3
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app.database.utils import now_msk
+# Функция для получения времени МСК
+# МСК = UTC+3 (в России нет перехода на летнее время с 2014 года)
+def now_msk() -> datetime:
+    """
+    Возвращает текущее время в МСК с информацией о таймзоне.
+    Использует UTC+3 как фиксированное смещение для МСК.
+    """
+    try:
+        # Пытаемся использовать zoneinfo (работает на Linux/Mac и Windows с tzdata)
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Moscow"))
+    except (ImportError, Exception):
+        # Fallback: используем UTC и добавляем 3 часа (МСК = UTC+3)
+        from datetime import timezone, timedelta
+        msk_offset = timedelta(hours=3)
+        msk_tz = timezone(msk_offset)
+        return datetime.now(timezone.utc).astimezone(msk_tz)
 
 
 def _db_changed(src_path: Path, backup_path: Path) -> bool:
@@ -83,24 +100,48 @@ def backup_database(
     need_backup = True
     if not force and backup_path.exists():
         if not _db_changed(src_path, backup_path):
-            print(f"БД не изменилась с последнего бэкапа. Пропускаем создание нового бэкапа.")
+            print("БД не изменилась с последнего бэкапа. Пропускаем создание нового бэкапа.")
             print(f"Последний бэкап: {backup_path}")
             need_backup = False
         else:
-            print(f"БД изменилась. Создаём новый бэкап...")
+            print("БД изменилась. Создаём новый бэкап...")
             # Удаляем старый бэкап за сегодня, если он есть
             backup_path.unlink()
     elif backup_path.exists() and force:
-        print(f"Принудительное создание бэкапа (старый будет перезаписан)...")
+        print("Принудительное создание бэкапа (старый будет перезаписан)...")
         backup_path.unlink()
     else:
-        print(f"Создаём новый бэкап...")
+        print("Создаём новый бэкап...")
 
     # Создаём бэкап только если нужно
     if need_backup:
+        # Пытаемся подключиться с повторными попытками
+        max_retries = 3
+        retry_delay = 10  # секунд между попытками
+        src_conn = None
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Открываем исходную БД
+                # timeout=30.0 означает, что скрипт будет ждать до 30 секунд,
+                # если БД заблокирована другими процессами (например, бот делает commit)
+                # Это позволяет избежать ошибки "database is locked"
+                src_conn = sqlite3.connect(src_path, timeout=30.0)
+                break  # Успешное подключение, выходим из цикла
+            except sqlite3.OperationalError as e:
+                if "locked" in str(e).lower() and attempt < max_retries:
+                    print(f"БД заблокирована (попытка {attempt}/{max_retries}). Ждём {retry_delay} сек...")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    # Последняя попытка или другая ошибка - пробрасываем исключение
+                    raise
+        
+        if src_conn is None:
+            print("Ошибка: не удалось подключиться к БД после всех попыток")
+            sys.exit(1)
+        
         try:
-            # Открываем исходную БД
-            src_conn = sqlite3.connect(src_path)
 
             # Проверяем целостность перед копированием
             src_check = src_conn.execute("PRAGMA integrity_check").fetchone()[0]
@@ -130,6 +171,8 @@ def backup_database(
             print(f"Бэкап создан успешно: {backup_path}")
         except Exception as e:
             print(f"Ошибка при создании бэкапа: {e}")
+            if src_conn:
+                src_conn.close()
             sys.exit(1)
 
     # Удаляем старые бэкапы (выполняем всегда, даже если новый бэкап не создавался)

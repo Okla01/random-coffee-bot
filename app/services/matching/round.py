@@ -18,7 +18,7 @@ from app.database import Match, User
 from app.database.utils import now_msk, ensure_aware_msk
 from app.keyboards.kb_matching import kb_match_invitation
 from app.services.const import USER_STATUS_ACTIVE
-from app.services.matching.constants import MATCH_ACTIVE_STATUSES, MATCH_SUCCESS_STATUSES
+from app.services.matching.constants import MATCH_ACTIVE_STATUSES
 from app.services.matching.settings import load_matching_settings
 from app.services.matching.utils import (
     compute_jaccard,
@@ -71,8 +71,8 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
         await _notify_no_pairs(bot, candidates)
         return
 
-    successful_pairs = await _load_successful_pairs(session)
-    edges = _build_pairing_edges(candidates, successful_pairs)
+    existing_pairs = await _load_successful_pairs(session)
+    edges = _build_pairing_edges(candidates, existing_pairs)
 
     if not edges:
         await _notify_no_pairs(bot, candidates)
@@ -174,18 +174,19 @@ async def _load_users_with_active_matches(session: AsyncSession) -> set[int]:
 
 async def _load_successful_pairs(session: AsyncSession) -> set[frozenset[int]]:
     """
-    Возвращает пары пользователей, которые уже имели успешный мэтч.
+    Возвращает пары пользователей, которые уже имели мэтч (любой статус).
+
+    Исключает повторные мэтчи между одними и теми же пользователями независимо
+    от статуса предыдущего мэтча (completed, skipped, expired_timeout и т.д.).
 
     Args:
         session (AsyncSession): активная сессия БД.
 
     Returns:
-        set[frozenset[int]]: множество пар (frozenset из двух user_id), завершённых
-            со статусом успешного мэтча.
+        set[frozenset[int]]: множество пар (frozenset из двух user_id), которые
+            уже имели мэтч в любой момент времени.
     """
-    stmt = select(Match.user_a_id, Match.user_b_id).where(
-        Match.status.in_(MATCH_SUCCESS_STATUSES)
-    )
+    stmt = select(Match.user_a_id, Match.user_b_id)
     result = await session.execute(stmt)
     return {
         frozenset((row[0], row[1]))
@@ -196,18 +197,18 @@ async def _load_successful_pairs(session: AsyncSession) -> set[frozenset[int]]:
 
 def _build_pairing_edges(
     candidates: list[User],
-    successful_pairs: set[frozenset[int]],
+    existing_pairs: set[frozenset[int]],
 ) -> list[PairingEdge]:
     """
     Строит список рёбер (потенциальных пар) с весами.
 
     Вычисляет коэффициент Жаккара для каждой пары кандидатов и исключает пары,
-    которые уже имели успешный мэтч. Рёбра с положительным Jaccard сортируются
+    которые уже имели мэтч (любой статус). Рёбра с положительным Jaccard сортируются
     по убыванию, рёбра с нулевым Jaccard перемешиваются случайно.
 
     Args:
         candidates (list[User]): список кандидатов для мэтчинга.
-        successful_pairs (set[frozenset[int]]): множество завершённых успешных пар.
+        existing_pairs (set[frozenset[int]]): множество пар, которые уже имели мэтч.
 
     Returns:
         list[PairingEdge]: отсортированный по приоритету список потенциальных пар.
@@ -222,7 +223,7 @@ def _build_pairing_edges(
         interests_a = precomputed_interests.get(user_a.id) or []
         for user_b in candidates[idx + 1 :]:
             pair_key = frozenset((user_a.id, user_b.id))
-            if pair_key in successful_pairs:
+            if pair_key in existing_pairs:
                 continue
 
             interests_b = precomputed_interests.get(user_b.id) or []

@@ -16,6 +16,7 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import (
+    BigInteger,
     DateTime,
     Float,
     ForeignKey,
@@ -54,7 +55,7 @@ class User(Base):
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    telegram_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     username: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Текущий статус/стадия
@@ -252,7 +253,7 @@ class AdminLog(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     admin_id: Mapped[int] = mapped_column(
-        Integer, index=True
+        BigInteger, index=True
     )  # ID администратора (telegram_id)
     action: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON)
@@ -355,7 +356,7 @@ class Complaint(Base):
         Integer, nullable=True
     )  # ID сообщения в админ-чате для редактирования
     reviewed_by: Mapped[Optional[int]] = mapped_column(
-        Integer, nullable=True
+        BigInteger, nullable=True
     )  # telegram_id админа, который обработал жалобу
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

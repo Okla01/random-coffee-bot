@@ -92,13 +92,22 @@ async def process_match_timeouts_and_reminders(
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
     }
 
+    # ОПТИМИЗАЦИЯ: Фильтруем мэтчи по времени создания в SQL
+    # Загружаем только те мэтчи, которые созданы после earliest_time
+    # (мэтчи старше timeout_delta точно истекли и не нуждаются в проверке)
+    earliest_time = now - timeout_delta
+    
     stmt = (
         select(Match)
         .options(
             selectinload(Match.user_a),
             selectinload(Match.user_b),
         )
-        .where(Match.status.in_(stage_map.keys()))
+        .where(
+            Match.status.in_(stage_map.keys()),
+            Match.created_at >= earliest_time,  # Фильтр по времени в SQL
+        )
+        .order_by(Match.created_at)  # Сортировка для предсказуемости обработки
     )
     result = await session.execute(stmt)
     matches = list(result.scalars().all())

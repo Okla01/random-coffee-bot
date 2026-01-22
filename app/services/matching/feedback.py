@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 from app.database import Match
 from app.services.matching.constants import MATCH_STATUS_MATCHED
 from app.keyboards.kb_matching import kb_meeting_feedback
+from app.services.core.rate_limiter import rate_limited_send
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,8 @@ async def send_feedback_to_users(
             if not user or not user.telegram_id:
                 continue
             try:
-                await bot.send_message(
+                await rate_limited_send(
+                    bot.send_message,
                     user.telegram_id,
                     text,
                     reply_markup=markup,

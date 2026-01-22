@@ -28,6 +28,9 @@ def make_engine(settings: Settings):
 
     Инициализирует AsyncEngine с параметрами из конфигурации, включая
     отключение echo-режима, активацию future-флага и проверку соединения перед использованием.
+    
+    Для PostgreSQL настраивает connection pool для поддержки высокой нагрузки (до 5000 пользователей).
+    Для SQLite connection pooling не требуется.
 
     Args:
         settings (Settings): объект конфигурации с URL базы данных.
@@ -35,11 +38,24 @@ def make_engine(settings: Settings):
     Returns:
         AsyncEngine: настроенный асинхронный движок SQLAlchemy.
     """
+    pool_config = {}
+    
+    # Настраиваем connection pool только для PostgreSQL
+    # Для SQLite connection pooling бесполезен (один writer)
+    if "postgresql" in settings.db_url:
+        pool_config = {
+            "pool_size": 50,           # Базовый размер пула соединений
+            "max_overflow": 100,       # Дополнительные соединения при пиковой нагрузке
+            "pool_timeout": 30,        # Таймаут ожидания свободного соединения (секунды)
+            "pool_recycle": 3600,      # Переподключение каждый час (защита от stale connections)
+        }
+    
     return create_async_engine(
         settings.db_url,
         echo=False,
         future=True,
         pool_pre_ping=True,
+        **pool_config,
     )
 
 

@@ -9,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 import logging
 
 from app.database import Match, User
+from app.services.core.rate_limiter import rate_limited_send
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,8 @@ async def notify_match_ready(bot: Bot, match: Match, actor: User) -> None:
     """
     if not actor.telegram_id:
         return
-    await bot.send_message(
+    await rate_limited_send(
+        bot.send_message,
         actor.telegram_id,
         "Мы сообщили твоему коллеге, что ты готов(а) пойти с ним на кофе и теперь ждем его ответа!🙃",
     )
@@ -46,7 +48,8 @@ async def notify_match_skip_self(bot: Bot, user: User) -> None:
     """
     if not user.telegram_id:
         return
-    await bot.send_message(
+    await rate_limited_send(
+        bot.send_message,
         user.telegram_id,
         "Ты пропустил участие на этой неделе. "
         "Ты сможешь снова участвовать в следующих раундах.",
@@ -89,7 +92,8 @@ async def notify_match_skip_partner(bot: Bot, match: Match, skipper: User) -> No
             # Игнорируем ошибки (сообщение могло быть удалено или изменено)
             pass
 
-    await bot.send_message(
+    await rate_limited_send(
+        bot.send_message,
         partner.telegram_id,
         "К сожалению, твоя пара решила пропустить участие на этой неделе. "
         "Ты автоматически попадёшь в следующий раунд.",
@@ -132,7 +136,8 @@ async def notify_match_user_deleted(bot: Bot, match: Match, deleted_user: User) 
             # Игнорируем ошибки (сообщение могло быть удалено или изменено)
             pass
 
-    await bot.send_message(
+    await rate_limited_send(
+        bot.send_message,
         partner.telegram_id,
         "К сожалению, твоя пара удалила анкету. "
         "Ты автоматически попадёшь в следующий раунд.",
@@ -152,9 +157,10 @@ async def notify_match_not_found(bot: Bot, user: User) -> None:
     """
     if not user.telegram_id:
         return
-    await bot.send_message(
+    await rate_limited_send(
+        bot.send_message,
         user.telegram_id,
-        "Сегодня состоялся круг “Random Coffee”, но, к сожалению, по твоим интересам не удалось найти «мэтч» 😔\n"
+        "Сегодня состоялся круг \"Random Coffee\", но, к сожалению, по твоим интересам не удалось найти «мэтч» 😔\n"
         "Однако ты автоматически участвуешь в следующих раундах🤜🏽🤛🏻"
     )
 
@@ -189,7 +195,7 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
             "Напишите коллеге для выбора времени встречи!"
         )
 
-        await bot.send_message(user.telegram_id, text)
+        await rate_limited_send(bot.send_message, user.telegram_id, text)
 
 
 async def notify_match_timeout(bot: Bot, match: Match) -> None:
@@ -267,7 +273,7 @@ async def _broadcast(bot: Bot, match: Match, text: str) -> None:
     """
     for user in (match.user_a, match.user_b):
         if user and user.telegram_id:
-            await bot.send_message(user.telegram_id, text)
+            await rate_limited_send(bot.send_message, user.telegram_id, text)
 
 
 def _get_partner(match: Match, actor: User) -> User | None:

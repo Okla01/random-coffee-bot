@@ -150,7 +150,9 @@ class Settings:
         smtp_password = os.getenv("SMTP_PASSWORD", "").strip()
         smtp_from = os.getenv("SMTP_FROM", smtp_user).strip()
 
+        # По умолчанию SQLite, для PostgreSQL установите DATABASE_URL в .env
         db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/db.sqlite3")
+        # Пример для PostgreSQL: DATABASE_URL=postgresql+asyncpg://rcb:rcb1234@localhost:5432/randomcoffee
 
         otp_ttl_seconds = int(os.getenv("OTP_TTL_SECONDS", "120"))  # 2min
         otp_cooldown_seconds = int(os.getenv("OTP_COOLDOWN_SECONDS", "120"))  # 2min

@@ -133,15 +133,15 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
 
-    # Джоба для обработки запланированных рассылок (каждые 5 минут)
+    # Джоба для обработки запланированных рассылок (каждую минуту для точности)
     scheduler.add_job(
         _scheduled_broadcasts_job,
-        IntervalTrigger(minutes=5, timezone=MOSCOW_TZ),
+        IntervalTrigger(minutes=1, timezone=MOSCOW_TZ),
         args=[session_factory, bot],
         id="scheduled_broadcasts",
         replace_existing=True,
     )
-    logger.info("Scheduled broadcasts job scheduled with interval: 5 minutes")
+    logger.info("Scheduled broadcasts job scheduled with interval: 1 minute")
 
     return scheduler
 
@@ -418,7 +418,7 @@ async def _scheduled_broadcasts_job(
     Проверяет наличие запланированных рассылок, время отправки которых уже наступило,
     и отправляет их пользователям.
 
-    Вызывается APScheduler каждые 5 минут (IntervalTrigger).
+    Вызывается APScheduler каждую минуту (IntervalTrigger) для точной отправки.
 
     Args:
         session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.

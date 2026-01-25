@@ -449,14 +449,27 @@ async def process_photo_content(
     # Берём самое большое фото
     photo = message.photo[-1]
     
-    # Получаем caption и HTML версию
+    # Получаем caption и HTML версию (та же логика, что и для медиа-групп)
     caption = message.caption or ""
     caption_html = ""
+    
+    # Пытаемся получить HTML версию caption
     if message.caption:
-        # Используем caption_html если доступен, иначе обычный caption
+        # Пробуем разные способы получить HTML версию
         if hasattr(message, 'caption_html') and message.caption_html:
             caption_html = message.caption_html
+        elif hasattr(message, 'html_caption') and message.html_caption:
+            caption_html = message.html_caption
+        # Если есть entities, восстанавливаем HTML из них
+        elif message.caption_entities:
+            try:
+                from aiogram.utils.text_decorations import html_decoration
+                caption_html = html_decoration.unparse(message.caption, message.caption_entities)
+            except (ImportError, AttributeError):
+                # Если не получилось, пробуем вручную восстановить форматирование
+                caption_html = _restore_html_from_entities(message.caption, message.caption_entities)
         else:
+            # Fallback на обычный caption
             caption_html = message.caption
     
     # Сохраняем данные

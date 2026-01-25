@@ -24,6 +24,7 @@ from app.services.matching.settings import (
     load_matching_settings,
     parse_time_to_hours_minutes,
 )
+from app.services.admin.broadcasts import get_scheduled_broadcasts, send_broadcast
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,16 @@ async def setup_matching_scheduler(
         id="feedback",
         replace_existing=True,
     )
+
+    # Джоба для обработки запланированных рассылок (каждые 5 минут)
+    scheduler.add_job(
+        _scheduled_broadcasts_job,
+        IntervalTrigger(minutes=5, timezone=MOSCOW_TZ),
+        args=[session_factory, bot],
+        id="scheduled_broadcasts",
+        replace_existing=True,
+    )
+    logger.info("Scheduled broadcasts job scheduled with interval: 5 minutes")
 
     return scheduler
 
@@ -395,3 +406,64 @@ async def refresh_feedback_schedule(
         )
     else:
         logger.warning("Feedback job not found or has no next run time")
+
+
+async def _scheduled_broadcasts_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    bot: Bot,
+) -> None:
+    """
+    Внутренняя джоба для обработки запланированных рассылок.
+
+    Проверяет наличие запланированных рассылок, время отправки которых уже наступило,
+    и отправляет их пользователям.
+
+    Вызывается APScheduler каждые 5 минут (IntervalTrigger).
+
+    Args:
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+        bot (Bot): экземпляр бота для отправки рассылок.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    logger.debug("Scheduled broadcasts job started by scheduler")
+    try:
+        async with session_factory() as session:
+            # Получаем все запланированные рассылки, готовые к отправке
+            broadcasts = await get_scheduled_broadcasts(session)
+            
+            if not broadcasts:
+                logger.debug("No scheduled broadcasts ready to send")
+                return
+            
+            logger.info("Found %d scheduled broadcast(s) ready to send", len(broadcasts))
+            
+            # Отправляем каждую рассылку
+            for broadcast in broadcasts:
+                try:
+                    logger.info("Sending scheduled broadcast #%d", broadcast.id)
+                    sent_count, failed_count = await send_broadcast(
+                        bot=bot,
+                        session=session,
+                        broadcast_id=broadcast.id,
+                        rate_limit_delay=0.05,  # 50ms между сообщениями
+                    )
+                    logger.info(
+                        "Scheduled broadcast #%d completed. Sent: %d, Failed: %d",
+                        broadcast.id,
+                        sent_count,
+                        failed_count,
+                    )
+                except Exception as e:
+                    logger.exception(
+                        "Failed to send scheduled broadcast #%d: %s",
+                        broadcast.id,
+                        e,
+                    )
+                    # Продолжаем обработку других рассылок
+                    continue
+    
+    except Exception as e:
+        logger.exception("Scheduled broadcasts job failed with error: %s", e)
+        raise

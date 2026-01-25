@@ -41,6 +41,11 @@ def kb_admin_menu() -> InlineKeyboardMarkup:
                 ),
             ],
             [
+                InlineKeyboardButton(
+                    text="💬 Рассылки", callback_data="admin:broadcasts"
+                ),
+            ],
+            [
                 InlineKeyboardButton(text="⛔ Выход", callback_data="admin:exit"),
             ],
         ]
@@ -480,5 +485,72 @@ def kb_admin_statistics() -> InlineKeyboardMarkup:
                 )
             ],
             [InlineKeyboardButton(text="⬅️ Назад", callback_data="admin:back_to_menu")],
+        ]
+    )
+
+
+def kb_admin_broadcasts() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для меню рассылок.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📨 Отправить сейчас",
+                    callback_data="admin:broadcast:send_now"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📅 Запланировать отправку",
+                    callback_data="admin:broadcast:schedule"
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="admin:back_to_menu"
+                ),
+            ],
+        ]
+    )
+
+
+def kb_admin_broadcast_back() -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру с кнопкой "Назад" для возврата к меню рассылок.
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Назад",
+                    callback_data="admin:broadcast:back"
+                ),
+            ],
+        ]
+    )
+
+
+def kb_admin_broadcast_preview(is_scheduled: bool = False) -> InlineKeyboardMarkup:
+    """
+    Генерирует клавиатуру для предпросмотра рассылки.
+    
+    Args:
+        is_scheduled: True если рассылка запланированная, False если немедленная
+    """
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data="admin:broadcast:cancel_preview"
+                ),
+                InlineKeyboardButton(
+                    text="📨 Отправить",
+                    callback_data="admin:broadcast:confirm_send"
+                ),
+            ],
         ]
     )

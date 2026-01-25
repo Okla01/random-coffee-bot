@@ -21,12 +21,14 @@ from .name_approval import router as name_approval_router
 from .complaints import router as complaints_router
 from .statistics import router as statistics_router
 from .export_excel import router as export_excel_router
+from .broadcasts import router as broadcasts_router
 
 # Объединяем все роутеры административной панели
 # Порядок важен: более специфичные обработчики должны быть выше
 router = Router()
 router.include_router(admin_router)
 router.include_router(complaints_router)  # Обработчики жалоб
+router.include_router(broadcasts_router)  # Обработчики рассылок
 router.include_router(settings_router)  # Специфичные callback-обработчики настроек
 router.include_router(blocking_router)  # Обработчики блокировки (из уведомлений)
 router.include_router(

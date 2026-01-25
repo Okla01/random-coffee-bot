@@ -71,6 +71,22 @@ async def on_media_group(
     Здесь мы складываем все кадры в буфер, а отдельная задача через небольшую
     паузу собирает альбом целиком и сохраняет фото в профиль.
     """
+    # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+    # Это позволяет админам использовать админ-панель, даже если они на стадии загрузки фото
+    state_data = await state.get_data()
+    if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
+        raise SkipHandler()
+
+    # Проверяем стадию пользователя - обрабатываем только на стадии profile_photo
+    async with session_factory() as session:
+        user = await get_or_create_user(
+            session, message.from_user.id, message.from_user.username
+        )
+        if user.stage != "profile_photo":
+            await session.commit()
+            raise SkipHandler()
+        await session.commit()
+
     media_group_id = str(message.media_group_id)
 
     # Сохраняем текущий кадр в буфере
@@ -116,6 +132,17 @@ async def _finalize_media_group_album(
 
         async with session_factory() as session:
             user = await get_or_create_user(session, user_id)
+
+            # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+            state_data = await state.get_data()
+            if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
+                await session.commit()
+                return
+
+            # Проверяем стадию пользователя - обрабатываем только на стадии profile_photo
+            if user.stage != "profile_photo":
+                await session.commit()
+                return
 
             # Добавляем фото через бизнес-логику
             success, photos_list = await add_photos_to_profile(session, user, photos)
@@ -164,6 +191,12 @@ async def on_single_photo(
     """
     Обрабатывает одиночное фото при загрузке.
     """
+    # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+    # Это позволяет админам использовать админ-панель, даже если они на стадии загрузки фото
+    state_data = await state.get_data()
+    if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
+        raise SkipHandler()
+
     async with session_factory() as session:
         user = await get_or_create_user(
             session, message.from_user.id, message.from_user.username

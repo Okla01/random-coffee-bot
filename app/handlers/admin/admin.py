@@ -73,7 +73,7 @@ async def cmd_admin(
 
         # Отображение админ-панели после всех проверок
         sent = await message.answer(
-            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
             reply_markup=kb_admin_menu(),
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

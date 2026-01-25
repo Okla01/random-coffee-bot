@@ -389,3 +389,52 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
     value: Mapped[str] = mapped_column(String(512))
+
+
+# ----------------------------- Broadcasts ---------------------------- #
+
+
+class Broadcast(Base):
+    """
+    Рассылки администратора.
+
+    Хранит информацию о рассылках: содержимое сообщения (текст, фото, медиа),
+    время создания, время отправки (для запланированных), статус выполнения,
+    статистику отправки (успешные/неуспешные попытки).
+    """
+
+    __tablename__ = "broadcasts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    admin_id: Mapped[int] = mapped_column(
+        BigInteger, index=True
+    )  # telegram_id администратора, создавшего рассылку
+    
+    # Содержимое рассылки
+    message_text: Mapped[Optional[str]] = mapped_column(
+        String(4096), nullable=True
+    )  # Текст сообщения
+    media_json: Mapped[Optional[dict]] = mapped_column(
+        JSON, nullable=True
+    )  # Медиа файлы (фото, видео и т.д.) в формате JSON
+    
+    # Временные метки
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=now_msk, index=True
+    )
+    scheduled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Запланированное время отправки (None = отправить сейчас)
+    sent_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )  # Фактическое время отправки
+    
+    # Статус рассылки
+    status: Mapped[str] = mapped_column(
+        String(16), default="draft", index=True
+    )  # draft, scheduled, sending, completed, failed
+    
+    # Статистика отправки
+    total_users: Mapped[int] = mapped_column(Integer, default=0)  # Всего пользователей
+    sent_count: Mapped[int] = mapped_column(Integer, default=0)  # Успешно отправлено
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)  # Ошибок при отправке

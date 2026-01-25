@@ -386,7 +386,7 @@ async def cb_save_admin_settings(
 
     # Переход в главное меню настроек (редактируем текущее сообщение)
     await cq.message.edit_text(
-        "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+        "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
         reply_markup=kb_admin_menu(),
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
@@ -464,7 +464,7 @@ async def cb_cancel_admin_settings(
     await cq.answer("Выход без сохранения")
     # Переход в главное меню настроек (редактируем текущее сообщение)
     await cq.message.edit_text(
-        "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+        "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
         reply_markup=kb_admin_menu(),
     )
     await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})

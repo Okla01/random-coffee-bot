@@ -89,21 +89,21 @@ async def cb_admin_back_to_menu(
         # Редактируем текущее сообщение
         try:
             await cq.message.edit_text(
-                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
                 reply_markup=kb_admin_menu(),
             )
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
         except Exception:
             # Если не удалось отредактировать, создаём новое сообщение
             sent = await cq.message.answer(
-                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+                "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
                 reply_markup=kb_admin_menu(),
             )
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})
     else:
         # Если это сообщение с документом (без текста), создаём новое сообщение
         sent = await cq.message.answer(
-            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат при блокировках.",
+            "Админ-панель открыта.\nДействия по заявкам будут приходить в админ-чат.",
             reply_markup=kb_admin_menu(),
         )
         await state.update_data(**{FSMDataKeys.LAST_KB_MID: sent.message_id})

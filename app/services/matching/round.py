@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
 import random
 
 from aiogram import Bot
@@ -15,7 +14,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import Match, User
-from app.database.utils import now_msk, ensure_aware_msk
+from app.database.utils import now_msk
 from app.keyboards.kb_matching import kb_match_invitation
 from app.services.const import USER_STATUS_ACTIVE
 from app.services.matching.constants import MATCH_ACTIVE_STATUSES
@@ -67,7 +66,7 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
         return
 
     now = now_msk()
-    candidates = await _load_candidates(session, now)
+    candidates = await _load_candidates(session)
     if len(candidates) < 2:
         await _notify_no_pairs(bot, candidates)
         return
@@ -103,17 +102,14 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
 
 async def _load_candidates(
     session: AsyncSession,
-    now,
 ) -> list[User]:
     """
     Возвращает список пользователей, готовых к участию в новом раунде.
 
-    Фильтрует пользователей по статусу, стадии профиля, отсутствию активных мэтчей
-    и соблюдению кулдауна last_pairing_at.
+    Фильтрует пользователей по статусу, стадии профиля и отсутствию активных мэтчей.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        now: текущее время в МСК.
 
     Returns:
         list[User]: список пользователей-кандидатов для мэтчинга.
@@ -130,23 +126,11 @@ async def _load_candidates(
     result = await session.execute(stmt)
     users = list(result.scalars().all())
 
-    # Кулдаун с последнего мэтча - фиксированная 1 неделя
-    cooldown_delta = timedelta(weeks=1)
-    # Погрешность в 1 час для учета точности времени
-    cooldown_tolerance = timedelta(hours=1)
+    # Фильтруем только пользователей с telegram_id
     eligible: list[User] = []
     for user in users:
         if not user.telegram_id:
             continue
-        if user.last_pairing_at:
-            # Приводим last_pairing_at к aware-формату для корректного вычитания
-            last_pairing_aware = ensure_aware_msk(user.last_pairing_at)
-            if last_pairing_aware:
-                time_passed = now - last_pairing_aware
-                # Если прошло меньше кулдауна (с учетом погрешности) - пропускаем
-                # Используем погрешность чтобы избежать проблем с точностью времени
-                if time_passed < cooldown_delta - cooldown_tolerance:
-                    continue
         eligible.append(user)
     return eligible
 
@@ -175,34 +159,24 @@ async def _load_users_with_active_matches(session: AsyncSession) -> set[int]:
 
 async def _load_successful_pairs(
     session: AsyncSession,
-    lookback_weeks: int = 26,
 ) -> set[frozenset[int]]:
     """
-    Возвращает пары пользователей, которые уже имели мэтч за последние N недель.
+    Возвращает пары пользователей, которые уже имели мэтч когда-либо.
 
     Исключает повторные мэтчи между одними и теми же пользователями независимо
-    от статуса предыдущего мэтча (completed, skipped, expired_timeout и т.д.).
-    
-    ОПТИМИЗИРОВАНО: Загружает только пары за последние lookback_weeks недель
-    вместо ВСЕХ пар за всё время. Это значительно снижает потребление памяти
-    и ускоряет загрузку при большой истории мэтчей.
+    от статуса предыдущего мэтча (completed, skipped, expired_timeout и т.д.)
+    и времени создания мэтча. Пары, которые когда-либо имели мэтч, никогда
+    не будут сопоставлены повторно.
 
     Args:
         session (AsyncSession): активная сессия БД.
-        lookback_weeks (int): количество недель назад для поиска пар (по умолчанию 26 = 6 месяцев).
 
     Returns:
         set[frozenset[int]]: множество пар (frozenset из двух user_id), которые
-            уже имели мэтч за последние lookback_weeks недель.
+            уже имели мэтч когда-либо.
     """
-    # Вычисляем дату отсечения (lookback_weeks недель назад)
-    cutoff_date = now_msk() - timedelta(weeks=lookback_weeks)
-    
-    # Загружаем только пары, созданные после cutoff_date
-    stmt = (
-        select(Match.user_a_id, Match.user_b_id)
-        .where(Match.created_at >= cutoff_date)
-    )
+    # Загружаем все пары из истории мэтчей
+    stmt = select(Match.user_a_id, Match.user_b_id)
     
     result = await session.execute(stmt)
     return {
@@ -291,9 +265,9 @@ async def _persist_matches(
     now,
 ) -> list[Match]:
     """
-    Сохраняет созданные пары в таблицу matches и обновляет last_pairing_at.
+    Сохраняет созданные пары в таблицу matches.
 
-    Создаёт записи Match для каждой пары и обновляет last_pairing_at у обоих пользователей.
+    Создаёт записи Match для каждой пары.
     
     ОПТИМИЗИРОВАНО: Один flush для всех мэтчей вместо flush на каждый мэтч.
     Это значительно ускоряет сохранение при большом количестве пар (2500+).
@@ -321,8 +295,6 @@ async def _persist_matches(
         match.user_a = user_a
         match.user_b = user_b
         session.add(match)
-        user_a.last_pairing_at = now
-        user_b.last_pairing_at = now
         created.append(match)
     
     # Один flush для всех мэтчей (вместо flush на каждый мэтч)

@@ -98,9 +98,6 @@ class User(Base):
     last_match_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
     )  # Дата последнего мэтча
-    last_pairing_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
-    )  # Дата последней подборки мэтча (создания Match)
 
     # Связи с другими моделями
     otps: Mapped[list["Otp"]] = relationship(

@@ -137,7 +137,7 @@ async def cmd_reset_matching(
     settings: Settings,
 ) -> None:
     """
-    Очищает все записи в таблице matches и сбрасывает last_pairing_at у всех пользователей.
+    Очищает все записи в таблице matches и сбрасывает last_match_at у всех пользователей.
 
     Доступно только администраторам. Используется для полного сброса состояния мэтчинга.
     """
@@ -146,20 +146,20 @@ async def cmd_reset_matching(
             await message.answer("Команда доступна только администраторам.")
             return
 
-    await message.answer("Очищаю все мэтчи и сбрасываю last_pairing_at...")
+    await message.answer("Очищаю все мэтчи и сбрасываю last_match_at...")
 
     async with session_factory() as session:
         # Удаляем все записи из matches
         await session.execute(delete(Match))
-        # Очищаем last_pairing_at и last_match_at у всех пользователей
+        # Очищаем last_match_at у всех пользователей
         await session.execute(
-            update(User).values(last_pairing_at=None, last_match_at=None)
+            update(User).values(last_match_at=None)
         )
 
         await session.commit()
 
     await message.answer(
-        "✅ Все мэтчи удалены, last_pairing_at сброшен у всех пользователей."
+        "✅ Все мэтчи удалены, last_match_at сброшен у всех пользователей."
     )
 
 

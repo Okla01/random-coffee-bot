@@ -17,7 +17,6 @@ from app.database.utils import ensure_aware_msk, now_msk
 from app.services.matching.constants import (
     MATCH_STATUS_EXPIRED_TIMEOUT,
     MATCH_STATUS_PENDING_RESPONSE,
-    MATCH_USER_RESPONSE_CONFIRM,
     MATCH_USER_RESPONSE_SKIP,
 )
 from app.services.matching.messages import (

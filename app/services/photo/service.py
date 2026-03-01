@@ -134,6 +134,8 @@ async def refresh_file_id(
     bot: "Bot",
     storage_chat_id: int,
     message_id: int,
+    timeout: float = 5.0,
+    max_retries: int = 2,
 ) -> Optional[str]:
     """
     Обновляет file_id через message_id из чата-хранилища.
@@ -145,44 +147,90 @@ async def refresh_file_id(
         bot: объект бота.
         storage_chat_id: ID чата-хранилища.
         message_id: ID сообщения с фото.
+        timeout: Таймаут на операцию в секундах.
+        max_retries: Максимальное количество повторных попыток.
 
     Returns:
         str | None: обновлённый file_id или None при ошибке (включая невалидный message_id).
     """
+    import asyncio
     from aiogram.exceptions import TelegramBadRequest
     
-    try:
-        forwarded = await bot.forward_message(
-            chat_id=storage_chat_id,
-            from_chat_id=storage_chat_id,
-            message_id=message_id,
-        )
-        file_id = (
-            forwarded.photo[-1].file_id if forwarded.photo else None
-        )
-        # Удаляем пересланное сообщение (уборка)
+    for attempt in range(1, max_retries + 1):
         try:
-            await bot.delete_message(storage_chat_id, forwarded.message_id)
-        except Exception:
-            pass
-        return file_id
-    except TelegramBadRequest as e:
-        error_msg = str(e).lower()
-        # Проверяем, является ли ошибка "message not found"
-        if "message" in error_msg and ("not found" in error_msg or "to forward not found" in error_msg):
-            logger.warning(
-                "message_id=%s невалидный (сообщение не найдено): %s", message_id, e
+            # Используем asyncio.wait_for для таймаута
+            forwarded = await asyncio.wait_for(
+                bot.forward_message(
+                    chat_id=storage_chat_id,
+                    from_chat_id=storage_chat_id,
+                    message_id=message_id,
+                ),
+                timeout=timeout
             )
-        else:
-            logger.error(
-                "Ошибка Telegram API при обновлении file_id (message_id=%s): %s", message_id, e
+            file_id = (
+                forwarded.photo[-1].file_id if forwarded.photo else None
             )
-        return None
-    except Exception as e:
-        logger.error(
-            "Неожиданная ошибка при обновлении file_id (message_id=%s): %s", message_id, e
-        )
-        return None
+            # Удаляем пересланное сообщение (уборка)
+            try:
+                await bot.delete_message(storage_chat_id, forwarded.message_id)
+            except Exception:
+                pass
+            return file_id
+            
+        except asyncio.TimeoutError:
+            if attempt < max_retries:
+                logger.warning(
+                    "Таймаут обновления file_id (message_id=%s), попытка %d/%d",
+                    message_id, attempt, max_retries
+                )
+                await asyncio.sleep(1)  # Небольшая задержка перед повтором
+                continue
+            else:
+                logger.error(
+                    "Таймаут обновления file_id (message_id=%s) после %d попыток",
+                    message_id, max_retries
+                )
+                return None
+                
+        except TelegramBadRequest as e:
+            error_msg = str(e).lower()
+            # Проверяем, является ли ошибка "message not found"
+            if "message" in error_msg and ("not found" in error_msg or "to forward not found" in error_msg):
+                logger.warning(
+                    "message_id=%s невалидный (сообщение не найдено): %s", message_id, e
+                )
+                return None
+            else:
+                if attempt < max_retries:
+                    logger.warning(
+                        "Ошибка Telegram API при обновлении file_id (message_id=%s), попытка %d/%d: %s",
+                        message_id, attempt, max_retries, e
+                    )
+                    await asyncio.sleep(1)
+                    continue
+                else:
+                    logger.error(
+                        "Ошибка Telegram API при обновлении file_id (message_id=%s) после %d попыток: %s",
+                        message_id, max_retries, e
+                    )
+                    return None
+                    
+        except Exception as e:
+            if attempt < max_retries:
+                logger.warning(
+                    "Неожиданная ошибка при обновлении file_id (message_id=%s), попытка %d/%d: %s",
+                    message_id, attempt, max_retries, e
+                )
+                await asyncio.sleep(1)
+                continue
+            else:
+                logger.error(
+                    "Неожиданная ошибка при обновлении file_id (message_id=%s) после %d попыток: %s",
+                    message_id, max_retries, e
+                )
+                return None
+    
+    return None
 
 
 # ─────────────────── Валидация и обновление фото ─────────────────── #
@@ -283,14 +331,15 @@ async def validate_and_refresh_photos(
         # Сохраняем изменения в БД
         if session:
             try:
-                await session.commit()
+                # Используем flush() вместо commit() - commit должен делать вызывающая сторона
+                await session.flush()
                 logger.info(
-                    "photos_json очищен, stage=profile_photo, status=not_active для user=%s и сохранены в БД",
+                    "photos_json очищен, stage=profile_photo, status=not_active для user=%s (flush выполнен)",
                     user.telegram_id
                 )
             except Exception as e:
                 logger.error(
-                    "Ошибка очистки photos_json в БД (user=%s): %s",
+                    "Ошибка flush photos_json в БД (user=%s): %s",
                     user.telegram_id, e
                 )
                 raise
@@ -349,14 +398,15 @@ async def validate_and_refresh_photos(
     # Сохраняем изменения в БД
     if session:
         try:
-            await session.commit()
+            # Используем flush() вместо commit() - commit должен делать вызывающая сторона
+            await session.flush()
             logger.debug(
                 "Обновлены file_id для user=%s (%d записей)",
                 user.telegram_id, len(valid_entries)
             )
         except Exception as e:
             logger.error(
-                "Ошибка сохранения обновлённых file_id в БД (user=%s): %s",
+                "Ошибка flush обновлённых file_id в БД (user=%s): %s",
                 user.telegram_id, e
             )
     else:
@@ -589,7 +639,8 @@ async def send_user_photos(
     # Сохраняем обновлённые file_id в БД
     if session:
         try:
-            await session.commit()
+            # Используем flush() вместо commit() - commit должен делать вызывающая сторона
+            await session.flush()
         except Exception:
             pass
 

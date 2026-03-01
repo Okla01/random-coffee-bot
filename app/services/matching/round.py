@@ -59,44 +59,84 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
     Returns:
         None: ничего не возвращает.
     """
-    settings = await load_matching_settings(session)
-    if not settings.matching_enabled:
-        logger.info("Раунд мэтчинга пропущен: отключён в настройках.")
-        return
+    try:
+        settings = await load_matching_settings(session)
+        if not settings.matching_enabled:
+            logger.info("Раунд мэтчинга пропущен: отключён в настройках.")
+            return
 
-    now = now_msk()
-    candidates = await _load_candidates(session)
-    if len(candidates) < 2:
-        await _notify_no_pairs(bot, candidates)
-        return
+        now = now_msk()
+        candidates = await _load_candidates(session)
+        if len(candidates) < 2:
+            await _notify_no_pairs(bot, candidates)
+            return
 
-    existing_pairs = await _load_successful_pairs(session)
-    edges = _build_pairing_edges(candidates, existing_pairs)
+        existing_pairs = await _load_successful_pairs(session)
+        edges = _build_pairing_edges(candidates, existing_pairs)
 
-    if not edges:
-        await _notify_no_pairs(bot, candidates)
-        return
+        if not edges:
+            await _notify_no_pairs(bot, candidates)
+            return
 
-    selected_pairs = _select_pairs(edges)
-    if not selected_pairs:
-        await _notify_no_pairs(bot, candidates)
-        return
+        selected_pairs = _select_pairs(edges)
+        if not selected_pairs:
+            await _notify_no_pairs(bot, candidates)
+            return
 
-    created_matches = await _persist_matches(session, selected_pairs, now)
-    await session.flush()  # Сохраняем match в БД для получения ID
-    await _notify_new_matches(session, bot, created_matches)
-    await (
-        session.commit()
-    )  # Коммитим после отправки всех уведомлений и сохранения message_id
+        # Шаг 1: Создаём и коммитим мэтчи ДО отправки уведомлений
+        # Это гарантирует, что мэтчи сохранены даже если отправка уведомлений упадёт
+        created_matches = await _persist_matches(session, selected_pairs, now)
+        await session.commit()  # Коммитим мэтчи сразу
+        
+        logger.info("Создано %d мэтчей, закоммичено в БД", len(created_matches))
+        
+        # Шаг 2: Отправка уведомлений (не критично для целостности данных)
+        # Если уведомления не отправятся - есть механизм повторной отправки через resend_failed_match_notifications
+        try:
+            # Перезагружаем мэтчи с relations для отправки уведомлений
+            from sqlalchemy.orm import selectinload
+            match_ids = [m.id for m in created_matches]
+            stmt = select(Match).where(Match.id.in_(match_ids)).options(
+                selectinload(Match.user_a),
+                selectinload(Match.user_b),
+            )
+            result = await session.execute(stmt)
+            matches_for_notify = list(result.scalars().all())
+            
+            stats = await _notify_new_matches(session, bot, matches_for_notify)
+            await session.commit()  # Коммитим message_id и флаги notified
+            logger.info(
+                "Уведомления отправлены: успешно=%d, ошибок=%d",
+                stats["success"], stats["failed"]
+            )
+        except Exception as e:
+            logger.exception("Ошибка отправки уведомлений, но мэтчи уже сохранены: %s", e)
+            # Мэтчи уже в БД, уведомления можно отправить позже через resend_failed_match_notifications
+            await session.rollback()  # Откатываем только изменения уведомлений
 
-    matched_user_ids = {
-        user_id
-        for pair in selected_pairs
-        for user_id in (pair.user_a.id, pair.user_b.id)
-    }
-    unmatched_users = [user for user in candidates if user.id not in matched_user_ids]
-    if unmatched_users:
-        await _notify_no_pairs(bot, unmatched_users)
+        matched_user_ids = {
+            user_id
+            for pair in selected_pairs
+            for user_id in (pair.user_a.id, pair.user_b.id)
+        }
+        unmatched_users = [user for user in candidates if user.id not in matched_user_ids]
+        if unmatched_users:
+            await _notify_no_pairs(bot, unmatched_users)
+            
+    except Exception as e:
+        logger.exception("КРИТИЧЕСКАЯ ОШИБКА в раунде мэтчинга: %s", e)
+        
+        # Отправляем алерт разработчику
+        from app.services.core.alerts import send_critical_alert
+        try:
+            await send_critical_alert(
+                bot,
+                f"Раунд мэтчинга упал с ошибкой:\n<code>{str(e)}</code>"
+            )
+        except Exception as alert_error:
+            logger.exception("Не удалось отправить критическое уведомление: %s", alert_error)
+        
+        raise
 
 
 async def _load_candidates(
@@ -305,7 +345,7 @@ async def _persist_matches(
 
 async def _notify_new_matches(
     session: AsyncSession, bot: Bot, matches: list[Match]
-) -> None:
+) -> dict[str, int]:
     """
     Отправляет участникам сообщения о новой паре.
 
@@ -317,17 +357,44 @@ async def _notify_new_matches(
         matches (list[Match]): список созданных мэтчей.
 
     Returns:
-        None: ничего не возвращает.
+        dict: {"success": int, "failed": int} - статистика отправки.
     """
     from app.services.core.config import Settings as AppSettings
     app_settings = AppSettings.load()
 
+    stats = {"success": 0, "failed": 0}
+
     for match in matches:
+        match_success = True
+
+        # Отправляем user_a
         try:
             await _send_match_invite(session, bot, match, app_settings, is_user_a=True)
+        except Exception as e:
+            logger.exception(
+                "Не удалось уведомить user_a (id=%s) о мэтче %s: %s",
+                match.user_a_id, match.id, e
+            )
+            match_success = False
+
+        # Отправляем user_b
+        try:
             await _send_match_invite(session, bot, match, app_settings, is_user_a=False)
-        except Exception:
-            logger.exception("Не удалось уведомить пользователей о мэтче %s", match.id)
+        except Exception as e:
+            logger.exception(
+                "Не удалось уведомить user_b (id=%s) о мэтче %s: %s",
+                match.user_b_id, match.id, e
+            )
+            match_success = False
+
+        if match_success:
+            stats["success"] += 1
+        else:
+            stats["failed"] += 1
+            # Флаги notified остаются False (по умолчанию) для повторной отправки
+            # Не нужно явно устанавливать False, так как они уже False по умолчанию
+
+    return stats
 
 
 async def _send_match_invite(
@@ -368,19 +435,24 @@ async def _send_match_invite(
         )
         return
 
-    try:
-        # Отправляем фото партнёра через централизованный сервис
-        from app.services.photo import send_user_photos, has_photos
-
-        if has_photos(partner):
-            # send_user_photos автоматически обрабатывает ошибки file_id и обновляет их
-            # Внутри send_user_photos используются bot.send_photo/send_media_group,
-            # которые уже имеют rate limiting через middleware или другие механизмы
+    # Отправляем фото партнёра (не критично, если не отправится)
+    from app.services.photo import send_user_photos, has_photos
+    
+    if has_photos(partner):
+        try:
             await send_user_photos(
                 bot, user.telegram_id, partner, app_settings, session=session
             )
+        except Exception as photo_error:
+            # Логируем, но продолжаем отправку текстового сообщения
+            logger.warning(
+                "Не удалось отправить фото партнёра для мэтча %s пользователю %s: %s. "
+                "Продолжаю с текстовым сообщением.",
+                match.id, user.id, photo_error
+            )
 
-        # Отправляем текстовое сообщение с анкетой
+    # ВСЕГДА отправляем текстовое сообщение, даже если фото не отправилось
+    try:
         partner_caption = _build_partner_caption(partner)
         text = (
             "☕️ Random Coffee\n\n"
@@ -403,8 +475,14 @@ async def _send_match_invite(
             match.last_message_id_b = sent_message.message_id
             match.notified_b = True
         await session.flush()
-    except Exception as e:
-        logger.exception("Не удалось отправить приглашение на мэтч пользователю %s (мэтч %s): %s", user.id, match.id, e)
+    except Exception as text_error:
+        # Критическая ошибка - текстовое сообщение не отправилось
+        logger.error(
+            "КРИТИЧНО: Не удалось отправить текстовое сообщение для мэтча %s пользователю %s: %s",
+            match.id, user.id, text_error
+        )
+        # НЕ пробрасываем исключение - продолжаем работу для других мэтчей
+        # Флаг notified останется False, будет повторная отправка через resend_failed_match_notifications
         raise
 
 

@@ -25,6 +25,7 @@ from app.services.matching.settings import (
     parse_time_to_hours_minutes,
 )
 from app.services.admin.broadcasts import get_scheduled_broadcasts, send_broadcast
+from app.services.photo.validation_job import validate_all_user_photos_periodically
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,20 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
     logger.info("Задача запланированных рассылок запланирована с интервалом: 1 минута")
+
+    # Джоба для валидации всех фото пользователей (каждый день в 3:00 МСК)
+    scheduler.add_job(
+        _validate_photos_job,
+        CronTrigger(
+            hour=3,
+            minute=0,
+            timezone=MOSCOW_TZ,
+        ),
+        args=[session_factory, bot],
+        id="validate_photos",
+        replace_existing=True,
+    )
+    logger.info("Задача валидации фото запланирована на 3:00 МСК каждый день")
 
     return scheduler
 
@@ -270,6 +285,7 @@ async def _matching_round_job(
         logger.info("Задача раунда мэтчинга успешно завершена")
     except Exception as e:
         logger.exception("Задача раунда мэтчинга завершилась ошибкой: %s", e)
+        # Алерт уже отправлен в run_matching_round, просто пробрасываем исключение
         raise
 
 
@@ -466,4 +482,29 @@ async def _scheduled_broadcasts_job(
     
     except Exception as e:
         logger.exception("Задача запланированных рассылок завершилась ошибкой: %s", e)
+        raise
+
+
+async def _validate_photos_job(
+    session_factory: async_sessionmaker[AsyncSession],
+    bot: Bot,
+) -> None:
+    """
+    Внутренняя джоба для валидации всех фото пользователей.
+
+    Вызывается APScheduler каждый день в 3:00 МСК (Cron-триггер).
+
+    Args:
+        session_factory (async_sessionmaker[AsyncSession]): фабрика сессий БД.
+        bot (Bot): экземпляр бота для использования в джобе.
+
+    Returns:
+        None: ничего не возвращает.
+    """
+    logger.info("Задача валидации фото запущена планировщиком")
+    try:
+        await validate_all_user_photos_periodically(session_factory, bot)
+        logger.info("Задача валидации фото успешно завершена")
+    except Exception as e:
+        logger.exception("Задача валидации фото завершилась ошибкой: %s", e)
         raise

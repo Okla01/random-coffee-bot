@@ -61,6 +61,7 @@ class Settings:
     admin_chat_id: int | None
     admin_chat_id_complaints: int | None
     photos_storage_chat_id: int | None
+    developer_telegram_id: int | None
 
     # Email checks
     # Проверка email
@@ -153,6 +154,14 @@ class Settings:
             except (ValueError, TypeError):
                 pass
 
+        developer_telegram_id: int | None = None
+        developer_id = os.getenv("DEVELOPER_TELEGRAM_ID", "")
+        if developer_id:
+            try:
+                developer_telegram_id = int(developer_id)
+            except (ValueError, TypeError):
+                pass
+
         smtp_host = os.getenv("SMTP_HOST", "").strip()
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_user = os.getenv("SMTP_USER", "").strip()
@@ -178,6 +187,7 @@ class Settings:
             admin_chat_id=admin_chat_id,
             admin_chat_id_complaints=admin_chat_id_complaints,
             photos_storage_chat_id=photos_storage_chat_id,
+            developer_telegram_id=developer_telegram_id,
             email_regex_str=email_regex_str,
             email_regex=email_regex,
             allowed_domains=allowed_domains,

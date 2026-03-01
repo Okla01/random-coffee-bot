@@ -61,7 +61,7 @@ async def run_matching_round(session: AsyncSession, bot: Bot) -> None:
     """
     settings = await load_matching_settings(session)
     if not settings.matching_enabled:
-        logger.info("Matching round skipped: disabled in settings.")
+        logger.info("Раунд мэтчинга пропущен: отключён в настройках.")
         return
 
     now = now_msk()
@@ -327,7 +327,7 @@ async def _notify_new_matches(
             await _send_match_invite(session, bot, match, app_settings, is_user_a=True)
             await _send_match_invite(session, bot, match, app_settings, is_user_a=False)
         except Exception:
-            logger.exception("Failed to notify users about match %s", match.id)
+            logger.exception("Не удалось уведомить пользователей о мэтче %s", match.id)
 
 
 async def _send_match_invite(
@@ -360,7 +360,7 @@ async def _send_match_invite(
     expected_user_id = match.user_a_id if is_user_a else match.user_b_id
     if user.id != expected_user_id:
         logger.warning(
-            "User ID mismatch for match %s: expected %s, got %s (telegram_id: %s)",
+            "Несоответствие ID пользователя для мэтча %s: ожидалось %s, получено %s (telegram_id: %s)",
             match.id,
             expected_user_id,
             user.id,
@@ -404,7 +404,7 @@ async def _send_match_invite(
             match.notified_b = True
         await session.flush()
     except Exception as e:
-        logger.exception("Failed to send match invite to user %s (match %s): %s", user.id, match.id, e)
+        logger.exception("Не удалось отправить приглашение на мэтч пользователю %s (мэтч %s): %s", user.id, match.id, e)
         raise
 
 
@@ -460,4 +460,4 @@ async def _notify_no_pairs(bot: Bot, users: list[User]) -> None:
         try:
             await rate_limited_send(bot.send_message, user.telegram_id, text)
         except Exception:
-            logger.exception("Failed to notify user %s about missing pair", user.id)
+            logger.exception("Не удалось уведомить пользователя %s об отсутствии пары", user.id)

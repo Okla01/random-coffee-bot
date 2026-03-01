@@ -69,7 +69,7 @@ async def send_feedback_to_users(
                 sent_count += 1
             except Exception as e:
                 logger.warning(
-                    "Failed to send feedback request to user %d: %s",
+                    "Не удалось отправить запрос обратной связи пользователю %d: %s",
                     user.telegram_id,
                     e,
                 )

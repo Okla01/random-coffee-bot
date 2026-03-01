@@ -318,14 +318,14 @@ async def remove_match_keyboards(bot: Bot, match: Match) -> None:
         except TelegramBadRequest as exc:
             if "message is not modified" not in str(exc):
                 logger.exception(
-                    "Failed to remove keyboard for user %s message %s: %s",
+                    "Не удалось удалить клавиатуру для пользователя %s сообщения %s: %s",
                     getattr(user, "id", None),
                     message_id,
                     exc,
                 )
         except Exception:
             logger.exception(
-                "Failed to remove keyboard for user %s message %s",
+                "Не удалось удалить клавиатуру для пользователя %s сообщения %s",
                 getattr(user, "id", None),
                 message_id,
             )

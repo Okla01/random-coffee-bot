@@ -416,7 +416,7 @@ async def resend_failed_match_notifications(
                     sent_count += 1
                 except Exception as e:
                     logger.warning(
-                        "Failed to resend notification to user_a (match %s, user %s): %s",
+                        "Не удалось повторно отправить уведомление user_a (мэтч %s, пользователь %s): %s",
                         match.id,
                         match.user_a_id,
                         e,
@@ -429,13 +429,13 @@ async def resend_failed_match_notifications(
                     sent_count += 1
                 except Exception as e:
                     logger.warning(
-                        "Failed to resend notification to user_b (match %s, user %s): %s",
+                        "Не удалось повторно отправить уведомление user_b (мэтч %s, пользователь %s): %s",
                         match.id,
                         match.user_b_id,
                         e,
                     )
         except Exception as e:
-            logger.exception("Error processing match %s for resend: %s", match.id, e)
+            logger.exception("Ошибка обработки мэтча %s для повторной отправки: %s", match.id, e)
 
     await session.commit()
     return sent_count

@@ -55,7 +55,7 @@ async def setup_matching_scheduler(
     # Парсинг времени подбора из формата "ЧЧ:ММ"
     time_parts = parse_time_to_hours_minutes(settings.match_msk_time)
     if time_parts is None:
-        logger.warning("Invalid match_msk_time format, using default 12:00")
+        logger.warning("Неверный формат match_msk_time, используется значение по умолчанию 12:00")
         match_hour, match_minute = 12, 0
     else:
         match_hour, match_minute = time_parts
@@ -94,8 +94,8 @@ async def setup_matching_scheduler(
         replace_existing=True,
     )
     logger.info(
-        "Timeouts/reminders job scheduled with interval: %s "
-        "(based on reminder_interval=%s, response_timeout=%s)",
+        "Задача таймаутов/напоминаний запланирована с интервалом: %s "
+        "(на основе reminder_interval=%s, response_timeout=%s)",
         interval_display,
         settings.reminder_interval_time,
         settings.response_timeout_time,
@@ -109,12 +109,12 @@ async def setup_matching_scheduler(
         id="resend_match_notifications",
         replace_existing=True,
     )
-    logger.info("Resend match notifications job scheduled with interval: 30 minutes")
+    logger.info("Задача повторной отправки уведомлений о мэтчах запланирована с интервалом: 30 минут")
 
     # Парсинг времени обратной связи из формата "ЧЧ:ММ"
     feedback_time_parts = parse_time_to_hours_minutes(settings.feedback_msk_time)
     if feedback_time_parts is None:
-        logger.warning("Invalid feedback_msk_time format, using default 18:00")
+        logger.warning("Неверный формат feedback_msk_time, используется значение по умолчанию 18:00")
         feedback_hour, feedback_minute = 18, 0
     else:
         feedback_hour, feedback_minute = feedback_time_parts
@@ -141,7 +141,7 @@ async def setup_matching_scheduler(
         id="scheduled_broadcasts",
         replace_existing=True,
     )
-    logger.info("Scheduled broadcasts job scheduled with interval: 1 minute")
+    logger.info("Задача запланированных рассылок запланирована с интервалом: 1 минута")
 
     return scheduler
 
@@ -161,13 +161,13 @@ async def refresh_matching_round_schedule(
     # Парсинг времени подбора из формата "ЧЧ:ММ"
     time_parts = parse_time_to_hours_minutes(settings.match_msk_time)
     if time_parts is None:
-        logger.warning("Invalid match_msk_time format, using default 12:00")
+        logger.warning("Неверный формат match_msk_time, используется значение по умолчанию 12:00")
         match_hour, match_minute = 12, 0
     else:
         match_hour, match_minute = time_parts
 
     logger.info(
-        "Refreshing matching round schedule: day=%s, time=%s (%d:%02d)",
+        "Обновление расписания раунда мэтчинга: день=%s, время=%s (%d:%02d)",
         settings.match_day,
         settings.match_msk_time,
         match_hour,
@@ -188,11 +188,11 @@ async def refresh_matching_round_schedule(
     job = scheduler.get_job("matching_round")
     if job and job.next_run_time:
         logger.info(
-            "Matching round job rescheduled. Next run: %s",
+            "Задача раунда мэтчинга переназначена. Следующий запуск: %s",
             job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         )
     else:
-        logger.warning("Matching round job not found or has no next run time")
+        logger.warning("Задача раунда мэтчинга не найдена или не имеет времени следующего запуска")
 
 
 async def refresh_timeouts_schedule(
@@ -224,7 +224,7 @@ async def refresh_timeouts_schedule(
         interval_display = f"{timeout_interval:.1f} minutes"
 
     logger.info(
-        "Refreshing timeouts/reminders schedule: interval=%s "
+        "Обновление расписания таймаутов/напоминаний: интервал=%s "
         "(reminder_interval=%s, response_timeout=%s)",
         interval_display,
         settings.reminder_interval_time,
@@ -240,11 +240,11 @@ async def refresh_timeouts_schedule(
     job = scheduler.get_job("match_timeouts")
     if job and job.next_run_time:
         logger.info(
-            "Timeouts/reminders job rescheduled. Next run: %s",
+            "Задача таймаутов/напоминаний переназначена. Следующий запуск: %s",
             job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         )
     else:
-        logger.warning("Timeouts/reminders job not found or has no next run time")
+        logger.warning("Задача таймаутов/напоминаний не найдена или не имеет времени следующего запуска")
 
 
 async def _matching_round_job(
@@ -263,13 +263,13 @@ async def _matching_round_job(
     Returns:
         None: ничего не возвращает.
     """
-    logger.info("Matching round job started by scheduler")
+    logger.info("Задача раунда мэтчинга запущена планировщиком")
     try:
         async with session_factory() as session:
             await run_matching_round(session, bot)
-        logger.info("Matching round job completed successfully")
+        logger.info("Задача раунда мэтчинга успешно завершена")
     except Exception as e:
-        logger.exception("Matching round job failed with error: %s", e)
+        logger.exception("Задача раунда мэтчинга завершилась ошибкой: %s", e)
         raise
 
 
@@ -289,14 +289,14 @@ async def _timeouts_job(
     Returns:
         None: ничего не возвращает.
     """
-    logger.debug("Timeouts and reminders job started by scheduler")
+    logger.debug("Задача таймаутов и напоминаний запущена планировщиком")
     try:
         async with session_factory() as session:
             settings = await load_matching_settings(session)
             await process_match_timeouts_and_reminders(session, settings, bot)
-        logger.debug("Timeouts and reminders job completed successfully")
+        logger.debug("Задача таймаутов и напоминаний успешно завершена")
     except Exception as e:
-        logger.exception("Timeouts and reminders job failed with error: %s", e)
+        logger.exception("Задача таймаутов и напоминаний завершилась ошибкой: %s", e)
         raise
 
 
@@ -316,13 +316,13 @@ async def _feedback_job(
     Returns:
         None: ничего не возвращает.
     """
-    logger.info("Feedback job started by scheduler")
+    logger.info("Задача обратной связи запущена планировщиком")
     try:
         async with session_factory() as session:
             count = await send_feedback_to_users(session, bot)
-        logger.info("Feedback job completed successfully. Sent to %d users", count)
+        logger.info("Задача обратной связи успешно завершена. Отправлено %d пользователям", count)
     except Exception as e:
-        logger.exception("Feedback job failed with error: %s", e)
+        logger.exception("Задача обратной связи завершилась ошибкой: %s", e)
         raise
 
 
@@ -342,16 +342,16 @@ async def _resend_notifications_job(
     Returns:
         None: ничего не возвращает.
     """
-    logger.debug("Resend match notifications job started by scheduler")
+    logger.debug("Задача повторной отправки уведомлений о мэтчах запущена планировщиком")
     try:
         async with session_factory() as session:
             count = await resend_failed_match_notifications(session, bot)
             if count > 0:
-                logger.info("Resend match notifications job completed. Resent %d notifications", count)
+                logger.info("Задача повторной отправки уведомлений о мэтчах завершена. Повторно отправлено %d уведомлений", count)
             else:
-                logger.debug("Resend match notifications job completed. No notifications to resend")
+                logger.debug("Задача повторной отправки уведомлений о мэтчах завершена. Нет уведомлений для повторной отправки")
     except Exception as e:
-        logger.exception("Resend match notifications job failed with error: %s", e)
+        logger.exception("Задача повторной отправки уведомлений о мэтчах завершилась ошибкой: %s", e)
         raise
 
 
@@ -374,13 +374,13 @@ async def refresh_feedback_schedule(
     # Парсинг времени обратной связи из формата "ЧЧ:ММ"
     time_parts = parse_time_to_hours_minutes(settings.feedback_msk_time)
     if time_parts is None:
-        logger.warning("Invalid feedback_msk_time format, using default 18:00")
+        logger.warning("Неверный формат feedback_msk_time, используется значение по умолчанию 18:00")
         feedback_hour, feedback_minute = 18, 0
     else:
         feedback_hour, feedback_minute = time_parts
 
     logger.info(
-        "Refreshing feedback schedule: day=%s, time=%s (%d:%02d)",
+        "Обновление расписания обратной связи: день=%s, время=%s (%d:%02d)",
         settings.feedback_day,
         settings.feedback_msk_time,
         feedback_hour,
@@ -401,11 +401,11 @@ async def refresh_feedback_schedule(
     job = scheduler.get_job("feedback")
     if job and job.next_run_time:
         logger.info(
-            "Feedback job rescheduled. Next run: %s",
+            "Задача обратной связи переназначена. Следующий запуск: %s",
             job.next_run_time.strftime("%Y-%m-%d %H:%M:%S %Z"),
         )
     else:
-        logger.warning("Feedback job not found or has no next run time")
+        logger.warning("Задача обратной связи не найдена или не имеет времени следующего запуска")
 
 
 async def _scheduled_broadcasts_job(
@@ -427,22 +427,22 @@ async def _scheduled_broadcasts_job(
     Returns:
         None: ничего не возвращает.
     """
-    logger.debug("Scheduled broadcasts job started by scheduler")
+    logger.debug("Задача запланированных рассылок запущена планировщиком")
     try:
         async with session_factory() as session:
             # Получаем все запланированные рассылки, готовые к отправке
             broadcasts = await get_scheduled_broadcasts(session)
             
             if not broadcasts:
-                logger.debug("No scheduled broadcasts ready to send")
+                logger.debug("Нет запланированных рассылок, готовых к отправке")
                 return
             
-            logger.info("Found %d scheduled broadcast(s) ready to send", len(broadcasts))
+            logger.info("Найдено %d запланированных рассылок, готовых к отправке", len(broadcasts))
             
             # Отправляем каждую рассылку
             for broadcast in broadcasts:
                 try:
-                    logger.info("Sending scheduled broadcast #%d", broadcast.id)
+                    logger.info("Отправка запланированной рассылки #%d", broadcast.id)
                     sent_count, failed_count = await send_broadcast(
                         bot=bot,
                         session=session,
@@ -450,14 +450,14 @@ async def _scheduled_broadcasts_job(
                         rate_limit_delay=0.05,  # 50ms между сообщениями
                     )
                     logger.info(
-                        "Scheduled broadcast #%d completed. Sent: %d, Failed: %d",
+                        "Запланированная рассылка #%d завершена. Отправлено: %d, Ошибок: %d",
                         broadcast.id,
                         sent_count,
                         failed_count,
                     )
                 except Exception as e:
                     logger.exception(
-                        "Failed to send scheduled broadcast #%d: %s",
+                        "Не удалось отправить запланированную рассылку #%d: %s",
                         broadcast.id,
                         e,
                     )
@@ -465,5 +465,5 @@ async def _scheduled_broadcasts_job(
                     continue
     
     except Exception as e:
-        logger.exception("Scheduled broadcasts job failed with error: %s", e)
+        logger.exception("Задача запланированных рассылок завершилась ошибкой: %s", e)
         raise

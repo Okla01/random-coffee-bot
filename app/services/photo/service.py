@@ -392,57 +392,6 @@ async def validate_and_refresh_photos(
     return True
 
 
-# ─────────────────── Проверка и обновление file_id (устаревшая функция) ─────────────────── #
-
-
-async def ensure_valid_file_id(
-    bot: "Bot",
-    photo_entry: dict,
-    settings: "Settings",
-    user_telegram_id: int,
-) -> Optional[str]:
-    """
-    Проверяет и обновляет file_id при необходимости.
-    
-    Если file_id отсутствует, обновляет его через message_id.
-    Валидность существующего file_id проверяется при отправке в send_user_photos.
-    
-    Args:
-        bot: объект бота.
-        photo_entry: словарь с данными фото {"message_id": int, "file_id": str}.
-        settings: настройки (содержат photos_storage_chat_id).
-        user_telegram_id: Telegram ID пользователя (для логирования).
-    
-    Returns:
-        str | None: file_id (существующий или обновлённый) или None при ошибке.
-    """
-    file_id = photo_entry.get("file_id")
-    message_id = photo_entry.get("message_id")
-    
-    # Если file_id отсутствует — обновляем через message_id
-    if not file_id:
-        if message_id and settings.photos_storage_chat_id:
-            new_file_id = await refresh_file_id(
-                bot, settings.photos_storage_chat_id, message_id
-            )
-            if new_file_id:
-                photo_entry["file_id"] = new_file_id
-                logger.info(
-                    "Обновлён file_id для user=%s через message_id=%s",
-                    user_telegram_id, message_id
-                )
-                return new_file_id
-        logger.warning(
-            "Не удалось обновить file_id для user=%s (message_id=%s)",
-            user_telegram_id, message_id
-        )
-        return None
-    
-    # file_id есть — возвращаем его
-    # Валидность будет проверена при отправке в send_user_photos
-    return file_id
-
-
 # ─────────────────── Построение медиа-группы ─────────────────── #
 
 

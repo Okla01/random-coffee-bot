@@ -236,7 +236,7 @@ async def on_meeting_complaint(
         await state.set_state(MeetingFeedbackStates.waiting_complaint_text)
         await cq.answer()
     except Exception as e:
-        logger.exception("Failed to edit message for complaint: %s", e)
+        logger.exception("Не удалось отредактировать сообщение для жалобы: %s", e)
         await cq.answer("Ошибка при обработке запроса", show_alert=True)
 
 
@@ -266,7 +266,7 @@ async def on_complaint_cancel(
         await state.set_state(None)
         await cq.answer()
     except Exception as e:
-        logger.exception("Failed to edit message for cancel complaint: %s", e)
+        logger.exception("Не удалось отредактировать сообщение для отмены жалобы: %s", e)
         await cq.answer("Ошибка при обработке запроса", show_alert=True)
 
 
@@ -322,7 +322,7 @@ async def on_complaint_text_input(
         # Используем admin_chat_id_complaints, если задан, иначе fallback на admin_chat_id
         complaints_chat_id = settings.admin_chat_id_complaints or settings.admin_chat_id
         if not complaints_chat_id:
-            logger.error("ADMIN_CHAT_ID_COMPLAINTS or ADMIN_CHAT_ID not configured")
+            logger.error("ADMIN_CHAT_ID_COMPLAINTS или ADMIN_CHAT_ID не настроены")
             await msg.answer("Ошибка конфигурации. Обратитесь к администратору.")
             await state.set_state(None)
             return
@@ -343,7 +343,7 @@ async def on_complaint_text_input(
             try:
                 await msg.delete()
             except Exception as e:
-                logger.exception("Failed to delete user message: %s", e)
+                logger.exception("Не удалось удалить сообщение пользователя: %s", e)
 
             # Устанавливаем обратную связь от пользователя
             updated = await set_match_feedback(session, match, user, "complaint")
@@ -369,13 +369,13 @@ async def on_complaint_text_input(
                     reply_markup=None,
                 )
             except Exception as e:
-                logger.exception("Failed to edit message after complaint: %s", e)
+                logger.exception("Не удалось отредактировать сообщение после жалобы: %s", e)
                 await msg.answer(confirmation_text)
 
             await state.set_state(None)
 
         except Exception as e:
-            logger.exception("Failed to submit complaint: %s", e)
+            logger.exception("Не удалось отправить жалобу: %s", e)
             await msg.answer("Ошибка при отправке жалобы. Попробуйте позже.")
 
 
@@ -423,5 +423,5 @@ async def on_meeting_positive(
         await cq.message.edit_text(text, reply_markup=None)
         await cq.answer()
     except Exception as e:
-        logger.exception("Failed to edit message for positive feedback: %s", e)
+        logger.exception("Не удалось отредактировать сообщение для положительной обратной связи: %s", e)
         await cq.answer("Ошибка при обработке запроса", show_alert=True)

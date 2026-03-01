@@ -50,7 +50,7 @@ async def delete_user_by_telegram_id(
     ).scalar_one_or_none()
     
     if not user:
-        logger.warning("User with telegram_id %s not found for deletion", telegram_id)
+        logger.warning("Пользователь с telegram_id %s не найден для удаления", telegram_id)
         return
 
     # Находим все активные мэтчи пользователя
@@ -86,7 +86,7 @@ async def delete_user_by_telegram_id(
                 await notify_match_user_deleted(bot, match, user)
             except Exception as e:
                 logger.warning(
-                    "Failed to notify partner about user deletion (match %s): %s",
+                    "Не удалось уведомить партнёра об удалении пользователя (мэтч %s): %s",
                     match.id,
                     e,
                 )

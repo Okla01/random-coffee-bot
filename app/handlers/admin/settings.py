@@ -377,7 +377,7 @@ async def cb_save_admin_settings(
         import logging
 
         logger = logging.getLogger(__name__)
-        logger.warning("Matching scheduler not available when saving settings")
+        logger.warning("Планировщик мэтчинга недоступен при сохранении настроек")
 
     # Удаление последней клавиатуры
     await clear_last_kb(state, cq.message.chat.id, cq.message.bot)

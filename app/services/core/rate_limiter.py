@@ -18,8 +18,7 @@ Usage:
 import asyncio
 import time
 import logging
-from typing import Any, Callable, TypeVar, ParamSpec
-from functools import wraps
+from typing import Callable, TypeVar, ParamSpec
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +86,7 @@ async def rate_limited_send(
             
             if sleep_time > 0:
                 logger.debug(
-                    "Rate limit reached (%d/%d), sleeping %.3f seconds",
+                    "Достигнут лимит запросов (%d/%d), ожидание %.3f секунд",
                     len(_last_send_times),
                     TELEGRAM_RATE_LIMIT,
                     sleep_time,
@@ -114,14 +113,14 @@ async def rate_limited_send(
                 ):
                     # Это ожидаемая ошибка устаревшего file_id - логируем на уровне WARNING
                     logger.warning(
-                        "Rate limited request: invalid file_id (will be refreshed): %s", e
+                        "Запрос с ограничением скорости: невалидный file_id (будет обновлён): %s", e
                     )
                 else:
                     # Другие TelegramBadRequest - логируем как обычно
-                    logger.exception("Rate limited request failed: %s", e)
+                    logger.exception("Запрос с ограничением скорости завершился ошибкой: %s", e)
             else:
                 # Все остальные ошибки - логируем как обычно
-                logger.exception("Rate limited request failed: %s", e)
+                logger.exception("Запрос с ограничением скорости завершился ошибкой: %s", e)
             raise
         
         # Сохраняем timestamp выполнения
@@ -129,69 +128,3 @@ async def rate_limited_send(
         
         return result
 
-
-def rate_limit(func: Callable[P, T]) -> Callable[P, T]:
-    """
-    Декоратор для автоматического rate limiting функций отправки сообщений.
-    
-    Использует rate_limited_send внутри для ограничения частоты вызовов.
-    Удобен для оборачивания пользовательских функций, которые делают много вызовов API.
-    
-    Args:
-        func: async функция для оборачивания
-        
-    Returns:
-        Обёрнутая функция с rate limiting
-    
-    Example:
-        @rate_limit
-        async def send_notification(bot, user_id, text):
-            return await bot.send_message(user_id, text)
-        
-        # Использование:
-        await send_notification(bot, 123, "Hello")  # Автоматически с rate limiting
-    """
-    @wraps(func)
-    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        return await rate_limited_send(func, *args, **kwargs)
-    return wrapper
-
-
-def get_rate_limit_stats() -> dict[str, Any]:
-    """
-    Возвращает статистику rate limiter для мониторинга.
-    
-    Returns:
-        dict со следующими ключами:
-        - current_window_size: количество запросов в текущем окне (последняя секунда)
-        - limit: максимальное количество запросов в секунду
-        - utilization: процент использования лимита (0.0 - 1.0)
-        - oldest_timestamp: timestamp самого старого запроса в окне (или None)
-        - newest_timestamp: timestamp самого нового запроса в окне (или None)
-    """
-    now = time.time()
-    
-    # Очищаем устаревшие timestamps для точной статистики
-    active_timestamps = [t for t in _last_send_times if now - t < 1.0]
-    
-    oldest = active_timestamps[0] if active_timestamps else None
-    newest = active_timestamps[-1] if active_timestamps else None
-    
-    return {
-        "current_window_size": len(active_timestamps),
-        "limit": TELEGRAM_RATE_LIMIT,
-        "utilization": len(active_timestamps) / TELEGRAM_RATE_LIMIT,
-        "oldest_timestamp": oldest,
-        "newest_timestamp": newest,
-    }
-
-
-def reset_rate_limiter() -> None:
-    """
-    Сбрасывает состояние rate limiter.
-    
-    Полезно для тестирования или в случае необходимости очистки истории.
-    В продакшене обычно не требуется.
-    """
-    _last_send_times.clear()
-    logger.info("Rate limiter state reset")

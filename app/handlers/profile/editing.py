@@ -48,14 +48,13 @@ from app.services.profile.editing import (
     process_save_profile,
     process_edit_review,
 )
-from app.services.profile.photo import send_photo_request
+from app.services.photo import send_photo_request, send_user_photos, has_photos
 
 from app.database.db import (
     get_or_create_user,
     update_user_stage,
 )
 from app.handlers.fsm import FSMDataKeys
-from aiogram.types import InputMediaPhoto
 from app.keyboards.kb_admin import kb_admin_name_approval
 from app.database import User
 
@@ -116,12 +115,13 @@ async def _notify_admin_profile_request(bot, settings: Settings, user: User) -> 
     if not settings.admin_chat_id:
         return
 
-    photos = (user.photos_json or {}).get("photos", []) if user.photos_json else []
-    media = [
-        InputMediaPhoto(media=photo.get("file_id"))
-        for photo in photos
-        if photo.get("file_id")
-    ]
+    # Отправляем фото из чата-хранилища (по file_id)
+    if has_photos(user):
+        try:
+            await send_user_photos(bot, settings.admin_chat_id, user, settings)
+        except Exception:
+            pass
+
     header_prefix = (
         f"🔗: @{user.username}" if user.username else f"Telegram ID: {user.telegram_id}"
     )
@@ -134,8 +134,6 @@ async def _notify_admin_profile_request(bot, settings: Settings, user: User) -> 
     text = f"{header}\n\n{preview_text}"
 
     try:
-        if media:
-            await bot.send_media_group(settings.admin_chat_id, media=media)
         await bot.send_message(
             settings.admin_chat_id,
             text,
@@ -223,7 +221,8 @@ async def on_profile_text(
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
-                    message.bot, message.chat.id, user, state, kb_profile_review()
+                    message.bot, message.chat.id, user, state, kb_profile_review(),
+                    settings=settings,
                 )
                 return
 
@@ -245,7 +244,8 @@ async def on_profile_text(
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
-                    message.bot, message.chat.id, user, state, kb_profile_review()
+                    message.bot, message.chat.id, user, state, kb_profile_review(),
+                    settings=settings,
                 )
                 return
 
@@ -267,7 +267,8 @@ async def on_profile_text(
             if result.result_type == "field_updated_review":
                 await state.update_data(**{FSMDataKeys.EDITING_FIELD: None})
                 await send_profile_preview(
-                    message.bot, message.chat.id, user, state, kb_profile_review()
+                    message.bot, message.chat.id, user, state, kb_profile_review(),
+                    settings=settings,
                 )
                 return
 
@@ -435,7 +436,8 @@ async def on_interests_callback(
                 pass
 
             await send_profile_preview(
-                cq.bot, cq.message.chat.id, user, state, kb_profile_review()
+                cq.bot, cq.message.chat.id, user, state, kb_profile_review(),
+                settings=settings,
             )
             await cq.answer("Интересы сохранены")
             return

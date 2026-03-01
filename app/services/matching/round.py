@@ -9,7 +9,6 @@ from dataclasses import dataclass
 import random
 
 from aiogram import Bot
-from aiogram.types import InputMediaPhoto
 from sqlalchemy import Select, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -320,16 +319,19 @@ async def _notify_new_matches(
     Returns:
         None: ничего не возвращает.
     """
+    from app.services.core.config import Settings as AppSettings
+    app_settings = AppSettings.load()
+
     for match in matches:
         try:
-            await _send_match_invite(session, bot, match, is_user_a=True)
-            await _send_match_invite(session, bot, match, is_user_a=False)
+            await _send_match_invite(session, bot, match, app_settings, is_user_a=True)
+            await _send_match_invite(session, bot, match, app_settings, is_user_a=False)
         except Exception:
             logger.exception("Failed to notify users about match %s", match.id)
 
 
 async def _send_match_invite(
-    session: AsyncSession, bot: Bot, match: Match, *, is_user_a: bool
+    session: AsyncSession, bot: Bot, match: Match, app_settings, *, is_user_a: bool
 ) -> None:
     """
     Отправляет сообщение одному участнику с приглашением на встречу.
@@ -341,6 +343,7 @@ async def _send_match_invite(
         session (AsyncSession): активная сессия БД для сохранения message_id.
         bot (Bot): экземпляр бота для отправки сообщений.
         match (Match): объект мэтча с загруженными user_a и user_b.
+        app_settings: настройки приложения (Settings) для доступа к photos_storage_chat_id.
         is_user_a (bool): True если отправляем user_a, False если user_b.
 
     Returns:
@@ -354,7 +357,6 @@ async def _send_match_invite(
         return
     
     # Проверяем, что текущий пользователь с этим telegram_id - тот же, что в мэтче
-    # Это защита от переиспользования telegram_id
     expected_user_id = match.user_a_id if is_user_a else match.user_b_id
     if user.id != expected_user_id:
         logger.warning(
@@ -367,27 +369,16 @@ async def _send_match_invite(
         return
 
     try:
-        # Отправляем фото партнёра, если есть
-        if partner.photos_json and partner.photos_json.get("photos"):
-            photos_list = partner.photos_json.get("photos", [])
-            if photos_list:
-                media_group = []
-                for photo_data in photos_list:
-                    media_group.append(InputMediaPhoto(media=photo_data["file_id"]))
-                try:
-                    await rate_limited_send(
-                        bot.send_media_group,
-                        user.telegram_id,
-                        media=media_group
-                    )
-                except Exception:
-                    # Если не удалось отправить группу, отправляем по одному
-                    for photo_data in photos_list:
-                        await rate_limited_send(
-                            bot.send_photo,
-                            user.telegram_id,
-                            photo_data["file_id"]
-                        )
+        # Отправляем фото партнёра через централизованный сервис
+        from app.services.photo import send_user_photos, has_photos
+
+        if has_photos(partner):
+            # send_user_photos автоматически обрабатывает ошибки file_id и обновляет их
+            # Внутри send_user_photos используются bot.send_photo/send_media_group,
+            # которые уже имеют rate limiting через middleware или другие механизмы
+            await send_user_photos(
+                bot, user.telegram_id, partner, app_settings, session=session
+            )
 
         # Отправляем текстовое сообщение с анкетой
         partner_caption = _build_partner_caption(partner)
@@ -411,10 +402,9 @@ async def _send_match_invite(
         else:
             match.last_message_id_b = sent_message.message_id
             match.notified_b = True
-        await session.flush()  # Сохраняем message_id и флаг в БД
+        await session.flush()
     except Exception as e:
         logger.exception("Failed to send match invite to user %s (match %s): %s", user.id, match.id, e)
-        # Не устанавливаем флаг, чтобы джоба могла повторить отправку
         raise
 
 

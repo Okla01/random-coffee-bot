@@ -11,6 +11,8 @@ Inline-обработчик для поиска пользователей.
 
 from __future__ import annotations
 
+import logging
+
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -34,7 +36,6 @@ from app.keyboards.kb_admin import kb_admin_user_actions
 from app.keyboards.utils import clear_last_kb
 from app.services.admin import is_admin
 from app.services.admin.inline_search import (
-    build_media_group,
     prepare_inline_search_result,
     prepare_user_profile_data,
 )
@@ -44,10 +45,12 @@ from app.services.const import (
     IS_RESULT_KEY_MESSAGE_TEXT,
     IS_RESULT_KEY_TITLE,
     UPD_KEY_HAS_PHOTOS,
-    UPD_KEY_PHOTOS_LIST,
     UPD_KEY_PROFILE_TEXT,
 )
 from app.services.core import Settings
+from app.services.photo import send_user_photos
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -56,9 +59,6 @@ def _detect_search_type(search_query: str) -> tuple[str, str]:
     """
     Определяет тип поиска по строке запроса.
 
-    Анализирует формат запроса и определяет тип поиска: если начинается с @ — поиск по username,
-    если только цифры — поиск по Telegram ID, иначе — поиск по имени в анкете.
-
     Args:
         search_query (str): строка поискового запроса.
 
@@ -66,13 +66,10 @@ def _detect_search_type(search_query: str) -> tuple[str, str]:
         tuple[str, str]: кортеж из типа поиска ("username", "id", "name") и очищенного запроса.
     """
     if search_query.startswith("@"):
-        # Поиск по username (убираем @)
         return "username", search_query
     elif search_query.isdigit():
-        # Поиск по Telegram ID
         return "id", search_query
     else:
-        # Поиск по имени в анкете
         return "name", search_query
 
 
@@ -84,9 +81,6 @@ async def _get_search_results(
     """
     Выполняет поиск пользователей в зависимости от типа.
 
-    Вызывает соответствующую функцию поиска из модуля database.db в зависимости от типа.
-    Ограничивает количество результатов до 50 (лимит Telegram API для inline-запросов).
-
     Args:
         session (AsyncSession): сессия БД.
         search_query (str): строка поиска.
@@ -95,7 +89,6 @@ async def _get_search_results(
     Returns:
         list[User]: список найденных пользователей (до 50).
     """
-    # Telegram API ограничивает количество результатов до 50
     if search_type == "username":
         return await search_users_by_username(session, search_query, 50)
     elif search_type == "id":
@@ -116,37 +109,24 @@ async def inline_search_users(
     """
     Универсальный поиск пользователей через inline-режим.
 
-    Обрабатывает inline-запросы с префиксом user: для поиска пользователей. Проверяет права
-    администратора, определяет тип поиска по формату запроса, выполняет поиск и формирует
-    результаты в виде InlineQueryResultArticle с данными профиля.
-
     Args:
         query (InlineQuery): объект inline-запроса.
         session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
         settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает (результаты отправляются через query.answer).
     """
     async with session_factory() as session:
-        # Проверка прав администратора
         if not await is_admin(session, settings, query.from_user.id):
             await query.answer(results=[], cache_time=1, is_personal=True)
             return
 
-        # Извлечение и обработка поискового запроса
         search_query = query.query[5:].strip()
         if not search_query:
             await query.answer(results=[], cache_time=1, is_personal=True)
             return
 
-        # Определение типа поиска
         search_type, clean_query = _detect_search_type(search_query)
-
-        # Выполнение поиска
         users = await _get_search_results(session, clean_query, search_type)
 
-        # Формирование результатов
         results: list[InlineQueryResultArticle] = []
         for user in users:
             result_data = await prepare_inline_search_result(session, user, search_type)
@@ -178,35 +158,24 @@ async def chosen_inline_result_handler(
     """
     Обрабатывает выбор результата inline-поиска.
 
-    Получает пользователя по ID из результата, проверяет права администратора, формирует
-    данные профиля (текст и фотографии). Если есть фотографии — отправляет медиа-группу
-    и отдельное сообщение с клавиатурой действий. Если нет фотографий — отправляет
-    полный текст профиля с клавиатурой действий.
-
     Args:
-        chosen_result (ChosenInlineResult): объект выбранного результата inline-поиска.
-        state (FSMContext): контекст FSM для управления состоянием.
+        chosen_result (ChosenInlineResult): объект выбранного результата.
+        state (FSMContext): контекст FSM.
         session_factory (async_sessionmaker[AsyncSession]): фабрика БД сессий.
         settings (Settings): конфигурация приложения.
-
-    Returns:
-        None: ничего не возвращает.
     """
 
     await clear_last_kb(state, chosen_result.from_user.id, chosen_result.bot)
 
-    # Проверка прав администратора
     async with session_factory() as session:
         if not await is_admin(session, settings, chosen_result.from_user.id):
             return
 
-        # Получаем ID пользователя из результата
         try:
             user_id = int(chosen_result.result_id)
         except ValueError:
             return
 
-        # Получаем пользователя из БД по ID
         user = await get_user_by_id(session, user_id)
         if not user:
             return
@@ -214,13 +183,11 @@ async def chosen_inline_result_handler(
         # Подготавливаем данные профиля пользователя
         profile_data = await prepare_user_profile_data(session, user)
         profile_text = profile_data[UPD_KEY_PROFILE_TEXT]
-        photos_list = profile_data[UPD_KEY_PHOTOS_LIST]
 
         # Проверяем статус пользователя для формирования клавиатуры
         user_is_blocked = is_user_blocked(user)
         user_is_admin = await is_admin(session, settings, user.telegram_id)
 
-        # Формируем клавиатуру действий
         keyboard = kb_admin_user_actions(
             user_id=user.id,
             is_blocked=user_is_blocked,
@@ -228,7 +195,7 @@ async def chosen_inline_result_handler(
         )
 
         if not profile_data[UPD_KEY_HAS_PHOTOS]:
-            # Если нет фотографий, отправляем полный текст профиля с клавиатурой
+            # Нет фото — отправляем только текст с клавиатурой
             try:
                 message = await chosen_result.bot.send_message(
                     chat_id=chosen_result.from_user.id,
@@ -236,26 +203,30 @@ async def chosen_inline_result_handler(
                     parse_mode="HTML",
                     reply_markup=keyboard,
                 )
-                # Сохраняем message_id последней клавиатуры в FSM
                 await state.update_data(**{FSMDataKeys.LAST_KB_MID: message.message_id})
             except Exception:
                 pass
             return
 
-        # Формируем и отправляем медиа-группу с фотографиями
-        media_group = build_media_group(photos_list, profile_text)
-
-        # Отправляем медиа-группу
+        # Отправляем фото с текстом профиля в caption
+        # send_user_photos автоматически проверяет и обновляет file_id при необходимости
         try:
-            await chosen_result.bot.send_media_group(
-                chat_id=chosen_result.from_user.id,
-                media=media_group,
+            await send_user_photos(
+                chosen_result.bot,
+                chosen_result.from_user.id,
+                user,
+                settings,
+                caption=profile_text,
+                parse_mode="HTML",
+                session=session,  # Передаём session для сохранения обновлённых file_id
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "Ошибка отправки фото пользователя %s в inline_search: %s",
+                user.id, e
+            )
 
         # Отправляем отдельное сообщение с клавиатурой действий
-        # (Telegram API не позволяет редактировать клавиатуру в медиа-группах)
         try:
             message = await chosen_result.bot.send_message(
                 chat_id=chosen_result.from_user.id,
@@ -263,7 +234,6 @@ async def chosen_inline_result_handler(
                 parse_mode="HTML",
                 reply_markup=keyboard,
             )
-            # Сохраняем message_id последней клавиатуры в FSM
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: message.message_id})
         except Exception:
             pass

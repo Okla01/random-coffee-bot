@@ -5,8 +5,6 @@
 отправки фотографий профиля и сообщения с кнопками.
 """
 
-from aiogram.types import InputMediaPhoto
-
 from app.database import User
 from app.handlers.fsm import FSMDataKeys
 
@@ -17,15 +15,12 @@ async def send_profile_preview(
     user: User,
     state,
     reply_markup,
+    settings=None,
     send_photos: bool = True,
     send_preview_text: bool = True,
 ) -> None:
     """
     Отправляет фото профиля (если есть) и текстовый предпросмотр профиля с клавиатурой.
-
-    Сначала отправляет медиа-группу с фотографиями пользователя (если добавлены),
-    затем формирует текстовое представление анкеты и отправляет сообщение с клавиатурой,
-    сохраняя ID сообщения в FSM-состояние для последующего гашения кнопок.
 
     Args:
         bot: объект бота/клиента aiogram.
@@ -33,6 +28,7 @@ async def send_profile_preview(
         user (User): объект пользователя (модель из БД).
         state: FSMContext для сохранения `last_kb_mid`.
         reply_markup: клавиатура для сообщения.
+        settings: настройки приложения (Settings). Нужны для отправки фото.
         send_photos (bool): отправлять ли фотографии. По умолчанию True.
         send_preview_text (bool): отправлять ли текстовый предпросмотр. По умолчанию True.
 
@@ -40,27 +36,13 @@ async def send_profile_preview(
         None: ничего не возвращает.
     """
     # Отправляем фото если они есть и send_photos=True
-    if send_photos and user.photos_json and user.photos_json.get("photos"):
-        photos_list = user.photos_json.get("photos", [])
-        if photos_list:
-            # Строим медиа-группу
-            media_group = []
-            for idx, photo_data in enumerate(photos_list):
-                caption = f"Добавлено {len(photos_list)} фото" if idx == 0 else None
-                media_group.append(
-                    InputMediaPhoto(media=photo_data["file_id"], caption=caption)
-                )
+    if send_photos and settings:
+        from app.services.photo import send_user_photos, get_photo_count, has_photos as _has_photos
 
-            # Отправляем медиа-группу
-            try:
-                await bot.send_media_group(chat_id, media=media_group)
-            except Exception:
-                # Если не удалось отправить группу, отправляем по одному
-                for idx, photo_data in enumerate(photos_list):
-                    caption = f"Добавлено {len(photos_list)} фото" if idx == 0 else None
-                    await bot.send_photo(
-                        chat_id, photo_data["file_id"], caption=caption
-                    )
+        if _has_photos(user):
+            count = get_photo_count(user)
+            caption = f"Добавлено {count} фото"
+            await send_user_photos(bot, chat_id, user, settings, caption=caption)
 
     # Отправляем текстовый предпросмотр если send_preview_text=True
     if send_preview_text:
@@ -76,9 +58,6 @@ async def send_profile_preview(
 def build_profile_preview_text(user: User) -> str:
     """
     Формирует текстовое представление профиля пользователя.
-
-    Собирает все данные профиля (имя, возраст, описание, интересы) в форматированный
-    многострочный текст с эмодзи-иконками для каждого поля.
 
     Args:
         user (User): объект пользователя (модель из БД).

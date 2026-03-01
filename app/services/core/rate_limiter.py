@@ -101,7 +101,27 @@ async def rate_limited_send(
         try:
             result = await func(*args, **kwargs)
         except Exception as e:
-            logger.exception("Rate limited request failed: %s", e)
+            # Для TelegramBadRequest с ошибками file_id логируем на уровне WARNING,
+            # так как эти ошибки ожидаемы и обрабатываются выше по стеку
+            from aiogram.exceptions import TelegramBadRequest
+            if isinstance(e, TelegramBadRequest):
+                error_msg = str(e).lower()
+                if (
+                    "wrong file" in error_msg
+                    or "file_reference" in error_msg
+                    or "can't unserialize" in error_msg
+                    or "wrong remote file identifier" in error_msg
+                ):
+                    # Это ожидаемая ошибка устаревшего file_id - логируем на уровне WARNING
+                    logger.warning(
+                        "Rate limited request: invalid file_id (will be refreshed): %s", e
+                    )
+                else:
+                    # Другие TelegramBadRequest - логируем как обычно
+                    logger.exception("Rate limited request failed: %s", e)
+            else:
+                # Все остальные ошибки - логируем как обычно
+                logger.exception("Rate limited request failed: %s", e)
             raise
         
         # Сохраняем timestamp выполнения

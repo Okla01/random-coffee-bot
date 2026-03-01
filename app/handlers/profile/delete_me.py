@@ -135,7 +135,8 @@ async def cb_delete_cancel(
 
         # Возвращаем пользователя к просмотру анкеты с фотографиями
         await send_profile_preview(
-            cq.message.bot, cq.message.chat.id, user, state, kb_profile_review()
+            cq.message.bot, cq.message.chat.id, user, state, kb_profile_review(),
+            settings=settings,
         )
 
     await cq.answer()

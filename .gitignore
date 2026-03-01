@@ -26,8 +26,9 @@ htmlcov/
 # Project specific
 data/*.db
 data/*.sqlite3
-
 data/backups/
+data/users_photos/
+
 logs/
 *.log
 .env
@@ -50,3 +51,5 @@ coverage.xml
 .vscode/
 *.code-workspace
 .history/
+
+scripts/

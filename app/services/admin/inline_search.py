@@ -27,10 +27,11 @@ from app.services.const import (
     UPD_KEY_PROFILE_TEXT,
     USER_STATUS_NAMES,
 )
-from app.services.profile.photo import get_photos_list
+from app.services.photo import get_photo_count, has_photos
 
 if TYPE_CHECKING:
     from aiogram.types import InputMediaPhoto
+
 
 # ----------------------------- Формирование результатов поиска ----------------------------- #
 
@@ -104,12 +105,7 @@ async def prepare_inline_search_result(
         search_type (str): тип поиска ("username", "id", "name").
 
     Returns:
-        dict: словарь с данными для формирования результата поиска:
-            - IS_RESULT_KEY_ID: ID пользователя (str)
-            - IS_RESULT_KEY_TITLE: заголовок результата (str)
-            - IS_RESULT_KEY_DESCRIPTION: описание для предпросмотра (str)
-            - IS_RESULT_KEY_MESSAGE_TEXT: текст для автоматической отправки (str)
-            - IS_RESULT_KEY_HAS_PHOTOS: есть ли фотографии (bool)
+        dict: словарь с данными для формирования результата поиска.
     """
     # Получение ролей пользователя
     roles = await get_user_roles(session, user.id)
@@ -118,9 +114,8 @@ async def prepare_inline_search_result(
     )
     status_str = USER_STATUS_NAMES.get(user.status, user.status)
 
-    # Получение фотографий пользователя
-    photos_list = get_photos_list(user)
-    photos_count = len(photos_list)
+    # Получение количества фотографий
+    photos_count = get_photo_count(user)
 
     # Формирование описания
     description = build_user_search_description(
@@ -131,7 +126,6 @@ async def prepare_inline_search_result(
     if search_type == "username":
         title = f"@{user.username}" if user.username else f"ID: {user.telegram_id}"
     else:
-        # Для поиска по ID или имени показываем имя в анкете
         title = user.name if user.name else "—"
 
     # Формирование текста для автоматической отправки
@@ -159,10 +153,7 @@ async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
         user (User): объект пользователя.
 
     Returns:
-        dict: словарь с данными профиля:
-            - UPD_KEY_PROFILE_TEXT: полный текст профиля (str)
-            - UPD_KEY_PHOTOS_LIST: список фотографий (list)
-            - UPD_KEY_HAS_PHOTOS: есть ли фотографии (bool)
+        dict: словарь с данными профиля.
     """
     # Получение ролей пользователя
     roles = await get_user_roles(session, user.id)
@@ -177,40 +168,8 @@ async def prepare_user_profile_data(session: AsyncSession, user: User) -> dict:
     # Формирование текста профиля
     profile_text = build_user_profile_text(user, roles_str, status_str, complaints_count)
 
-    # Получение фотографий пользователя
-    photos_list = get_photos_list(user)
-
     return {
         UPD_KEY_PROFILE_TEXT: profile_text,
-        UPD_KEY_PHOTOS_LIST: photos_list,
-        UPD_KEY_HAS_PHOTOS: len(photos_list) > 0,
+        UPD_KEY_PHOTOS_LIST: None,  # Больше не передаём список файлов
+        UPD_KEY_HAS_PHOTOS: has_photos(user),
     }
-
-
-def build_media_group(
-    photos_list: list[dict], profile_text: str
-) -> list["InputMediaPhoto"]:
-    """
-    Формирует медиа-группу с фотографиями пользователя.
-
-    Args:
-        photos_list (list[dict]): список фотографий пользователя.
-        profile_text (str): текст профиля для caption первой фотографии.
-
-    Returns:
-        list[InputMediaPhoto]: список объектов InputMediaPhoto для медиа-группы.
-    """
-    from aiogram.types import InputMediaPhoto
-
-    media_group = []
-    for idx, photo_data in enumerate(photos_list):
-        # Основная информация в caption только у первой фотографии
-        caption = profile_text if idx == 0 else None
-        media_group.append(
-            InputMediaPhoto(
-                media=photo_data["file_id"],
-                caption=caption,
-                parse_mode="HTML" if caption else None,
-            )
-        )
-    return media_group

@@ -33,22 +33,25 @@ from app.services.profile.utils import (
 )
 from app.services.profile.preview import send_profile_preview
 from app.handlers.fsm import FSMDataKeys
-from app.services.profile.photo import (
+
+# Импорты из централизованного фото-сервиса
+from app.services.photo import (
     MAX_PHOTOS,
     add_to_media_group_buffer,
     get_and_clear_media_group_buffer,
     is_media_group_processing,
     set_media_group_task,
     remove_media_group_task,
-    add_photos_to_profile,
-    add_single_photo_to_profile,
+    add_photos,
+    add_single_photo,
     get_telegram_profile_photo,
     add_telegram_profile_photo,
     clear_user_photos,
     can_add_photo,
+    has_photos,
     send_photo_request,
-    send_photos,
-    get_photos_list,
+    send_user_photos,
+    get_photos_data,
 )
 
 router = Router()
@@ -72,7 +75,6 @@ async def on_media_group(
     паузу собирает альбом целиком и сохраняет фото в профиль.
     """
     # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
-    # Это позволяет админам использовать админ-панель, даже если они на стадии загрузки фото
     state_data = await state.get_data()
     if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
         raise SkipHandler()
@@ -106,6 +108,7 @@ async def on_media_group(
             chat_id=message.chat.id,
             state=state,
             session_factory=session_factory,
+            settings=settings,
         )
     )
     set_media_group_task(media_group_id, task)
@@ -118,6 +121,7 @@ async def _finalize_media_group_album(
     chat_id: int,
     state: FSMContext,
     session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
 ) -> None:
     """
     Дождаться прихода всех сообщений альбома и обработать их одним разом.
@@ -133,19 +137,21 @@ async def _finalize_media_group_album(
         async with session_factory() as session:
             user = await get_or_create_user(session, user_id)
 
-            # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
+            # Проверяем, не открыта ли админ-панель
             state_data = await state.get_data()
             if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
                 await session.commit()
                 return
 
-            # Проверяем стадию пользователя - обрабатываем только на стадии profile_photo
+            # Проверяем стадию пользователя
             if user.stage != "profile_photo":
                 await session.commit()
                 return
 
-            # Добавляем фото через бизнес-логику
-            success, photos_list = await add_photos_to_profile(session, user, photos)
+            # Добавляем фото через централизованный сервис
+            success, added_count = await add_photos(
+                session, user, photos, bot, settings
+            )
 
             if not success:
                 # Удаляем старую клавиатуру
@@ -158,10 +164,10 @@ async def _finalize_media_group_album(
                             message_id=last_kb_mid,
                             reply_markup=None,
                         )
-                    except:
+                    except Exception:
                         pass
                 # Отправляем текущие фото
-                await send_photos(bot, chat_id, photos_list)
+                await send_user_photos(bot, chat_id, user, settings, session=session)
                 # Отправляем ошибку с кнопками
                 await bot.send_message(
                     chat_id,
@@ -171,7 +177,7 @@ async def _finalize_media_group_album(
                 return
 
         # Отправляем пользователю альбом (все актуальные фото профиля)
-        await send_photos_with_actions(bot, chat_id, user, state, photos_list)
+        await send_photos_with_actions(bot, chat_id, user, state, settings)
 
     finally:
         # Освобождаем слот таска для этой media_group
@@ -191,8 +197,7 @@ async def on_single_photo(
     """
     Обрабатывает одиночное фото при загрузке.
     """
-    # Проверяем, не открыта ли админ-панель - если да, пропускаем обработку
-    # Это позволяет админам использовать админ-панель, даже если они на стадии загрузки фото
+    # Проверяем, не открыта ли админ-панель
     state_data = await state.get_data()
     if state_data.get(FSMDataKeys.ADMIN_PANEL_ACTIVE):
         raise SkipHandler()
@@ -207,9 +212,9 @@ async def on_single_photo(
             await session.commit()
             raise SkipHandler()
 
-        # Добавляем фото через бизнес-логику
-        success, photos_list = await add_single_photo_to_profile(
-            session, user, message.photo[-1]
+        # Добавляем фото через централизованный сервис
+        success = await add_single_photo(
+            session, user, message.photo[-1], message.bot, settings
         )
 
         if not success:
@@ -223,10 +228,10 @@ async def on_single_photo(
                         message_id=last_kb_mid,
                         reply_markup=None,
                     )
-                except:
+                except Exception:
                     pass
             # Отправляем текущие фото
-            await send_photos(message.bot, message.chat.id, photos_list)
+            await send_user_photos(message.bot, message.chat.id, user, settings, session=session)
             # Отправляем ошибку с кнопками
             sent = await message.answer(
                 f"⚠️ Максимум {MAX_PHOTOS} фото. Очистите фото, чтобы добавить новые.",
@@ -237,7 +242,7 @@ async def on_single_photo(
 
         # Отправляем текущее количество фото и кнопки действий
         await send_photos_with_actions(
-            message.bot, message.chat.id, user, state, photos_list
+            message.bot, message.chat.id, user, state, settings
         )
 
 
@@ -249,26 +254,29 @@ async def send_photos_with_actions(
     chat_id: int,
     user,
     state: FSMContext,
-    photos_list: list,
+    settings: Settings,
 ) -> None:
     """
     Отправляет сохранённые фото и отдельное сообщение
     с текстом о количестве и кнопками действий.
     """
-    if not photos_list:
+    if not has_photos(user):
         await bot.send_message(
             chat_id,
             "Не удалось загрузить фото. Попробуйте ещё раз.",
         )
         return
 
-    # Отправляем фото через универсальную функцию (с caption "Добавлено N фото")
+    # Отправляем фото через send_profile_preview (который использует send_user_photos)
     await send_profile_preview(
-        bot, chat_id, user, state, None, send_photos=True, send_preview_text=False
+        bot, chat_id, user, state, None,
+        settings=settings,
+        send_photos=True,
+        send_preview_text=False,
     )
 
-    # Сообщение с кнопками (без текста "Добавлено N фото")
-    keyboard = kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
+    # Сообщение с кнопками
+    keyboard = kb_profile_photo_with_photos() if has_photos(user) else kb_profile_photo()
     sent = await bot.send_message(
         chat_id,
         "Что хочешь сделать?",
@@ -290,9 +298,6 @@ async def cb_photo_from_tg(
 ) -> None:
     """
     Обрабатывает нажатие кнопки «Взять фото из профиля 👤».
-
-    Пытается извлечь профильное фото пользователя из его Telegram профиля
-    и добавить его в список фото анкеты. Если фото нет, уведомляет об этом.
     """
     async with session_factory() as session:
         user = await get_or_create_user(session, cq.from_user.id, cq.from_user.username)
@@ -307,7 +312,7 @@ async def cb_photo_from_tg(
             await cq.answer()
             return
 
-        # Получаем фото из профиля через бизнес-логику
+        # Получаем фото из профиля
         photo = await get_telegram_profile_photo(cq.bot, cq.from_user.id)
 
         if not photo:
@@ -317,8 +322,10 @@ async def cb_photo_from_tg(
             await cq.answer()
             return
 
-        # Добавляем фото через бизнес-логику
-        success, photos_list = await add_telegram_profile_photo(session, user, photo)
+        # Добавляем фото
+        success = await add_telegram_profile_photo(
+            session, user, photo, cq.bot, settings
+        )
 
         if not success:
             await session.commit()
@@ -331,7 +338,7 @@ async def cb_photo_from_tg(
 
         await cq.message.delete()
         await send_photos_with_actions(
-            cq.bot, cq.message.chat.id, user, state, photos_list
+            cq.bot, cq.message.chat.id, user, state, settings
         )
         await cq.answer()
 
@@ -397,11 +404,7 @@ async def cb_photo_save(
     settings: Settings,
 ) -> None:
     """
-    Обрабатывает нажатие кнопки «Сохранить ✅» — сохраняет фото и переходит на следующий этап.
-
-    Проверяет, что добавлено хотя бы одно фото, переводит пользователя на стадию
-    profile_bio и запрашивает описание профиля. Если был режим редактирования отдельного
-    поля (photo), возвращает в режим просмотра анкеты.
+    Обрабатывает нажатие кнопки «Сохранить ✅».
     """
     await cq.message.delete()
     async with session_factory() as session:
@@ -418,7 +421,7 @@ async def cb_photo_save(
         data = await state.get_data()
         editing = data.get(FSMDataKeys.EDITING_FIELD)
 
-        # Проверяем, заполнен ли профиль полностью (для работы после перезапуска бота)
+        # Проверяем, заполнен ли профиль полностью
         editing_profile_complete = is_profile_complete(user)
         if editing == "photo" or editing_profile_complete:
             # Возвращаемся в режим просмотра анкеты
@@ -431,6 +434,7 @@ async def cb_photo_save(
                 user,
                 state,
                 kb_profile_review(),
+                settings=settings,
                 send_photos=False,
             )
         else:
@@ -465,11 +469,11 @@ async def cb_edit_photo(
             # режим редактирования
             await state.update_data(**{FSMDataKeys.EDITING_FIELD: "photo"})
 
-            photos_list = get_photos_list(user)
+            user_has_photos = has_photos(user)
 
             # Превращаем сообщение в клавиатуру без текста
             keyboard = (
-                kb_profile_photo_with_photos() if photos_list else kb_profile_photo()
+                kb_profile_photo_with_photos() if user_has_photos else kb_profile_photo()
             )
             await cq.message.edit_text("Что хочешь сделать?", reply_markup=keyboard)
             await state.update_data(**{FSMDataKeys.LAST_KB_MID: cq.message.message_id})
@@ -481,5 +485,5 @@ async def cb_edit_photo(
             await cq.message.answer(
                 "❌ Ошибка при загрузке фотографий. Попробуйте ещё раз."
             )
-        except:
+        except Exception:
             pass

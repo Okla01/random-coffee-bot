@@ -75,7 +75,7 @@ class User(Base):
     name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     photos_json: Mapped[Optional[dict]] = mapped_column(
         JSON, nullable=True
-    )  # {"фото": [{"file_id":..., "ts":...}, ...]}
+    )  # {"photos": [{"message_id": 123, "file_id": "AgAC..."}, ...]}
     bio: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     age: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     interests_json: Mapped[Optional[dict]] = mapped_column(

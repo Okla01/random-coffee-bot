@@ -69,4 +69,4 @@ async def cmd_start(
         # Вызываем бизнес-логику онбординга, которая решит, что делать дальше
         result = await process_start(session, user, settings)
 
-        await handle_start_result(message, state, user, result)
+        await handle_start_result(message, state, user, result, settings=settings)

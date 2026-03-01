@@ -406,10 +406,13 @@ async def resend_failed_match_notifications(
     sent_count = 0
     for match in matches:
         try:
+            from app.services.core.config import Settings as AppSettings
+            app_settings = AppSettings.load()
+
             # Пытаемся отправить уведомление user_a, если не было отправлено
             if not match.notified_a and match.user_a and match.user_a.telegram_id:
                 try:
-                    await _send_match_invite(session, bot, match, is_user_a=True)
+                    await _send_match_invite(session, bot, match, app_settings, is_user_a=True)
                     sent_count += 1
                 except Exception as e:
                     logger.warning(
@@ -422,7 +425,7 @@ async def resend_failed_match_notifications(
             # Пытаемся отправить уведомление user_b, если не было отправлено
             if not match.notified_b and match.user_b and match.user_b.telegram_id:
                 try:
-                    await _send_match_invite(session, bot, match, is_user_a=False)
+                    await _send_match_invite(session, bot, match, app_settings, is_user_a=False)
                     sent_count += 1
                 except Exception as e:
                     logger.warning(

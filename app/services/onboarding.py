@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.handlers.fsm import FSMDataKeys
 from app.handlers.profile.photo import send_photos_with_actions
+from app.services.photo import has_photos
 from app.keyboards.kb_auth import kb_auth_code_wait
 from app.keyboards.kb_profile import (
     kb_profile_photo,
@@ -191,6 +192,7 @@ async def handle_start_result(
     state: FSMContext,
     user: User,
     result: StartResult,
+    settings: Settings | None = None,
 ):
     """
     Обработчик результата process_start.
@@ -238,10 +240,9 @@ async def handle_start_result(
         return
 
     if result.action == "ask_profile_photo":
-        has_photos = result.payload.get("has_photos") if result.payload else False
-        if has_photos:
-            photos_list = user.photos_json.get("photos", [])
-            await send_photos_with_actions(bot, chat_id, user, state, photos_list)
+        user_has_photos = has_photos(user)
+        if user_has_photos and settings:
+            await send_photos_with_actions(bot, chat_id, user, state, settings)
         else:
             sent = await answer(
                 "Выбери фото и пришли их ниже 👇",
@@ -296,6 +297,7 @@ async def handle_start_result(
             user,
             state,
             kb_profile_review(),
+            settings=settings,
         )
         return
 
@@ -306,5 +308,6 @@ async def handle_start_result(
             user,
             state,
             kb_profile_review(),
+            settings=settings,
         )
         return

@@ -60,6 +60,7 @@ class Settings:
     admin_ids: Set[int]
     admin_chat_id: int | None
     admin_chat_id_complaints: int | None
+    photos_storage_chat_id: int | None
 
     # Email checks
     # Проверка email
@@ -144,6 +145,14 @@ class Settings:
             except (ValueError, TypeError):
                 pass
 
+        photos_storage_chat_id: int | None = None
+        storage_chat_id = os.getenv("PHOTOS_STORAGE_CHAT_ID", "")
+        if storage_chat_id:
+            try:
+                photos_storage_chat_id = int(storage_chat_id)
+            except (ValueError, TypeError):
+                pass
+
         smtp_host = os.getenv("SMTP_HOST", "").strip()
         smtp_port = int(os.getenv("SMTP_PORT", "587"))
         smtp_user = os.getenv("SMTP_USER", "").strip()
@@ -168,6 +177,7 @@ class Settings:
             admin_ids=admin_ids,
             admin_chat_id=admin_chat_id,
             admin_chat_id_complaints=admin_chat_id_complaints,
+            photos_storage_chat_id=photos_storage_chat_id,
             email_regex_str=email_regex_str,
             email_regex=email_regex,
             allowed_domains=allowed_domains,

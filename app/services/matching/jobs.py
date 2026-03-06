@@ -91,10 +91,12 @@ async def process_match_timeouts_and_reminders(
         MATCH_STATUS_PENDING_RESPONSE: "pending_response",
     }
 
-    # ОПТИМИЗАЦИЯ: Фильтруем мэтчи по времени создания в SQL
-    # Загружаем только те мэтчи, которые созданы после earliest_time
-    # (мэтчи старше timeout_delta точно истекли и не нуждаются в проверке)
-    earliest_time = now - timeout_delta
+    logger.debug(
+        "timeout/reminder cycle started: now=%s reminder=%s timeout=%s",
+        now.isoformat(),
+        settings.reminder_interval_time,
+        settings.response_timeout_time,
+    )
     
     stmt = (
         select(Match)
@@ -104,12 +106,12 @@ async def process_match_timeouts_and_reminders(
         )
         .where(
             Match.status.in_(stage_map.keys()),
-            Match.created_at >= earliest_time,  # Фильтр по времени в SQL
         )
         .order_by(Match.created_at)  # Сортировка для предсказуемости обработки
     )
     result = await session.execute(stmt)
     matches = list(result.scalars().all())
+    logger.debug("pending_response matches loaded for timeout/reminder check: %d", len(matches))
 
     for match in matches:
         stage = stage_map[match.status]
@@ -129,6 +131,13 @@ async def process_match_timeouts_and_reminders(
 
         # Проверяем таймаут: если прошло больше response_timeout_time
         if elapsed >= timeout_delta:
+            logger.info(
+                "match %s expired by timeout: elapsed=%s user_a_response=%s user_b_response=%s",
+                match.id,
+                elapsed,
+                match.user_a_response,
+                match.user_b_response,
+            )
             match.status = MATCH_STATUS_EXPIRED_TIMEOUT
             # Устанавливаем skip только если пользователь еще не ответил
             if match.user_a_response is None:
@@ -172,6 +181,11 @@ async def process_match_timeouts_and_reminders(
                     await notify_match_reminder(bot, match, stage, users_to_remind)
                     match.last_reminder_at = now
                     stats["reminded"] += 1
+                    logger.debug(
+                        "reminder sent for match %s to users=%s",
+                        match.id,
+                        [u.id for u in users_to_remind if u],
+                    )
 
     await session.commit()
 
@@ -179,6 +193,13 @@ async def process_match_timeouts_and_reminders(
     if bot:
         for match in expired_matches:
             await notify_match_timeout(bot, match)
+
+    logger.info(
+        "timeout/reminder cycle finished: checked=%d expired=%d reminded=%d",
+        len(matches),
+        stats["expired"],
+        stats["reminded"],
+    )
 
     return stats
 

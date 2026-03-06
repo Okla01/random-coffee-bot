@@ -10,6 +10,10 @@ import logging
 
 from app.database import Match, User
 from app.services.core.rate_limiter import rate_limited_send
+from app.services.matching.constants import (
+    MATCH_USER_RESPONSE_CONFIRM,
+    MATCH_USER_RESPONSE_SKIP,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -199,28 +203,68 @@ async def notify_match_scheduled(bot: Bot, match: Match) -> None:
 
 
 async def notify_match_timeout(bot: Bot, match: Match) -> None:
-    """
-    Уведомляет обоих участников об истечении времени на согласование встречи.
-
-    Вызывается автоматической джобой при переводе мэтча в статус expired_timeout.
-    Перед отправкой уведомления удаляет клавиатуры из старых сообщений.
-
-    Args:
-        bot (Bot): экземпляр бота для отправки сообщений.
-        match (Match): объект мэтча с загруженными user_a и user_b.
-
-    Returns:
-        None: ничего не возвращает.
-    """
-    # Удаляем клавиатуры из старых сообщений перед отправкой уведомления
+    """Notify users when response window expires for a match."""
     await remove_match_keyboards(bot, match)
 
-    text = (
-        "Время на согласование встречи истекло. "
-        "Вы сможете участвовать в следующих раундах."
+    timeout_text = (
+        "\u0412\u0440\u0435\u043c\u044f \u043d\u0430 \u0441\u043e\u0433\u043b\u0430\u0441\u043e\u0432\u0430\u043d\u0438\u0435 \u0432\u0441\u0442\u0440\u0435\u0447\u0438 \u0438\u0441\u0442\u0435\u043a\u043b\u043e. "
+        "\u0412\u044b \u0441\u043c\u043e\u0436\u0435\u0442\u0435 \u0443\u0447\u0430\u0441\u0442\u0432\u043e\u0432\u0430\u0442\u044c \u0432 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0445 \u0440\u0430\u0443\u043d\u0434\u0430\u0445."
     )
-    await _broadcast(bot, match, text)
+    partner_skipped_text = (
+        "\u041a \u0441\u043e\u0436\u0430\u043b\u0435\u043d\u0438\u044e, \u0442\u0432\u043e\u044f \u043f\u0430\u0440\u0430 \u0440\u0435\u0448\u0438\u043b\u0430 "
+        "\u043f\u0440\u043e\u043f\u0443\u0441\u0442\u0438\u0442\u044c \u0443\u0447\u0430\u0441\u0442\u0438\u0435 \u043d\u0430 \u044d\u0442\u043e\u0439 \u043d\u0435\u0434\u0435\u043b\u0435. "
+        "\u0422\u044b \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u0435\u0441\u043a\u0438 \u043f\u043e\u043f\u0430\u0434\u0451\u0448\u044c \u0432 \u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439 \u0440\u0430\u0443\u043d\u0434."
+    )
 
+    active_user = None
+    ignored_user = None
+
+    if (
+        match.user_a
+        and match.user_b
+        and match.user_a_response == MATCH_USER_RESPONSE_CONFIRM
+        and match.user_b_response in {None, MATCH_USER_RESPONSE_SKIP}
+    ):
+        active_user = match.user_a
+        ignored_user = match.user_b
+    elif (
+        match.user_a
+        and match.user_b
+        and match.user_b_response == MATCH_USER_RESPONSE_CONFIRM
+        and match.user_a_response in {None, MATCH_USER_RESPONSE_SKIP}
+    ):
+        active_user = match.user_b
+        ignored_user = match.user_a
+
+    if active_user and ignored_user:
+        if active_user.telegram_id:
+            await rate_limited_send(
+                bot.send_message,
+                active_user.telegram_id,
+                partner_skipped_text,
+            )
+        if ignored_user.telegram_id:
+            await rate_limited_send(
+                bot.send_message,
+                ignored_user.telegram_id,
+                timeout_text,
+            )
+
+        logger.info(
+            "timeout notifications sent (split): match_id=%s active_user=%s ignored_user=%s",
+            match.id,
+            getattr(active_user, "id", None),
+            getattr(ignored_user, "id", None),
+        )
+        return
+
+    await _broadcast(bot, match, timeout_text)
+    logger.info(
+        "timeout notifications sent (broadcast): match_id=%s user_a_response=%s user_b_response=%s",
+        match.id,
+        match.user_a_response,
+        match.user_b_response,
+    )
 
 async def notify_match_reminder(
     bot: Bot, match: Match, stage: str, users_to_remind: list[User] | None = None

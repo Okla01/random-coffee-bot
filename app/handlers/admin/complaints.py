@@ -574,9 +574,6 @@ async def handle_warning_text(
         complaints_chat_id = settings.admin_chat_id_complaints or settings.admin_chat_id
         if complaints_chat_id and admin_message_id:
             try:
-                # Получаем исходное сообщение — нам нужен его текст
-                # К сожалению, мы не можем получить текст старого сообщения напрямую,
-                # поэтому используем сохранённую информацию из complaint
 
                 # Формируем новый текст на основе данных жалобы
                 from app.services.admin.complaints import format_complaint_message

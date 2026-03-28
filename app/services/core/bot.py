@@ -14,8 +14,13 @@ from __future__ import annotations
 import signal
 import asyncio
 
-from aiogram import Bot, Dispatcher
+from aiohttp import ClientSession
+from aiohttp.hdrs import USER_AGENT
+from aiohttp.http import SERVER_SOFTWARE
+
+from aiogram import Bot, Dispatcher, __version__
 from aiogram.client.default import DefaultBotProperties
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram_dialog import setup_dialogs
 
 from .config import Settings
@@ -36,6 +41,24 @@ from app.handlers.auth.registration import router as registration_router
 from app.handlers.admin import router as commands_router
 from app.services.dev import router as dev_router
 from app.services.matching.scheduler import setup_matching_scheduler
+
+
+class TrustEnvAiohttpSession(AiohttpSession):
+    async def create_session(self) -> ClientSession:
+        if self._should_reset_connector:
+            await self.close()
+
+        if self._session is None or self._session.closed:
+            self._session = ClientSession(
+                connector=self._connector_type(**self._connector_init),
+                headers={
+                    USER_AGENT: f"{SERVER_SOFTWARE} aiogram/{__version__}",
+                },
+                trust_env=True,
+            )
+            self._should_reset_connector = False
+
+        return self._session
 
 
 async def create_dispatcher(settings: Settings) -> Dispatcher:
@@ -85,7 +108,12 @@ async def run_bot() -> None:
         RuntimeError: если не удаётся загрузить конфигурацию (например, нет BOT_TOKEN).
     """
     settings = Settings.load()
-    bot = Bot(token=settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+    session = TrustEnvAiohttpSession()
+    bot = Bot(
+        token=settings.bot_token,
+        session=session,
+        default=DefaultBotProperties(parse_mode="HTML"),
+    )
     dp = await create_dispatcher(settings)
 
     # Регистрируем middleware/контекст БД
@@ -134,3 +162,4 @@ async def run_bot() -> None:
             await dp.start_polling(bot, settings=settings, handle_signals=False)
         finally:
             scheduler.shutdown(wait=False)
+            await bot.session.close()

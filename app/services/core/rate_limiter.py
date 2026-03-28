@@ -115,6 +115,12 @@ async def rate_limited_send(
                     logger.warning(
                         "Запрос с ограничением скорости: невалидный file_id (будет обновлён): %s", e
                     )
+                elif (
+                    "message not found" in error_msg
+                    or "to forward not found" in error_msg
+                    or "message to copy not found" in error_msg
+                ):
+                    logger.warning("Запрос с ограничением скорости: исходное сообщение с фото не найдено: %s", e)
                 else:
                     # Другие TelegramBadRequest - логируем как обычно
                     logger.exception("Запрос с ограничением скорости завершился ошибкой: %s", e)

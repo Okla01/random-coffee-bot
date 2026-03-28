@@ -210,8 +210,9 @@ async def chosen_inline_result_handler(
 
         # Отправляем фото с текстом профиля в caption
         # send_user_photos автоматически проверяет и обновляет file_id при необходимости
+        photos_sent = False
         try:
-            await send_user_photos(
+            photos_sent = await send_user_photos(
                 chosen_result.bot,
                 chosen_result.from_user.id,
                 user,
@@ -225,6 +226,19 @@ async def chosen_inline_result_handler(
                 "Ошибка отправки фото пользователя %s в inline_search: %s",
                 user.id, e
             )
+
+        if not photos_sent:
+            try:
+                message = await chosen_result.bot.send_message(
+                    chat_id=chosen_result.from_user.id,
+                    text=profile_text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+                await state.update_data(**{FSMDataKeys.LAST_KB_MID: message.message_id})
+            except Exception:
+                pass
+            return
 
         # Отправляем отдельное сообщение с клавиатурой действий
         try:

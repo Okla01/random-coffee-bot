@@ -29,6 +29,7 @@ from app.services.matching.jobs import (
     process_match_reminders_only,
 )
 from app.services.matching.settings import load_matching_settings
+from app.services.photo.validation_job import validate_all_user_photos_periodically
 from app.database.db import get_or_create_user
 
 router = Router()
@@ -185,6 +186,29 @@ async def cmd_test_scheduler(
 
     await _matching_round_job(session_factory, message.bot)
     await message.answer("✅ Джоба выполнена.")
+
+
+@router.message(Command("test_validate_photos"))
+async def cmd_test_validate_photos(
+    message: Message,
+    session_factory: async_sessionmaker[AsyncSession],
+    settings: Settings,
+) -> None:
+    """
+    Принудительно запускает ночную валидацию фото.
+    """
+    async with session_factory() as session:
+        if not await is_admin(session, settings, message.from_user.id):
+            await message.answer("Команда доступна только администраторам.")
+            return
+
+    await message.answer("Запускаю ночную валидацию фото...")
+
+    try:
+        await validate_all_user_photos_periodically(session_factory, message.bot)
+        await message.answer("✅ Ночная валидация фото выполнена.")
+    except Exception as exc:
+        await message.answer(f"❌ Ошибка ночной валидации фото: {exc}")
 
 
 @router.message(Command("test_timeouts"))

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Централизованный сервис для работы с фотографиями.
 
 Все операции с фото пользователей:
@@ -14,7 +14,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+from datetime import datetime
+from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
 from aiogram.exceptions import TelegramBadRequest
@@ -27,12 +30,121 @@ if TYPE_CHECKING:
     from app.services.core.config import Settings
 
 from app.database import User
-from app.services.const import USER_STATUS_NOT_ACTIVE
 
 logger = logging.getLogger(__name__)
 
 # Максимальное количество фото в профиле
 MAX_PHOTOS = 5
+
+PHOTO_CHECK_OK = "ok"
+PHOTO_CHECK_REFRESHED = "refreshed"
+PHOTO_CHECK_BROKE_FILE_ID = "broke_fileId"
+PHOTO_CHECK_MESSAGE_MISSING = "message_missing"
+PHOTO_CHECK_TRANSIENT_ERROR = "transient_error"
+PHOTO_CHECK_BROKEN_RECORD = "broken_record"
+
+PHOTO_LOG_PATH = Path(__file__).resolve().parents[3] / "data" / "log_photo.txt"
+
+_BAD_FILE_ERROR_MARKERS = (
+    "wrong file",
+    "file_reference",
+    "can't unserialize",
+    "wrong remote file identifier",
+)
+_MISSING_MESSAGE_ERROR_MARKERS = (
+    "message not found",
+    "to forward not found",
+    "message to copy not found",
+)
+
+
+def _is_bad_file_error(error: Exception) -> bool:
+    error_msg = str(error).lower()
+    return any(marker in error_msg for marker in _BAD_FILE_ERROR_MARKERS)
+
+
+def _is_message_missing_error(error: Exception) -> bool:
+    error_msg = str(error).lower()
+    return "message" in error_msg and any(
+        marker in error_msg for marker in _MISSING_MESSAGE_ERROR_MARKERS
+    )
+
+
+def _append_photo_issue_log(
+    user: User,
+    photo_entry: dict,
+    reason: str,
+    details: str | None = None,
+) -> None:
+    try:
+        PHOTO_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        payload = (
+            f"[{timestamp}] user_id={getattr(user, 'id', None)} "
+            f"telegram_id={getattr(user, 'telegram_id', None)} "
+            f"message_id={photo_entry.get('message_id')} "
+            f"file_id={photo_entry.get('file_id')} "
+            f"reason={reason}"
+        )
+        if details:
+            payload += f" details={details}"
+        with PHOTO_LOG_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(payload + "\n")
+    except Exception as exc:
+        logger.error("Failed to write photo issue to %s: %s", PHOTO_LOG_PATH, exc)
+
+
+async def _persist_photo_changes(
+    user: User,
+    settings: "Settings",
+    session: Optional[AsyncSession],
+) -> None:
+    if session:
+        attributes.flag_modified(user, "photos_json")
+        await session.flush()
+        return
+
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+        engine = create_async_engine(settings.db_url, echo=False)
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as temp_session:
+            result = await temp_session.execute(select(User).where(User.id == user.id))
+            db_user = result.scalar_one_or_none()
+            if db_user:
+                db_user.photos_json = user.photos_json
+                attributes.flag_modified(db_user, "photos_json")
+                await temp_session.commit()
+        await engine.dispose()
+    except Exception as exc:
+        logger.error(
+            "Failed to persist photo changes for user=%s: %s",
+            user.telegram_id,
+            exc,
+        )
+
+
+async def _notify_user_about_lost_photos(bot: "Bot", user: User) -> None:
+    from app.services.core.rate_limiter import rate_limited_send
+
+    try:
+        await rate_limited_send(
+            bot.send_message,
+            chat_id=user.telegram_id,
+            text=(
+                "Похоже, ваши фото больше не доступны в нашем хранилище. "
+                "Иногда такое бывает по техническим причинам.\n\n"
+                "Пожалуйста, откройте /profile и загрузите фото заново."
+            ),
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to notify user=%s about lost photos: %s",
+            user.telegram_id,
+            exc,
+        )
 
 
 # ─────────────────── Чтение / запись данных фото ─────────────────── #
@@ -135,102 +247,261 @@ async def refresh_file_id(
     storage_chat_id: int,
     message_id: int,
     timeout: float = 5.0,
-    max_retries: int = 2,
-) -> Optional[str]:
-    """
-    Обновляет file_id через message_id из чата-хранилища.
+    max_retries: int = 3,
+) -> tuple[str, Optional[str]]:
+    """Refresh file_id from message_id without mutating user data."""
+    from app.services.core.rate_limiter import rate_limited_send
 
-    Пересылает сообщение в тот же чат, извлекает file_id из пересланного
-    сообщения, затем удаляет пересланное сообщение.
+    if not message_id:
+        return PHOTO_CHECK_BROKEN_RECORD, None
 
-    Args:
-        bot: объект бота.
-        storage_chat_id: ID чата-хранилища.
-        message_id: ID сообщения с фото.
-        timeout: Таймаут на операцию в секундах.
-        max_retries: Максимальное количество повторных попыток.
-
-    Returns:
-        str | None: обновлённый file_id или None при ошибке (включая невалидный message_id).
-    """
-    import asyncio
-    from aiogram.exceptions import TelegramBadRequest
-    
     for attempt in range(1, max_retries + 1):
         try:
-            # Используем asyncio.wait_for для таймаута
             forwarded = await asyncio.wait_for(
-                bot.forward_message(
+                rate_limited_send(
+                    bot.forward_message,
                     chat_id=storage_chat_id,
                     from_chat_id=storage_chat_id,
                     message_id=message_id,
                 ),
-                timeout=timeout
+                timeout=timeout,
             )
-            file_id = (
-                forwarded.photo[-1].file_id if forwarded.photo else None
-            )
-            # Удаляем пересланное сообщение (уборка)
             try:
-                await bot.delete_message(storage_chat_id, forwarded.message_id)
-            except Exception:
-                pass
-            return file_id
-            
+                if not forwarded.photo:
+                    logger.warning(
+                        "message_id=%s forwarded without photo while refreshing file_id",
+                        message_id,
+                    )
+                    return PHOTO_CHECK_BROKEN_RECORD, None
+                return PHOTO_CHECK_OK, forwarded.photo[-1].file_id
+            finally:
+                try:
+                    await rate_limited_send(
+                        bot.delete_message,
+                        chat_id=storage_chat_id,
+                        message_id=forwarded.message_id,
+                    )
+                except Exception:
+                    pass
         except asyncio.TimeoutError:
             if attempt < max_retries:
                 logger.warning(
-                    "Таймаут обновления file_id (message_id=%s), попытка %d/%d",
-                    message_id, attempt, max_retries
+                    "Timeout refreshing file_id for message_id=%s, attempt %d/%d",
+                    message_id,
+                    attempt,
+                    max_retries,
                 )
-                await asyncio.sleep(1)  # Небольшая задержка перед повтором
+                await asyncio.sleep(min(attempt, 3))
                 continue
-            else:
-                logger.error(
-                    "Таймаут обновления file_id (message_id=%s) после %d попыток",
-                    message_id, max_retries
-                )
-                return None
-                
-        except TelegramBadRequest as e:
-            error_msg = str(e).lower()
-            # Проверяем, является ли ошибка "message not found"
-            if "message" in error_msg and ("not found" in error_msg or "to forward not found" in error_msg):
-                logger.warning(
-                    "message_id=%s невалидный (сообщение не найдено): %s", message_id, e
-                )
-                return None
-            else:
-                if attempt < max_retries:
-                    logger.warning(
-                        "Ошибка Telegram API при обновлении file_id (message_id=%s), попытка %d/%d: %s",
-                        message_id, attempt, max_retries, e
-                    )
-                    await asyncio.sleep(1)
-                    continue
-                else:
-                    logger.error(
-                        "Ошибка Telegram API при обновлении file_id (message_id=%s) после %d попыток: %s",
-                        message_id, max_retries, e
-                    )
-                    return None
-                    
-        except Exception as e:
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+        except TelegramBadRequest as exc:
+            if _is_message_missing_error(exc):
+                logger.warning("message_id=%s is not available: %s", message_id, exc)
+                return PHOTO_CHECK_MESSAGE_MISSING, None
             if attempt < max_retries:
                 logger.warning(
-                    "Неожиданная ошибка при обновлении file_id (message_id=%s), попытка %d/%d: %s",
-                    message_id, attempt, max_retries, e
+                    "Telegram error while refreshing file_id for message_id=%s, attempt %d/%d: %s",
+                    message_id,
+                    attempt,
+                    max_retries,
+                    exc,
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(min(attempt, 3))
                 continue
-            else:
-                logger.error(
-                    "Неожиданная ошибка при обновлении file_id (message_id=%s) после %d попыток: %s",
-                    message_id, max_retries, e
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+        except Exception as exc:
+            if attempt < max_retries:
+                logger.warning(
+                    "Unexpected error while refreshing file_id for message_id=%s, attempt %d/%d: %s",
+                    message_id,
+                    attempt,
+                    max_retries,
+                    exc,
                 )
-                return None
-    
-    return None
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+
+    return PHOTO_CHECK_TRANSIENT_ERROR, None
+
+
+async def _check_file_id(
+    bot: "Bot",
+    storage_chat_id: int,
+    file_id: Optional[str],
+    timeout: float = 5.0,
+    max_retries: int = 3,
+) -> tuple[str, Optional[str]]:
+    from app.services.core.rate_limiter import rate_limited_send
+
+    if not file_id:
+        return PHOTO_CHECK_BROKE_FILE_ID, None
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            probe = await asyncio.wait_for(
+                rate_limited_send(
+                    bot.send_photo,
+                    chat_id=storage_chat_id,
+                    photo=file_id,
+                ),
+                timeout=timeout,
+            )
+            try:
+                if probe.photo:
+                    return PHOTO_CHECK_OK, probe.photo[-1].file_id
+                return PHOTO_CHECK_OK, file_id
+            finally:
+                try:
+                    await rate_limited_send(
+                        bot.delete_message,
+                        chat_id=storage_chat_id,
+                        message_id=probe.message_id,
+                    )
+                except Exception:
+                    pass
+        except asyncio.TimeoutError:
+            if attempt < max_retries:
+                logger.warning(
+                    "Timeout checking file_id, attempt %d/%d",
+                    attempt,
+                    max_retries,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+        except TelegramBadRequest as exc:
+            if _is_bad_file_error(exc):
+                return PHOTO_CHECK_BROKE_FILE_ID, None
+            if attempt < max_retries:
+                logger.warning(
+                    "Telegram error while checking file_id, attempt %d/%d: %s",
+                    attempt,
+                    max_retries,
+                    exc,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+        except Exception as exc:
+            if attempt < max_retries:
+                logger.warning(
+                    "Unexpected error while checking file_id, attempt %d/%d: %s",
+                    attempt,
+                    max_retries,
+                    exc,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR, None
+
+    return PHOTO_CHECK_TRANSIENT_ERROR, None
+
+
+async def _refresh_photo_entry_from_message_id(
+    bot: "Bot",
+    user: User,
+    photo_entry: dict,
+    settings: "Settings",
+) -> tuple[str, bool]:
+    if not settings.photos_storage_chat_id:
+        logger.warning(
+            "photos_storage_chat_id is not configured, cannot refresh file_id for user=%s",
+            user.telegram_id,
+        )
+        return PHOTO_CHECK_TRANSIENT_ERROR, False
+
+    status, new_file_id = await refresh_file_id(
+        bot,
+        settings.photos_storage_chat_id,
+        photo_entry.get("message_id"),
+    )
+    if status == PHOTO_CHECK_OK and new_file_id:
+        changed = photo_entry.get("file_id") != new_file_id
+        photo_entry["file_id"] = new_file_id
+        return (
+            PHOTO_CHECK_REFRESHED if changed else PHOTO_CHECK_OK,
+            changed,
+        )
+
+    if status in (PHOTO_CHECK_MESSAGE_MISSING, PHOTO_CHECK_BROKEN_RECORD):
+        _append_photo_issue_log(user, photo_entry, status)
+
+    return status, False
+
+
+async def _copy_photo_by_message_id(
+    bot: "Bot",
+    chat_id: int,
+    storage_chat_id: int,
+    photo_entry: dict,
+    caption: Optional[str] = None,
+    parse_mode: Optional[str] = None,
+    timeout: float = 8.0,
+    max_retries: int = 3,
+) -> str:
+    from app.services.core.rate_limiter import rate_limited_send
+
+    message_id = photo_entry.get("message_id")
+    if not message_id:
+        return PHOTO_CHECK_BROKEN_RECORD
+
+    kwargs = {
+        "chat_id": chat_id,
+        "from_chat_id": storage_chat_id,
+        "message_id": message_id,
+    }
+    if caption is not None:
+        kwargs["caption"] = caption
+    if parse_mode is not None:
+        kwargs["parse_mode"] = parse_mode
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            await asyncio.wait_for(
+                rate_limited_send(bot.copy_message, **kwargs),
+                timeout=timeout,
+            )
+            return PHOTO_CHECK_OK
+        except asyncio.TimeoutError:
+            if attempt < max_retries:
+                logger.warning(
+                    "Timeout copying message_id=%s, attempt %d/%d",
+                    message_id,
+                    attempt,
+                    max_retries,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR
+        except TelegramBadRequest as exc:
+            if _is_message_missing_error(exc):
+                return PHOTO_CHECK_MESSAGE_MISSING
+            if attempt < max_retries:
+                logger.warning(
+                    "Telegram error while copying message_id=%s, attempt %d/%d: %s",
+                    message_id,
+                    attempt,
+                    max_retries,
+                    exc,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR
+        except Exception as exc:
+            if attempt < max_retries:
+                logger.warning(
+                    "Unexpected error while copying message_id=%s, attempt %d/%d: %s",
+                    message_id,
+                    attempt,
+                    max_retries,
+                    exc,
+                )
+                await asyncio.sleep(min(attempt, 3))
+                continue
+            return PHOTO_CHECK_TRANSIENT_ERROR
+
+    return PHOTO_CHECK_TRANSIENT_ERROR
 
 
 # ─────────────────── Валидация и обновление фото ─────────────────── #
@@ -242,204 +513,91 @@ async def validate_and_refresh_photos(
     settings: "Settings",
     session: Optional[AsyncSession] = None,
 ) -> bool:
-    """
-    Валидирует и обновляет все file_id через message_id.
-    
-    Правила:
-    1. Если file_id отсутствует или невалидный → обновляется через message_id
-    2. Если message_id невалидный (сообщение не найдено) → запись удаляется
-    3. Если все записи невалидны → photos_json очищается (становится None)
-    4. Изменения сохраняются в БД, если передан session
-    
-    Args:
-        bot: объект бота.
-        user: объект пользователя.
-        settings: настройки (содержат photos_storage_chat_id).
-        session: сессия БД — если передана, изменения будут сохранены.
-    
-    Returns:
-        bool: True если есть валидные фото, False если photos_json очищен.
-    """
+    """Soft validation: refresh file_id when possible and never clear user data."""
     photos_data = get_photos_data(user)
     if not photos_data:
         return False
-    
+
     if not settings.photos_storage_chat_id:
         logger.warning(
-            "photos_storage_chat_id не задан, невозможно обновить file_id для user=%s",
-            user.telegram_id
-        )
-        return False
-    
-    logger.debug(
-        "Начинаю валидацию %d записей фото для user=%s",
-        len(photos_data), user.telegram_id
-    )
-    
-    valid_entries = []
-    has_missing_message_id = False  # Флаг: есть ли записи без message_id
-    
-    for idx, photo_entry in enumerate(photos_data, start=1):
-        message_id = photo_entry.get("message_id")
-        
-        if not message_id:
-            # Нет message_id - запись невалидна, пропускаем
-            has_missing_message_id = True
-            logger.warning(
-                "[%d/%d] Запись фото без message_id для user=%s - запись будет удалена",
-                idx, len(photos_data), user.telegram_id
-            )
-            continue
-        
-        # Пытаемся обновить file_id через message_id
-        new_file_id = await refresh_file_id(
-            bot, settings.photos_storage_chat_id, message_id
-        )
-        
-        if new_file_id:
-            # message_id валидный, file_id обновлён
-            photo_entry["file_id"] = new_file_id
-            valid_entries.append(photo_entry)
-            logger.debug(
-                "[%d/%d] Обновлён file_id для user=%s через message_id=%s",
-                idx, len(photos_data), user.telegram_id, message_id
-            )
-        else:
-            # message_id невалидный (сообщение не найдено) - запись удаляется
-            logger.warning(
-                "[%d/%d] message_id=%s невалидный для user=%s (сообщение не найдено) - запись будет удалена",
-                idx, len(photos_data), message_id, user.telegram_id
-            )
-    
-    # Если есть записи без message_id или не осталось валидных записей - очищаем photos_json
-    if has_missing_message_id or not valid_entries:
-        if has_missing_message_id:
-            logger.error(
-                "Обнаружены записи без message_id для user=%s. Очищаю photos_json, устанавливаю stage=profile_photo, status=not_active.",
-                user.telegram_id
-            )
-        else:
-            logger.error(
-                "Все %d фото невалидны для user=%s (нет валидных message_id). Очищаю photos_json, устанавливаю stage=profile_photo, status=not_active.",
-                len(photos_data), user.telegram_id
-            )
-        
-        user.photos_json = None
-        user.stage = "profile_photo"
-        user.status = USER_STATUS_NOT_ACTIVE
-        
-        # Сохраняем изменения в БД
-        if session:
-            try:
-                # Используем flush() вместо commit() - commit должен делать вызывающая сторона
-                await session.flush()
-                logger.info(
-                    "photos_json очищен, stage=profile_photo, status=not_active для user=%s (flush выполнен)",
-                    user.telegram_id
-                )
-            except Exception as e:
-                logger.error(
-                    "Ошибка flush photos_json в БД (user=%s): %s",
-                    user.telegram_id, e
-                )
-                raise
-        else:
-            # Если session не передан, создаём новую сессию для сохранения
-            try:
-                from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-                from sqlalchemy import select
-                
-                # Создаём временную сессию для сохранения
-                engine = create_async_engine(settings.db_url, echo=False)
-                session_factory = async_sessionmaker(engine, expire_on_commit=False)
-                
-                async with session_factory() as temp_session:
-                    # Загружаем пользователя заново в новой сессии
-                    result = await temp_session.execute(
-                        select(User).where(User.id == user.id)
-                    )
-                    db_user = result.scalar_one_or_none()
-                    if db_user:
-                        db_user.photos_json = None
-                        db_user.stage = "profile_photo"
-                        db_user.status = USER_STATUS_NOT_ACTIVE
-                        await temp_session.commit()
-                        logger.info(
-                            "photos_json очищен, stage=profile_photo, status=not_active для user=%s и сохранены в БД (создана новая сессия)",
-                            user.telegram_id
-                        )
-                    else:
-                        logger.warning(
-                            "Пользователь user=%s не найден в БД для очистки photos_json",
-                            user.telegram_id
-                        )
-                await engine.dispose()
-            except Exception as e:
-                logger.error(
-                    "Ошибка создания сессии и очистки photos_json в БД (user=%s): %s",
-                    user.telegram_id, e
-                )
-                # Не пробрасываем ошибку, так как это не критично для работы бота
-        
-        return False
-    
-    # Обновляем photos_json только валидными записями
-    if len(valid_entries) < len(photos_data):
-        # Были удалены невалидные записи
-        logger.info(
-            "Удалено %d невалидных записей для user=%s, осталось %d валидных",
-            len(photos_data) - len(valid_entries),
+            "photos_storage_chat_id is not configured, skip photo validation for user=%s",
             user.telegram_id,
-            len(valid_entries)
         )
-    
-    set_photos_data(user, valid_entries)
-    
-    # Сохраняем изменения в БД
-    if session:
-        try:
-            # Используем flush() вместо commit() - commit должен делать вызывающая сторона
-            await session.flush()
-            logger.debug(
-                "Обновлены file_id для user=%s (%d записей)",
-                user.telegram_id, len(valid_entries)
+        return any(entry.get("file_id") for entry in photos_data)
+
+    active_entries: list[dict] = []
+    changed = False
+    removed_count = 0
+    usable_photos = 0
+
+    for idx, photo_entry in enumerate(photos_data, start=1):
+        file_id = photo_entry.get("file_id")
+        entry_had_file_id = bool(file_id)
+
+        if file_id:
+            status, checked_file_id = await _check_file_id(
+                bot,
+                settings.photos_storage_chat_id,
+                file_id,
             )
-        except Exception as e:
-            logger.error(
-                "Ошибка flush обновлённых file_id в БД (user=%s): %s",
-                user.telegram_id, e
-            )
-    else:
-        # Если session не передан, но были изменения - создаём новую сессию для сохранения
-        try:
-            from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-            from sqlalchemy import select
-            
-            engine = create_async_engine(settings.db_url, echo=False)
-            session_factory = async_sessionmaker(engine, expire_on_commit=False)
-            
-            async with session_factory() as temp_session:
-                result = await temp_session.execute(
-                    select(User).where(User.id == user.id)
+            if status == PHOTO_CHECK_OK:
+                usable_photos += 1
+                if checked_file_id and checked_file_id != file_id:
+                    photo_entry["file_id"] = checked_file_id
+                    changed = True
+                active_entries.append(photo_entry)
+                continue
+            if status == PHOTO_CHECK_TRANSIENT_ERROR:
+                logger.warning(
+                    "[%d/%d] transient error while checking file_id for user=%s, keep current data",
+                    idx,
+                    len(photos_data),
+                    user.telegram_id,
                 )
-                db_user = result.scalar_one_or_none()
-                if db_user:
-                    # Обновляем photos_json в БД
-                    db_user.photos_json = user.photos_json
-                    attributes.flag_modified(db_user, "photos_json")
-                    await temp_session.commit()
-                    logger.debug(
-                        "Обновлены file_id для user=%s (%d записей) - создана новая сессия",
-                        user.telegram_id, len(valid_entries)
-                    )
-            await engine.dispose()
-        except Exception as e:
-            logger.error(
-                "Ошибка создания сессии и сохранения обновлённых file_id в БД (user=%s): %s",
-                user.telegram_id, e
+                usable_photos += 1
+                active_entries.append(photo_entry)
+                continue
+
+        status, entry_changed = await _refresh_photo_entry_from_message_id(
+            bot,
+            user,
+            photo_entry,
+            settings,
+        )
+        if status in (PHOTO_CHECK_OK, PHOTO_CHECK_REFRESHED):
+            usable_photos += 1
+            changed = changed or entry_changed
+            active_entries.append(photo_entry)
+            continue
+
+        if status == PHOTO_CHECK_TRANSIENT_ERROR:
+            logger.warning(
+                "[%d/%d] transient error while refreshing file_id for user=%s, keep current data",
+                idx,
+                len(photos_data),
+                user.telegram_id,
             )
-    
-    return True
+            if entry_had_file_id:
+                usable_photos += 1
+            active_entries.append(photo_entry)
+            continue
+
+        logger.warning(
+            "[%d/%d] photo source is unavailable for user=%s, record removed",
+            idx,
+            len(photos_data),
+            user.telegram_id,
+        )
+        removed_count += 1
+        changed = True
+
+    if changed or removed_count:
+        set_photos_data(user, active_entries)
+        await _persist_photo_changes(user, settings, session)
+        if removed_count and not active_entries:
+            await _notify_user_about_lost_photos(bot, user)
+
+    return usable_photos > 0
 
 
 # ─────────────────── Построение медиа-группы ─────────────────── #
@@ -454,58 +612,127 @@ async def build_user_media_group(
     session: Optional[AsyncSession] = None,
     skip_validation: bool = False,
 ) -> list[InputMediaPhoto]:
-    """
-    Строит медиа-группу из фото пользователя.
-
-    Использует только валидные file_id для построения медиа-группы.
-    Если skip_validation=False, валидирует и обновляет все file_id перед построением.
-
-    Args:
-        bot: объект бота.
-        user: объект пользователя.
-        settings: настройки приложения (содержат photos_storage_chat_id).
-        caption: подпись к первому фото.
-        parse_mode: режим парсинга подписи (HTML, Markdown, ...).
-        session: сессия БД — если передана, изменения будут сохранены.
-        skip_validation: пропустить валидацию (если уже выполнена ранее).
-
-    Returns:
-        list[InputMediaPhoto]: список элементов для send_media_group/send_photo.
-    """
-    # Валидируем и обновляем все фото перед построением медиа-группы (если не пропущено)
+    """Build media group from currently known file_id values."""
     if not skip_validation:
-        has_valid_photos = await validate_and_refresh_photos(bot, user, settings, session)
-        if not has_valid_photos:
-            return []
-    
+        try:
+            await validate_and_refresh_photos(bot, user, settings, session)
+        except Exception as exc:
+            logger.warning(
+                "Soft validation failed before building media group for user=%s: %s",
+                user.telegram_id,
+                exc,
+            )
+
     photos_data = get_photos_data(user)
     if not photos_data:
         return []
 
     media_group: list[InputMediaPhoto] = []
+    first_caption_used = False
 
-    for idx, photo_entry in enumerate(photos_data):
+    for photo_entry in photos_data:
         file_id = photo_entry.get("file_id")
         if not file_id:
-            # Это не должно происходить после validate_and_refresh_photos,
-            # но на всякий случай проверяем
             continue
-        
-        photo_caption = caption if idx == 0 else None
-        photo_parse_mode = parse_mode if idx == 0 and caption else None
 
         media_group.append(
             InputMediaPhoto(
                 media=file_id,
-                caption=photo_caption,
-                parse_mode=photo_parse_mode,
+                caption=caption if not first_caption_used else None,
+                parse_mode=parse_mode if caption and not first_caption_used else None,
             )
         )
+        first_caption_used = True
 
     return media_group
 
 
 # ─────────────────── Отправка фото пользователю ─────────────────── #
+
+
+async def _send_photo_entry_with_recovery(
+    bot: "Bot",
+    chat_id: int,
+    user: User,
+    photo_entry: dict,
+    settings: "Settings",
+    caption: Optional[str] = None,
+    parse_mode: Optional[str] = None,
+) -> tuple[str, bool]:
+    from app.services.core.rate_limiter import rate_limited_send
+
+    file_id = photo_entry.get("file_id")
+    if file_id:
+        try:
+            await asyncio.wait_for(
+                rate_limited_send(
+                    bot.send_photo,
+                    chat_id=chat_id,
+                    photo=file_id,
+                    caption=caption,
+                    parse_mode=parse_mode,
+                ),
+                timeout=8.0,
+            )
+            return PHOTO_CHECK_OK, False
+        except TelegramBadRequest as exc:
+            if not _is_bad_file_error(exc):
+                logger.warning(
+                    "Telegram error while sending photo by file_id for user=%s: %s",
+                    user.telegram_id,
+                    exc,
+                )
+                return PHOTO_CHECK_TRANSIENT_ERROR, False
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timeout while sending photo by file_id for user=%s",
+                user.telegram_id,
+            )
+            return PHOTO_CHECK_TRANSIENT_ERROR, False
+        except Exception as exc:
+            logger.warning(
+                "Unexpected error while sending photo by file_id for user=%s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return PHOTO_CHECK_TRANSIENT_ERROR, False
+
+    if not settings.photos_storage_chat_id:
+        logger.warning(
+            "photos_storage_chat_id is not configured, cannot recover photo for user=%s",
+            user.telegram_id,
+        )
+        return PHOTO_CHECK_TRANSIENT_ERROR, False
+
+    copy_status = await _copy_photo_by_message_id(
+        bot,
+        chat_id,
+        settings.photos_storage_chat_id,
+        photo_entry,
+        caption=caption,
+        parse_mode=parse_mode,
+    )
+    if copy_status != PHOTO_CHECK_OK:
+        if copy_status in (PHOTO_CHECK_MESSAGE_MISSING, PHOTO_CHECK_BROKEN_RECORD):
+            _append_photo_issue_log(user, photo_entry, copy_status)
+        return copy_status, False
+
+    refresh_status, entry_changed = await _refresh_photo_entry_from_message_id(
+        bot,
+        user,
+        photo_entry,
+        settings,
+    )
+    if refresh_status == PHOTO_CHECK_TRANSIENT_ERROR:
+        logger.warning(
+            "Photo for user=%s was sent by message_id, but file_id refresh failed temporarily",
+            user.telegram_id,
+        )
+
+    return (
+        PHOTO_CHECK_REFRESHED if entry_changed else PHOTO_CHECK_OK,
+        entry_changed,
+    )
 
 
 async def send_user_photos(
@@ -516,133 +743,107 @@ async def send_user_photos(
     caption: Optional[str] = None,
     parse_mode: Optional[str] = None,
     session: Optional[AsyncSession] = None,
-) -> None:
-    """
-    Отправляет фото пользователя в чат.
+) -> bool:
+    from app.services.core.rate_limiter import rate_limited_send
 
-    Перед отправкой валидирует и обновляет все file_id через validate_and_refresh_photos.
-    Одиночное фото — send_photo, несколько — send_media_group.
-    При ошибке отправки (невалидный file_id) повторно валидирует и обновляет.
+    photos_data = get_photos_data(user)
+    if not photos_data:
+        return False
 
-    Args:
-        bot: объект бота.
-        chat_id: ID чата для отправки.
-        user: объект пользователя (читает photos_json).
-        settings: настройки (содержат photos_storage_chat_id).
-        caption: подпись к первому фото.
-        parse_mode: режим парсинга подписи.
-        session: сессия БД — если передана, обновлённые file_id будут сохранены.
-    """
-    # Валидируем и обновляем все фото перед отправкой
-    has_valid_photos = await validate_and_refresh_photos(bot, user, settings, session)
-    if not has_valid_photos:
-        return
-    
-    # Строим медиа-группу (пропускаем валидацию, так как уже выполнили)
-    media_group = await build_user_media_group(
-        bot, user, settings, caption, parse_mode, session, skip_validation=True
-    )
-    if not media_group:
-        return
-
-    try:
-        # Используем rate limiting для вызовов Telegram API
-        from app.services.core.rate_limiter import rate_limited_send
-        
-        if len(media_group) == 1:
-            item = media_group[0]
-            await rate_limited_send(
-                bot.send_photo,
-                chat_id,
-                photo=item.media,
-                caption=item.caption,
-                parse_mode=item.parse_mode,
+    original_count = len(photos_data)
+    if len(photos_data) > 1 and all(entry.get("file_id") for entry in photos_data):
+        media_group = [
+            InputMediaPhoto(
+                media=entry["file_id"],
+                caption=caption if idx == 0 else None,
+                parse_mode=parse_mode if idx == 0 and caption else None,
             )
-        else:
-            try:
-                await rate_limited_send(
-                    bot.send_media_group,
-                    chat_id,
-                    media=media_group
-                )
-            except TelegramBadRequest:
-                # Fallback: отправляем по одному
-                for item in media_group:
-                    await rate_limited_send(
-                        bot.send_photo,
-                        chat_id,
-                        photo=item.media,
-                        caption=item.caption,
-                        parse_mode=item.parse_mode,
-                    )
-    except TelegramBadRequest as e:
-        error_msg = str(e).lower()
-        if (
-            "wrong file" in error_msg
-            or "file_reference" in error_msg
-            or "can't unserialize" in error_msg
-            or "wrong remote file identifier" in error_msg
-        ):
-            # file_id устарел — повторно валидируем и обновляем все фото
-            logger.info(
-                "Обнаружен устаревший file_id для user=%s, повторно валидирую и обновляю...",
-                user.telegram_id
-            )
-            try:
-                # Повторно валидируем и обновляем все фото
-                has_valid_photos = await validate_and_refresh_photos(
-                    bot, user, settings, session
-                )
-                if not has_valid_photos:
-                    logger.warning(
-                        "После валидации не осталось валидных фото для user=%s",
-                        user.telegram_id
-                    )
-                    return
-                
-                # Строим медиа-группу заново с обновлёнными file_id (пропускаем валидацию)
-                media_group = await build_user_media_group(
-                    bot, user, settings, caption, parse_mode, session, skip_validation=True
-                )
-                if not media_group:
-                    return
-                
-                # Повторная отправка
-                if len(media_group) == 1:
-                    item = media_group[0]
-                    await rate_limited_send(
-                        bot.send_photo,
-                        chat_id,
-                        photo=item.media,
-                        caption=item.caption,
-                        parse_mode=item.parse_mode,
-                    )
-                else:
-                    await rate_limited_send(
-                        bot.send_media_group,
-                        chat_id,
-                        media=media_group
-                    )
-                
-                logger.info(
-                    "Успешно обновлён и отправлен file_id для user=%s", user.telegram_id
-                )
-            except Exception as refresh_error:
-                logger.error(
-                    "Не удалось обновить и отправить фото для user=%s: %s",
-                    user.telegram_id, refresh_error
-                )
-                raise
-        else:
-            logger.error("Ошибка отправки фото user=%s: %s", user.telegram_id, e)
-
-    # Сохраняем обновлённые file_id в БД
-    if session:
+            for idx, entry in enumerate(photos_data)
+        ]
         try:
-            # Используем flush() вместо commit() - commit должен делать вызывающая сторона
-            await session.flush()
-        except Exception:
-            pass
+            await asyncio.wait_for(
+                rate_limited_send(
+                    bot.send_media_group,
+                    chat_id=chat_id,
+                    media=media_group,
+                ),
+                timeout=10.0,
+            )
+            return True
+        except TelegramBadRequest as exc:
+            if not _is_bad_file_error(exc):
+                logger.warning(
+                    "Cannot send media group for user=%s: %s",
+                    user.telegram_id,
+                    exc,
+                )
+                return False
+            logger.info(
+                "Media group for user=%s contains stale file_id, fallback to per-photo recovery",
+                user.telegram_id,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timeout while sending media group for user=%s",
+                user.telegram_id,
+            )
+            return False
+        except Exception as exc:
+            logger.warning(
+                "Unexpected error while sending media group for user=%s: %s",
+                user.telegram_id,
+                exc,
+            )
+            return False
+
+    active_entries: list[dict] = []
+    changed = False
+    sent_any = False
+
+    for photo_entry in photos_data:
+        current_caption = caption if not sent_any else None
+        current_parse_mode = parse_mode if current_caption else None
+        status, entry_changed = await _send_photo_entry_with_recovery(
+            bot,
+            chat_id,
+            user,
+            photo_entry,
+            settings,
+            caption=current_caption,
+            parse_mode=current_parse_mode,
+        )
+        changed = changed or entry_changed
+
+        if status in (PHOTO_CHECK_OK, PHOTO_CHECK_REFRESHED):
+            sent_any = True
+            active_entries.append(photo_entry)
+            continue
+
+        if status in (PHOTO_CHECK_MESSAGE_MISSING, PHOTO_CHECK_BROKEN_RECORD):
+            logger.warning(
+                "Photo source is unavailable for user=%s, remove current photo from profile",
+                user.telegram_id,
+            )
+            changed = True
+            continue
+
+        logger.warning(
+            "Temporary error while sending photo for user=%s, skip current photo",
+            user.telegram_id,
+        )
+        active_entries.append(photo_entry)
+
+    removed_count = original_count - len(active_entries)
+    if changed or removed_count:
+        set_photos_data(user, active_entries)
+        await _persist_photo_changes(user, settings, session)
+        if removed_count and not active_entries:
+            await _notify_user_about_lost_photos(bot, user)
+
+    if not sent_any:
+        logger.warning("No photos were sent for user=%s", user.telegram_id)
+
+    return sent_any
 
 
 # ─────────────────── Управление фото в профиле ─────────────────── #

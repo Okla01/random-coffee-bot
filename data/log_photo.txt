@@ -1,0 +1,2 @@
+[2026-03-28 22:33:11] user_id=1 telegram_id=1032292268 message_id=6123214129 file_id=AgACAgIAAw_Ntge8AQADAgADYwADOgQ reason=message_missing
+[2026-03-28 22:34:13] user_id=3 telegram_id=5256311100 message_id=712421451252 file_id=AgACAgIAAxUxAAKHEWsbdar4Sdp0eT9QHHwLAQADAgADYwADOgQ reason=message_missing
